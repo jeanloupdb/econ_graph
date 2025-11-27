@@ -1,0 +1,84 @@
+version: "3.9"
+
+# Enable BuildKit for all services
+x-build-config-api: &build-config-api
+  context: ./econ_graph_api
+  dockerfile: Dockerfile
+  args:
+    BUILDKIT_INLINE_CACHE: "1"
+  cache_from:
+    - econ-api:latest
+    - econ-api:builder
+
+x-build-config-web: &build-config-web
+  context: ./econ_graph_web
+  dockerfile: Dockerfile
+  args:
+    BUILDKIT_INLINE_CACHE: "1"
+  cache_from:
+    - econ-web:latest
+
+services:
+  db:
+    image: postgres:16
+    container_name: econ_db
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./econ_graph_api/infra/sql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+
+
+  api:
+    build: *build-config-api
+    image: econ-api:latest
+    container_name: econ_api
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    command: >
+      uvicorn app.main:app --host ${APP_HOST:-0.0.0.0} --port 8000 --reload
+    volumes:
+      # Uncomment for development with hot reload
+      - ./econ_graph_api/app:/app/app:ro
+      - ./econ_graph_api/scripts:/app/scripts:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+
+  web:
+    build: *build-config-web
+    image: econ-web:latest
+    container_name: econ_web
+    env_file: .env
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-http://api:8000}
+    command: npm run dev
+    volumes:
+      # Mount source code for hot reload in development
+      - ./econ_graph_web/src:/app/src:ro
+      - ./econ_graph_web/public:/app/public:ro
+
+volumes:
+  db_data:

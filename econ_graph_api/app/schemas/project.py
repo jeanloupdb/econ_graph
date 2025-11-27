@@ -1,0 +1,47 @@
+from pydantic import BaseModel, Field
+from typing import Optional, Literal, List
+from datetime import datetime
+
+
+class ProjectCreate(BaseModel):
+  id: str = Field(..., min_length=1, max_length=64)
+  name: str = Field(..., min_length=1, max_length=200)
+
+
+class ProjectUpdate(BaseModel):
+  name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+
+
+class ProjectOut(BaseModel):
+  id: str
+  name: str
+  created_at: datetime
+  updated_at: datetime
+
+  class Config:
+    from_attributes = True
+
+
+class ProjectExposedRoot(BaseModel):
+  instance_id: str
+  label: str
+  unit: Optional[str] = None
+  type: Literal["project"] = "project"
+
+
+class CompositeExposedRoot(BaseModel):
+  composite_node_instance_id: str
+  composite_id: str
+  internal_id: str
+  raw_internal_id: Optional[str] = None
+  composite_instance_path: List[str] = Field(default_factory=list)
+  linked_node_instance_id: Optional[str] = None
+  label: Optional[str] = None
+  unit: Optional[str] = None
+  current_value: Optional[float] = None
+  type: Literal["composite"] = "composite"
+
+
+class ProjectExposedRootsResponse(BaseModel):
+  project_roots: List[ProjectExposedRoot]
+  composite_roots: List[CompositeExposedRoot]

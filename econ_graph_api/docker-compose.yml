@@ -1,0 +1,66 @@
+version: "3.9"
+
+# Enable BuildKit for all services
+x-build-config: &build-config
+  context: .
+  dockerfile: Dockerfile
+  args:
+    BUILDKIT_INLINE_CACHE: "1"
+  # Use BuildKit cache from previous builds
+  cache_from:
+    - econ-api:latest
+    - econ-api:builder
+
+services:
+  db:
+    image: postgres:16
+    container_name: econ_db
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./infra/sql:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: *build-config
+    image: econ-api:latest
+    container_name: econ_api
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${APP_PORT}:8000"
+    # Note: --reload requires mounting code volume in dev
+    # For production, remove --reload
+    command: >
+      uvicorn app.main:app --host 0.0.0.0 --port 8000
+    # Uncomment for development with hot reload
+    # volumes:
+    #   - ./app:/app/app:ro
+
+  migrate:
+    build: *build-config
+    image: econ-api:latest
+    container_name: econ_migrate
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/app/infra/docker/wait-for.sh", "db:5432", "--"]
+    command: >
+      bash -c "alembic upgrade head"
+
+volumes:
+  db_data:
