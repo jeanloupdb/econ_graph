@@ -1,12 +1,12 @@
 "use client";
 
-import type { Node } from "@/lib/types";
 import { getNodeDisplayIdentifier } from "@/lib/nodes";
+import type { Node } from "@/lib/types";
+import { formatNumber } from "@/utils/format";
 import { Layers } from "lucide-react";
-import { formatNumber } from "@/lib/utils";
-import { createPortal } from "react-dom";
-import { useMemo, useState } from "react";
 import type React from "react";
+import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 type Palette = { bg: string; border: string; text: string };
 

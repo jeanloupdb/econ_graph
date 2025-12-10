@@ -1,21 +1,37 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useUIStore } from '@/store/uiState';
-import { useProjectStore } from '@/store/projectState';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { ChevronLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Loader2, Settings2, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
-import { NewNodeModal } from '@/components/forms/NewNodeModal';
-import { NewApiNodeModal } from '@/components/forms/NewApiNodeModal';
-import { InsertCompositeModal } from '@/components/forms/InsertCompositeModal';
-import { useScenarioStore } from '@/store/scenarioState';
-import { useComputeAll, useComputeWithScenario, useScenarios, useCompareScenarios } from '@/lib/api/hooks';
-import { SwitchSelector } from '@/components/ui/switch-selector';
-import { GraphAddNodeMenu } from '@/components/graph/GraphAddNodeMenu';
-import { toast } from 'sonner';
+import { InsertCompositeModal } from "@/components/forms/InsertCompositeModal";
+import { NewApiNodeModal } from "@/components/forms/NewApiNodeModal";
+import { NewNodeModal } from "@/components/forms/NewNodeModal";
+import { GraphAddNodeMenu } from "@/components/graph/GraphAddNodeMenu";
+import { ShareProjectModal } from "@/components/modals/ShareProjectModal";
+import { Button } from "@/components/ui/button";
+import { SwitchSelector } from "@/components/ui/switch-selector";
+import {
+    useCompareScenarios,
+    useComputeAll,
+    useComputeWithScenario,
+    useScenarios,
+} from "@/lib/api/hooks";
+import type { CompareNodeResult } from "@/lib/types";
+import { useProjectStore } from "@/store/projectState";
+import { useScenarioStore } from "@/store/scenarioState";
+import { useUIStore } from "@/store/uiState";
+import {
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    Layers,
+    Loader2,
+    RefreshCw,
+    Settings2,
+    Share2,
+} from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { UserMenu } from "./UserMenu";
 
 export function Topbar() {
   const router = useRouter();
@@ -27,10 +43,12 @@ export function Topbar() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showCreateApiDialog, setShowCreateApiDialog] = useState(false);
   const [showScenarioDropdown, setShowScenarioDropdown] = useState(false);
-  const [showInsertCompositeModal, setShowInsertCompositeModal] = useState(false);
+  const [showInsertCompositeModal, setShowInsertCompositeModal] =
+    useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const scenarioDropdownRef = useRef<HTMLDivElement>(null);
-  const scenarioAutoStatusRef = useRef<Record<string, 'idle' | 'pending'>>({});
+  const scenarioAutoStatusRef = useRef<Record<string, "idle" | "pending">>({});
   const scenarioAutoRetryTimeoutRef = useRef<Record<string, number | null>>({});
   const [scenarioAutoTick, setScenarioAutoTick] = useState(0);
 
@@ -42,14 +60,22 @@ export function Topbar() {
   const activeScenarioId = useScenarioStore((s) => s.activeScenarioId);
   const setActiveScenario = useScenarioStore((s) => s.setActiveScenario);
   const resetToBaseline = useScenarioStore((s) => s.resetToBaseline);
-  const scenarioValuesScenarioId = useScenarioStore((s) => s.scenarioValuesScenarioId);
-  const setScenarioComputedValues = useScenarioStore((s) => s.setScenarioComputedValues);
-  const clearScenarioComputedValues = useScenarioStore((s) => s.clearScenarioComputedValues);
+  const scenarioValuesScenarioId = useScenarioStore(
+    (s) => s.scenarioValuesScenarioId
+  );
+  const setScenarioComputedValues = useScenarioStore(
+    (s) => s.setScenarioComputedValues
+  );
+  const clearScenarioComputedValues = useScenarioStore(
+    (s) => s.clearScenarioComputedValues
+  );
   const comparisonEnabled = useScenarioStore((s) => s.comparisonEnabled);
   const scenarioAId = useScenarioStore((s) => s.scenarioAId);
   const scenarioBId = useScenarioStore((s) => s.scenarioBId);
   const setComparisonMode = useScenarioStore((s) => s.setComparisonMode);
-  const setComparisonScenarios = useScenarioStore((s) => s.setComparisonScenarios);
+  const setComparisonScenarios = useScenarioStore(
+    (s) => s.setComparisonScenarios
+  );
   const setComparisonValues = useScenarioStore((s) => s.setComparisonValues);
   const clearComparison = useScenarioStore((s) => s.clearComparison);
 
@@ -62,7 +88,7 @@ export function Topbar() {
   const [showCompareDropdown, setShowCompareDropdown] = useState(false);
   const handleCreateCompositeFromGraph = useCallback(() => {
     if (!currentProjectId) {
-      toast.error('Sélectionnez un projet avant de créer un composite.');
+      toast.error("Sélectionnez un projet avant de créer un composite.");
       return;
     }
     resetDetailPanels();
@@ -73,33 +99,43 @@ export function Topbar() {
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (scenarioDropdownRef.current && !scenarioDropdownRef.current.contains(event.target as Node)) {
+      if (
+        scenarioDropdownRef.current &&
+        !scenarioDropdownRef.current.contains(event.target as Node)
+      ) {
         setShowScenarioDropdown(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
     const clearAllRetryTimeouts = () => {
-      Object.values(scenarioAutoRetryTimeoutRef.current).forEach((timeoutId) => {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
+      Object.values(scenarioAutoRetryTimeoutRef.current).forEach(
+        (timeoutId) => {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
         }
-      });
+      );
       scenarioAutoRetryTimeoutRef.current = {};
     };
 
-    if (!activeScenarioId || !currentProjectId || comparisonEnabled || computeWithScenario.isPending) {
+    if (
+      !activeScenarioId ||
+      !currentProjectId ||
+      comparisonEnabled ||
+      computeWithScenario.isPending
+    ) {
       scenarioAutoStatusRef.current = {};
       clearAllRetryTimeouts();
       return;
     }
 
     if (scenarioValuesScenarioId === activeScenarioId) {
-      scenarioAutoStatusRef.current[activeScenarioId] = 'idle';
+      scenarioAutoStatusRef.current[activeScenarioId] = "idle";
       const timeoutId = scenarioAutoRetryTimeoutRef.current[activeScenarioId];
       if (timeoutId) {
         clearTimeout(timeoutId);
@@ -108,13 +144,13 @@ export function Topbar() {
       return;
     }
 
-    const status = scenarioAutoStatusRef.current[activeScenarioId] ?? 'idle';
-    if (status === 'pending') {
+    const status = scenarioAutoStatusRef.current[activeScenarioId] ?? "idle";
+    if (status === "pending") {
       return;
     }
 
     const scenarioIdForRun = activeScenarioId;
-    scenarioAutoStatusRef.current[scenarioIdForRun] = 'pending';
+    scenarioAutoStatusRef.current[scenarioIdForRun] = "pending";
     let cancelled = false;
 
     const runPreload = async () => {
@@ -127,7 +163,7 @@ export function Topbar() {
           return;
         }
         setScenarioComputedValues(scenarioIdForRun, result.results);
-        scenarioAutoStatusRef.current[scenarioIdForRun] = 'idle';
+        scenarioAutoStatusRef.current[scenarioIdForRun] = "idle";
         const timeoutId = scenarioAutoRetryTimeoutRef.current[scenarioIdForRun];
         if (timeoutId) {
           clearTimeout(timeoutId);
@@ -137,13 +173,14 @@ export function Topbar() {
         if (cancelled) {
           return;
         }
-        console.error('❌ Failed to preload scenario values:', error);
-        scenarioAutoStatusRef.current[scenarioIdForRun] = 'idle';
+        console.error("❌ Failed to preload scenario values:", error);
+        scenarioAutoStatusRef.current[scenarioIdForRun] = "idle";
         if (!scenarioAutoRetryTimeoutRef.current[scenarioIdForRun]) {
-          scenarioAutoRetryTimeoutRef.current[scenarioIdForRun] = window.setTimeout(() => {
-            scenarioAutoRetryTimeoutRef.current[scenarioIdForRun] = null;
-            setScenarioAutoTick((tick) => tick + 1);
-          }, 5000);
+          scenarioAutoRetryTimeoutRef.current[scenarioIdForRun] =
+            window.setTimeout(() => {
+              scenarioAutoRetryTimeoutRef.current[scenarioIdForRun] = null;
+              setScenarioAutoTick((tick) => tick + 1);
+            }, 5000);
         }
       }
     };
@@ -152,8 +189,8 @@ export function Topbar() {
 
     return () => {
       cancelled = true;
-      if (scenarioAutoStatusRef.current[scenarioIdForRun] === 'pending') {
-        scenarioAutoStatusRef.current[scenarioIdForRun] = 'idle';
+      if (scenarioAutoStatusRef.current[scenarioIdForRun] === "pending") {
+        scenarioAutoStatusRef.current[scenarioIdForRun] = "idle";
       }
     };
   }, [
@@ -176,7 +213,7 @@ export function Topbar() {
           scenarioAId,
           scenarioBId,
         });
-        const map: Record<string, unknown> = {};
+        const map: Record<string, CompareNodeResult> = {};
         for (const node of result.nodes) {
           map[node.node_id] = node;
         }
@@ -194,20 +231,20 @@ export function Topbar() {
           projectId: currentProjectId || undefined,
           scenarioId: activeScenarioId,
         });
-        console.log('✅ Scenario computation complete:', result);
+        console.log("✅ Scenario computation complete:", result);
         // Store scenario computation results
         setScenarioComputedValues(activeScenarioId, result.results);
         clearComparison();
       } else {
         const result = await computeAll.mutateAsync();
-        console.log('✅ Computation complete:', result);
+        console.log("✅ Computation complete:", result);
         // Clear scenario values when in baseline mode
         clearScenarioComputedValues();
         clearComparison();
       }
       // TODO: Show toast notification
     } catch (error) {
-      console.error('❌ Computation failed:', error);
+      console.error("❌ Computation failed:", error);
       // TODO: Show error notification
     } finally {
       setIsComputing(false);
@@ -241,7 +278,7 @@ export function Topbar() {
         clearScenarioComputedValues();
       }
     } catch (error) {
-      console.error('❌ Scenario selection recompute failed (topbar):', error);
+      console.error("❌ Scenario selection recompute failed (topbar):", error);
     } finally {
       setIsComputing(false);
     }
@@ -252,7 +289,7 @@ export function Topbar() {
       <div className="flex h-14 items-center justify-between border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950">
         <div className="flex items-center gap-3">
           <Link
-            href="/"
+            href="/dashboard"
             className="inline-flex items-center rounded px-2 py-1 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
             title="Back to Home"
           >
@@ -262,19 +299,19 @@ export function Topbar() {
           {/* Project + mode + selectors */}
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              {currentProject?.name || 'Econ Graph'}
+              {currentProject?.name || "Econ Graph"}
             </h1>
 
             {/* Mode toggle */}
             <div className="flex items-center gap-2">
               <SwitchSelector
                 options={[
-                  { value: 'scenario', label: 'Scénario' },
-                  { value: 'comparison', label: 'Comparaison' }
+                  { value: "scenario", label: "Scénario" },
+                  { value: "comparison", label: "Comparaison" },
                 ]}
-                value={comparisonEnabled ? 'comparison' : 'scenario'}
+                value={comparisonEnabled ? "comparison" : "scenario"}
                 onChange={(value) => {
-                  if (value === 'scenario') {
+                  if (value === "scenario") {
                     setComparisonMode(false);
                     clearComparison();
                   } else {
@@ -301,7 +338,7 @@ export function Topbar() {
                     />
                   )}
                   <span className="text-zinc-700 dark:text-zinc-300 font-medium">
-                    {currentScenario ? currentScenario.name : 'Baseline'}
+                    {currentScenario ? currentScenario.name : "Baseline"}
                   </span>
                   <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />
                 </button>
@@ -317,13 +354,13 @@ export function Topbar() {
                         }}
                         className={`flex w-full items-center justify-between rounded px-2 py-1 text-xs transition-colors ${
                           activeScenarioId === null
-                            ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200'
-                            : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                            ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200"
+                            : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
                         }`}
                       >
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 rounded-full bg-zinc-400" />
-                          <span>Baseline (données réelles)</span>
+                          <span>Baseline (données de base)</span>
                         </div>
                         {activeScenarioId === null && (
                           <span className="text-[10px] font-medium uppercase">
@@ -344,8 +381,8 @@ export function Topbar() {
                             }}
                             className={`flex w-full items-center justify-between rounded px-2 py-1 text-xs transition-colors ${
                               isActive
-                                ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200'
-                                : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                                ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200"
+                                : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
                             }`}
                           >
                             <div className="flex items-center gap-2">
@@ -369,7 +406,7 @@ export function Topbar() {
                       <div className="pt-2 mt-1 border-t border-zinc-200 dark:border-zinc-800">
                         <button
                           onClick={() => {
-                          setShowScenarioDropdown(false);
+                            setShowScenarioDropdown(false);
                             setScenarioPanelOpen(true);
                             setInspectorOpen(false);
                           }}
@@ -396,11 +433,19 @@ export function Topbar() {
                     <>
                       <span className="flex items-center gap-1 font-medium text-zinc-700 dark:text-zinc-300">
                         <span className="w-2 h-2 rounded-full bg-blue-500" />
-                        <span>{scenarioAId === 'baseline' ? 'Baseline' : scenarioA?.name}</span>
+                        <span>
+                          {scenarioAId === "baseline"
+                            ? "Baseline"
+                            : scenarioA?.name}
+                        </span>
                       </span>
                       <span className="flex items-center gap-1 font-medium text-zinc-700 dark:text-zinc-300">
                         <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                        <span>{scenarioBId === 'baseline' ? 'Baseline' : scenarioB?.name}</span>
+                        <span>
+                          {scenarioBId === "baseline"
+                            ? "Baseline"
+                            : scenarioB?.name}
+                        </span>
                       </span>
                     </>
                   ) : (
@@ -421,16 +466,18 @@ export function Topbar() {
                         <button
                           type="button"
                           className={`flex w-full items-center gap-2 rounded px-2 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
-                            scenarioAId === 'baseline'
-                              ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200'
-                              : 'text-zinc-700 dark:text-zinc-300'
+                            scenarioAId === "baseline"
+                              ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200"
+                              : "text-zinc-700 dark:text-zinc-300"
                           }`}
                           onClick={() => {
-                            setComparisonScenarios('baseline', scenarioBId);
+                            setComparisonScenarios("baseline", scenarioBId);
                           }}
                         >
                           <span className="w-2 h-2 rounded-full bg-blue-500" />
-                          <span className="truncate">Baseline (données réelles)</span>
+                          <span className="truncate">
+                            Baseline (données de base)
+                          </span>
                         </button>
                         {scenarios.map((s) => (
                           <button
@@ -438,8 +485,8 @@ export function Topbar() {
                             type="button"
                             className={`flex w-full items-center gap-2 rounded px-2 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
                               scenarioAId === s.id
-                                ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200'
-                                : 'text-zinc-700 dark:text-zinc-300'
+                                ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200"
+                                : "text-zinc-700 dark:text-zinc-300"
                             }`}
                             onClick={() => {
                               setComparisonScenarios(s.id, scenarioBId);
@@ -460,16 +507,18 @@ export function Topbar() {
                         <button
                           type="button"
                           className={`flex w-full items-center gap-2 rounded px-2 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
-                            scenarioBId === 'baseline'
-                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200'
-                              : 'text-zinc-700 dark:text-zinc-300'
+                            scenarioBId === "baseline"
+                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200"
+                              : "text-zinc-700 dark:text-zinc-300"
                           }`}
                           onClick={() => {
-                            setComparisonScenarios(scenarioAId, 'baseline');
+                            setComparisonScenarios(scenarioAId, "baseline");
                           }}
                         >
                           <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                          <span className="truncate">Baseline (données réelles)</span>
+                          <span className="truncate">
+                            Baseline (données de base)
+                          </span>
                         </button>
                         {scenarios.map((s) => (
                           <button
@@ -477,8 +526,8 @@ export function Topbar() {
                             type="button"
                             className={`flex w-full items-center gap-2 rounded px-2 py-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
                               scenarioBId === s.id
-                                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200'
-                                : 'text-zinc-700 dark:text-zinc-300'
+                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-200"
+                                : "text-zinc-700 dark:text-zinc-300"
                             }`}
                             onClick={() => {
                               setComparisonScenarios(scenarioAId, s.id);
@@ -502,7 +551,11 @@ export function Topbar() {
                             void handleCalculateAll();
                           }
                         }}
-                        disabled={!scenarioAId || !scenarioBId || compareMutation.isPending}
+                        disabled={
+                          !scenarioAId ||
+                          !scenarioBId ||
+                          compareMutation.isPending
+                        }
                       >
                         {compareMutation.isPending ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
@@ -559,12 +612,40 @@ export function Topbar() {
           >
             <Settings2 className="h-4 w-4" />
           </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              const { toggleLibraryPanel } = useUIStore.getState();
+              toggleLibraryPanel();
+            }}
+            title="Bibliothèque de composites"
+          >
+            <Layers className="h-4 w-4" />
+          </Button>
+
+          {/* Share Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowShareModal(true)}
+            title="Partager le projet"
+          >
+            <Share2 className="h-4 w-4" />
+          </Button>
+
+          {/* User Menu */}
+          <UserMenu />
         </div>
       </div>
 
       {/* Modals */}
       {showCreateDialog && (
-        <NewNodeModal open={showCreateDialog} onClose={() => setShowCreateDialog(false)} />
+        <NewNodeModal
+          open={showCreateDialog}
+          onClose={() => setShowCreateDialog(false)}
+        />
       )}
       {showCreateApiDialog && (
         <NewApiNodeModal
@@ -580,6 +661,14 @@ export function Topbar() {
             setShowInsertCompositeModal(false);
             handleCreateCompositeFromGraph();
           }}
+        />
+      )}
+      {showShareModal && currentProjectId && (
+        <ShareProjectModal
+          open={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          projectId={currentProjectId}
+          projectName={currentProject?.name || ""}
         />
       )}
     </div>

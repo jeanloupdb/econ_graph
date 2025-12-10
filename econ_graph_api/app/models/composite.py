@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import DateTime, JSON, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import DateTime, JSON, String, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
 
@@ -24,6 +24,7 @@ class Composite(Base):
         default=_generate_id,
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    user_id: Mapped[str | None] = mapped_column(String(64), ForeignKey("user.id"), nullable=True)  # Nullable for backward compatibility
     graph_data: Mapped[dict] = mapped_column(
         JSON,
         nullable=False,
@@ -40,6 +41,9 @@ class Composite(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
     )
+
+    # Relationships
+    owner = relationship("User", backref="composites")
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return f"<Composite id={self.id} name={self.name}>"

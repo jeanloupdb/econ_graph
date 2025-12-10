@@ -119,7 +119,7 @@ export function ComputationDialog({
       inputNodeOptions.map((n) => ({
         id: n.id,
         label: n.label,
-        tone: toneMap?.[n.id]?.tone,
+        tone: (toneMap as Record<string, { tone?: 'root' | 'intermediate' | 'leaf' | 'error' }> | undefined)?.[n.id]?.tone,
         isComposite: Boolean(n.composite_id),
       })),
     [inputNodeOptions, toneMap]

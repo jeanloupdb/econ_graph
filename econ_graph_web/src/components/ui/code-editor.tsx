@@ -1,14 +1,12 @@
 'use client';
 
-import { useRef, useEffect, useMemo, useState } from 'react';
-import type React from 'react';
-import Editor from '@monaco-editor/react';
-import type { editor } from 'monaco-editor';
-import type { languages } from 'monaco-editor';
 import { VariableHoverCard } from '@/components/ui/variable-hover-card';
 import type { NodeToneKey } from '@/lib/api/hooks';
 import { getBadgeToneClasses } from '@/lib/nodeStyles';
-import { Layers } from 'lucide-react';
+import Editor from '@monaco-editor/react';
+import { Layers, Loader2 } from 'lucide-react';
+import type { editor } from 'monaco-editor';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface CodeEditorProps {
   value: string;
@@ -22,6 +20,9 @@ interface CodeEditorProps {
   variables?: { id: string; label?: string; tone?: NodeToneKey; isComposite?: boolean }[];
   enableCompletion?: boolean;
   showSnippets?: boolean;
+  suggestions?: string[];
+  isLoading?: boolean;
+  className?: string;
 }
 
 export function CodeEditor({
@@ -36,6 +37,9 @@ export function CodeEditor({
   variables,
   enableCompletion = false,
   showSnippets = true,
+  suggestions = [],
+  isLoading = false,
+  className,
 }: CodeEditorProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -48,37 +52,6 @@ export function CodeEditor({
 
   const handleEditorDidMount = (editor: editor.IStandaloneCodeEditor, monaco: any) => {
     editorRef.current = editor;
-
-    // Register custom autocompletion provider for constants
-    if (enableCompletion && availableConstants.length > 0) {
-      const completionProvider = monaco.languages.registerCompletionItemProvider('python', {
-        provideCompletionItems: (model: any, position: any) => {
-          const word = model.getWordUntilPosition(position);
-          const range = {
-            startLineNumber: position.lineNumber,
-            endLineNumber: position.lineNumber,
-            startColumn: word.startColumn,
-            endColumn: word.endColumn,
-          };
-
-          // Show all available node IDs as suggestions
-          const suggestions = availableConstants.map((constant) => ({
-            label: constant,
-            kind: monaco.languages.CompletionItemKind.Variable,
-            documentation: `Nœud disponible: ${constant}`,
-            insertText: constant,
-            range: range,
-            sortText: constant,
-          }));
-
-          return { suggestions };
-        },
-      });
-
-      // Clean up on unmount
-      // Note: @monaco-editor/react doesn't use the return value here; dispose on unmount via effect below
-      (containerRef.current as any).__completionProvider = completionProvider;
-    }
 
     // Configure editor options
     editor.updateOptions({
@@ -98,12 +71,48 @@ export function CodeEditor({
       folding: false,
       renderLineHighlight: 'all',
       contextmenu: true,
-      quickSuggestions: false, // Disable automatic suggestions
-      suggestOnTriggerCharacters: false, // Don't show on typing trigger characters
-      acceptSuggestionOnEnter: 'off',
-      tabCompletion: 'off',
+      
+      // Aggressively disable all suggestions/completions
+      quickSuggestions: { other: false, comments: false, strings: false },
+      suggestOnTriggerCharacters: false,
+      snippetSuggestions: 'none',
       wordBasedSuggestions: 'off',
       parameterHints: { enabled: false },
+      inlineSuggest: { enabled: false },
+      acceptSuggestionOnEnter: 'off',
+      acceptSuggestionOnCommitCharacter: false,
+      tabCompletion: 'off',
+      
+      suggest: {
+        showMethods: false,
+        showFunctions: false,
+        showConstructors: false,
+        showFields: false,
+        showVariables: false,
+        showClasses: false,
+        showStructs: false,
+        showInterfaces: false,
+        showModules: false,
+        showProperties: false,
+        showEvents: false,
+        showOperators: false,
+        showUnits: false,
+        showValues: false,
+        showConstants: false,
+        showEnums: false,
+        showEnumMembers: false,
+        showKeywords: false,
+        showWords: false,
+        showColors: false,
+        showFiles: false,
+        showReferences: false,
+        showFolders: false,
+        showTypeParameters: false,
+        showSnippets: false,
+        filterGraceful: false,
+        snippetsPreventQuickSuggestions: false,
+      },
+      
       formatOnPaste: true,
       formatOnType: false,
       scrollbar: { horizontal: 'auto' },
@@ -133,8 +142,10 @@ export function CodeEditor({
   useEffect(() => {
     return () => {
       const anyContainer = containerRef.current as any;
-      if (anyContainer && anyContainer.__completionProvider) {
-        anyContainer.__completionProvider.dispose?.();
+      if (anyContainer) {
+        if (anyContainer.__completionProvider) {
+          anyContainer.__completionProvider.dispose?.();
+        }
       }
     };
   }, []);
@@ -258,6 +269,94 @@ export function CodeEditor({
     return () => hoverProvider.dispose();
   }, [variables]);
 
+  // Reset suggestion index when suggestions change
+  useEffect(() => {
+    setSuggestionIndex(0);
+  }, [suggestions]);
+
+  // Animated suggestions logic
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
+  const [displayedSuggestion, setDisplayedSuggestion] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Refined approach for animation
+  useEffect(() => {
+    if (!isEmpty || !suggestions || suggestions.length === 0 || isLoading) {
+      setDisplayedSuggestion('');
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      return;
+    }
+
+    // ... (rest of animation logic)
+
+    let localCharIndex = 0;
+    let localIsDeleting = false;
+    
+    const animate = () => {
+      const targetText = suggestions[suggestionIndex];
+      if (!targetText) return; // Guard against undefined
+      
+      if (!localIsDeleting) {
+        if (localCharIndex < targetText.length) {
+          localCharIndex++;
+          setDisplayedSuggestion(targetText.substring(0, localCharIndex));
+          // Faster typing speed
+          const speed = 5 + Math.random() * 10; 
+          typingTimeoutRef.current = setTimeout(animate, speed);
+        } else {
+          localIsDeleting = true;
+          typingTimeoutRef.current = setTimeout(animate, 5000); // Pause longer (5s)
+        }
+      } else {
+        // Switch to next suggestion
+        localIsDeleting = false;
+        localCharIndex = 0;
+        setDisplayedSuggestion('');
+        setSuggestionIndex((prev) => (prev + 1) % suggestions.length);
+      }
+    };
+
+    typingTimeoutRef.current = setTimeout(animate, 200);
+
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    };
+  }, [isEmpty, suggestions, suggestionIndex, isLoading]);
+
+  const acceptSuggestion = () => {
+    if (displayedSuggestion) {
+      const textToInsert = suggestions[suggestionIndex];
+      onChange(textToInsert);
+      editorRef.current?.focus();
+    }
+  };
+
+  const nextSuggestion = () => {
+    setDisplayedSuggestion('');
+    setSuggestionIndex((prev) => (prev + 1) % suggestions.length);
+    // Reset typing loop
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+  };
+
+  // Handle Tab key to accept suggestion
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isEmpty || !displayedSuggestion) return;
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation(); 
+        acceptSuggestion();
+      }
+      if (e.key === 'ArrowRight' && e.altKey) { // Alt+Right to skip? Or just let them click.
+         // Let's stick to click for now to avoid conflicts.
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [isEmpty, displayedSuggestion, suggestionIndex, suggestions]);
+
+
   const renderVariableChip = (
     v: { id: string; label?: string; tone?: NodeToneKey; isComposite?: boolean },
     key: string
@@ -279,9 +378,9 @@ export function CodeEditor({
         onClick={(e) => e.preventDefault()}
         onMouseEnter={(e) => {
           const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-          const crect = containerRef.current?.getBoundingClientRect();
-          const x = rect.left - (crect?.left || 0) + rect.width / 2;
-          const y = rect.top - (crect?.top || 0) - 8;
+          // Use viewport coordinates for Portal
+          const x = rect.left + rect.width / 2;
+          const y = rect.top - 8;
           setHovered({ id: v.id, label: v.label, x, y });
         }}
         onMouseLeave={() => setHovered(null)}
@@ -297,47 +396,105 @@ export function CodeEditor({
       ref={containerRef}
       onMouseDown={handleContainerMouseDown}
       onKeyDown={handleContainerKeyDown}
-      className="border border-zinc-300 dark:border-zinc-700 rounded-md overflow-hidden relative"
+      style={{ height }}
+      className={`border border-zinc-300 dark:border-zinc-700 rounded-md overflow-hidden relative flex flex-col ${className || ''}`}
     >
-      {/* Placeholder overlay when editor is empty */}
-      {isEmpty && !!placeholder && (
+      {/* Loading Overlay */}
+      {isLoading && (
+        <div className="absolute inset-0 z-30 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm flex items-center justify-center">
+          <div className="flex flex-col items-center gap-2 text-zinc-500 dark:text-zinc-400">
+            <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+            <span className="text-xs font-medium">Génération de l'IA...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Animated Suggestion Overlay */}
+      {isEmpty && displayedSuggestion && !isLoading && (
+        <div className="absolute inset-0 z-20 pointer-events-none pl-[46px] pt-[1px]"> {/* Adjusted padding for alignment */}
+           <div className="w-full h-full flex flex-col">
+              <div className="flex-1 font-mono text-[14px] leading-[19px] text-zinc-400 dark:text-zinc-500 whitespace-pre-wrap relative opacity-90">
+                 {(() => {
+                   const lines = displayedSuggestion.split('\n');
+                   return lines.map((line, i) => {
+                     // Only highlight the FIRST line if it's a comment
+                     const isComment = i === 0 && line.trim().startsWith('#');
+                     const isLast = i === lines.length - 1;
+                     return (
+                       <div key={i} className={`${isComment ? 'text-blue-600 dark:text-blue-400 font-bold bg-blue-50/50 dark:bg-blue-900/20 w-fit px-1 rounded -ml-1 mb-0.5' : ''}`}>
+                         {line}
+                         {isLast && <span className="animate-pulse inline-block w-2 h-4 bg-blue-500 align-middle ml-0.5"></span>}
+                       </div>
+                     );
+                   });
+                 })()}
+                 
+                 {/* Grouped Menu */}
+                 <div className="mt-4 pointer-events-auto animate-in fade-in zoom-in duration-200 flex items-center rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-sm w-fit select-none">
+                    <button
+                      onClick={acceptSuggestion}
+                      className="px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 hover:text-blue-600 dark:hover:text-blue-400 transition-colors rounded-l-md"
+                    >
+                      Accepter
+                    </button>
+                    
+                    <div className="w-[1px] h-4 bg-zinc-200 dark:bg-zinc-700" />
+
+                    <button
+                      onClick={nextSuggestion}
+                      className="px-3 py-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors rounded-r-md"
+                    >
+                      Suivant
+                    </button>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* Placeholder overlay when editor is empty (keep existing but maybe hide if suggestion is showing?) 
+          Actually, if suggestion is showing, we probably want to hide the static placeholder.
+      */}
+      {isEmpty && !!placeholder && !displayedSuggestion && (
         <div
-          className="pointer-events-none absolute inset-0 p-3 text-sm text-zinc-500 dark:text-zinc-400 whitespace-pre-wrap font-mono opacity-70"
+          className="pointer-events-none absolute inset-0 p-3 text-sm text-zinc-500 dark:text-zinc-400 whitespace-pre-wrap font-mono opacity-70 z-10"
           aria-hidden
         >
           {placeholder}
         </div>
       )}
-      <Editor
-        height={height}
-        defaultLanguage={language}
-        language={language}
-        value={value}
-        onChange={handleEditorChange}
-        onMount={(editor, monaco) => { monacoRef.current = monaco; handleEditorDidMount(editor, monaco); }}
-        theme={theme}
-        options={{
-          minimap: { enabled: false },
-          fontSize: 14,
-          lineNumbers: 'on',
-          roundedSelection: true,
-          scrollBeyondLastLine: false,
-          readOnly,
-          automaticLayout: true,
-          tabSize: 4,
-          insertSpaces: true,
-          wordWrap: 'off',
-          quickSuggestions: false,
-          suggestOnTriggerCharacters: false,
-          wordBasedSuggestions: 'off',
-          scrollbar: { horizontal: 'auto' },
-        }}
-        loading={
-          <div className="flex items-center justify-center h-full bg-zinc-900 text-zinc-400">
-            Chargement de l'éditeur...
-          </div>
-        }
-      />
+      <div className="flex-1 min-h-0 relative">
+        <Editor
+          height="100%"
+          defaultLanguage={language}
+          language={language}
+          value={value}
+          onChange={handleEditorChange}
+          onMount={(editor, monaco) => { monacoRef.current = monaco; handleEditorDidMount(editor, monaco); }}
+          theme={theme}
+          options={{
+            minimap: { enabled: false },
+            fontSize: 14,
+            lineNumbers: 'on',
+            roundedSelection: true,
+            scrollBeyondLastLine: false,
+            readOnly,
+            automaticLayout: true,
+            tabSize: 4,
+            insertSpaces: true,
+            wordWrap: 'off',
+            quickSuggestions: false,
+            suggestOnTriggerCharacters: false,
+            wordBasedSuggestions: 'off',
+            scrollbar: { horizontal: 'auto' },
+          }}
+          loading={
+            <div className="flex items-center justify-center h-full bg-zinc-900 text-zinc-400">
+              Chargement de l'éditeur...
+            </div>
+          }
+        />
+      </div>
       {showVariablePalette && paletteItems.length > 0 && (
         <div ref={paletteRef} className="border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
           <div className="flex flex-wrap gap-3 p-2 text-[11px]">
@@ -372,8 +529,8 @@ export function CodeEditor({
             <VariableHoverCard
               id={hovered.id}
               label={hovered.label}
-              x={Math.max(8, Math.min(hovered.x, (containerRef.current?.clientWidth || 0) - 8))}
-              y={Math.max(8, hovered.y)}
+              x={hovered.x}
+              y={hovered.y}
             />
           )}
         </div>

@@ -1,21 +1,25 @@
-import { create } from 'zustand';
 import { apiClient } from '@/lib/api/client';
+import { create } from 'zustand';
 
 export interface Project {
   id: string;
   name: string;
   createdAt: string;
   updatedAt: string;
+  public_view_token?: string | null;
 }
 
 interface ProjectState {
   projects: Project[];
   currentProjectId: string | null;
   load: () => void;
-  createProject: (name: string) => Project;
+  createProject: (name: string) => Promise<Project>;
   deleteProject: (id: string) => void;
   renameProject: (id: string, name: string) => void;
   setCurrentProject: (id: string) => void;
+  shareProject: (id: string) => Promise<{ public_view_token: string }>;
+  revokeShare: (id: string) => Promise<void>;
+  addProject: (project: Project) => void;
 }
 
 const LS_KEY = 'eg_projects_v1';
@@ -67,6 +71,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         name: p.name,
         createdAt: p.created_at,
         updatedAt: p.updated_at,
+        public_view_token: p.public_view_token,
       }));
       const cur = typeof window !== 'undefined' ? localStorage.getItem(LS_CUR) : null;
       const nextCurrent = cur || (projs[0]?.id || null);
@@ -80,13 +85,20 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
-  createProject: (name: string) => {
+  createProject: async (name: string) => {
     const now = new Date().toISOString();
     const idBase = name.trim().toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
     const id = `${idBase || 'project'}-${Date.now().toString(36)}`.slice(0, 48);
     const p: Project = { id, name: name.trim() || 'Untitled Project', createdAt: now, updatedAt: now };
-    // Persist via API
-    apiClient.post<Project, { id: string; name: string }>('/projects', { id: p.id, name: p.name }).catch(() => {});
+    
+    // Persist via API and wait for it
+    try {
+      await apiClient.post<Project, { id: string; name: string }>('/projects', { id: p.id, name: p.name });
+    } catch (e) {
+      console.error("Failed to create project on backend", e);
+      // We still continue with local state, but this might be risky if backend is down
+    }
+
     const projs = [...get().projects, p];
     set({ projects: projs, currentProjectId: id });
     save(projs, id);
@@ -112,5 +124,30 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setCurrentProject: (id: string) => {
     set({ currentProjectId: id });
     save(get().projects, id);
+  },
+
+  shareProject: async (id: string) => {
+    const res = await apiClient.post<{ public_view_token: string }>(`/projects/${id}/share`, {});
+    const projs = get().projects.map((p) => (p.id === id ? { ...p, public_view_token: res.public_view_token } : p));
+    set({ projects: projs });
+    save(projs, get().currentProjectId);
+    return res;
+  },
+
+  revokeShare: async (id: string) => {
+    await apiClient.delete(`/projects/${id}/share`);
+    const projs = get().projects.map((p) => (p.id === id ? { ...p, public_view_token: null } : p));
+    set({ projects: projs });
+    save(projs, get().currentProjectId);
+    set({ projects: projs });
+    save(projs, get().currentProjectId);
+  },
+
+  addProject: (project: Project) => {
+    const projs = [project, ...get().projects];
+    // Ensure uniqueness just in case
+    const uniqueProjs = Array.from(new Map(projs.map(p => [p.id, p])).values());
+    set({ projects: uniqueProjs });
+    save(uniqueProjs, get().currentProjectId);
   },
 }));

@@ -5,24 +5,25 @@ import { NewNodeModal } from "@/components/forms/NewNodeModal";
 import { AlgorithmPanel } from "@/components/panels/AlgorithmPanel";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
 } from "@/components/ui/dialog";
 import { ChevronLeft, Loader2 } from "lucide-react";
-import { EdgeInspector } from "./Inspector/EdgeInspector";
-import { StackPanelRenderer } from "./Inspector/StackPanelRenderer";
-import { NotesCard } from "./Inspector/NotesCard";
-import { InspectorHeader } from "./Inspector/InspectorHeader";
-import { InspectorBreadcrumbs } from "./Inspector/InspectorBreadcrumbs";
-import { DependenciesList } from "./Inspector/DependenciesList";
-import { CompositeInputs } from "./Inspector/CompositeInputs";
-import { ValueCard } from "./Inspector/ValueCard";
 import { AlgorithmBlock } from "./Inspector/AlgorithmBlock";
+import { CompositeInputs } from "./Inspector/CompositeInputs";
+import { DependenciesList } from "./Inspector/DependenciesList";
+import { EdgeInspector } from "./Inspector/EdgeInspector";
+import { InspectorBreadcrumbs } from "./Inspector/InspectorBreadcrumbs";
+import { InspectorHeader } from "./Inspector/InspectorHeader";
+import { NotesCard } from "./Inspector/NotesCard";
 import { ProviderBlock } from "./Inspector/ProviderBlock";
+import { SmartFixDialog } from "./Inspector/SmartFixDialog";
+import { StackPanelRenderer } from "./Inspector/StackPanelRenderer";
 import { useInspectorData } from "./Inspector/useInspectorData";
+import { ValueCard } from "./Inspector/ValueCard";
 
 export function Inspector() {
   const data = useInspectorData();
@@ -238,6 +239,19 @@ export function Inspector() {
         .custom-scroll::-webkit-scrollbar-thumb { background: rgba(100,100,100,.35); border-radius: 8px; }
         .custom-scroll::-webkit-scrollbar-track { background: transparent; }
       `}</style>
+
+      {typedNode && (
+        <SmartFixDialog
+          isOpen={data.smartFixOpen}
+          onClose={() => data.setSmartFixOpen(false)}
+          nodeId={typedNode.id}
+          currentCode={typedNode.computation_definition || ""}
+          errorTrace={typedNode.computation_error || ""}
+          onApplyFix={data.handleApplySmartFix}
+          errorInputNodes={data.errorInputNodes}
+          onNavigate={data.onNavigate}
+        />
+      )}
     </div>
   );
 }

@@ -1,43 +1,42 @@
 "use client";
 
 import {
-  useComputeAll,
-  useComputeWithScenario,
-  useCreateScenario,
-  useDeleteScenario,
-  useDuplicateScenario,
-  useNodeTones,
-  useProjectExposedRoots,
-  useProjectNodes,
-  useScenarios,
-  useTheme,
-  useUpdateOverrides,
-  useUpdateScenario,
-  useValidateOverride,
+    useComputeAll,
+    useComputeWithScenario,
+    useCreateScenario,
+    useDeleteScenario,
+    useDuplicateScenario,
+    useNodeTones,
+    useProjectExposedRoots,
+    useProjectNodes,
+    useScenarios,
+    useTheme,
+    useUpdateOverrides,
+    useUpdateScenario,
+    useValidateOverride,
 } from "@/lib/api/hooks";
+import { deriveEdgesFromCompute } from "@/lib/layout/graph";
 import type {
-  Node,
-  OverrideUpdate,
-  Scenario,
-  ScenarioCompositeOverride,
-  ScenarioCreate,
-  ScenarioNodeOverride,
+    OverrideUpdate,
+    Scenario,
+    ScenarioCompositeOverride,
+    ScenarioCreate,
+    ScenarioNodeOverride
 } from "@/lib/types";
 import { useProjectStore } from "@/store/projectState";
 import { useScenarioStore } from "@/store/scenarioState";
 import { useUIStore } from "@/store/uiState";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { deriveEdgesFromCompute } from "@/lib/layout/graph";
+import type {
+    DeleteScenarioDialogProps,
+    DuplicateScenarioDialogProps,
+    ModeChangeDialogProps,
+    NewScenarioDialogProps,
+    RenameScenarioDialogProps,
+} from "./ScenarioDialogs";
 import type { ScenarioHeaderProps } from "./ScenarioHeader";
 import type { ScenarioParametersProps } from "./ScenarioParameters";
-import type {
-  DeleteScenarioDialogProps,
-  DuplicateScenarioDialogProps,
-  ModeChangeDialogProps,
-  NewScenarioDialogProps,
-  RenameScenarioDialogProps,
-} from "./ScenarioDialogs";
 import { useScenarioPanelSections } from "./hooks";
 import { makeCompositeOverrideKey, OverrideTarget } from "./types";
 
@@ -666,6 +665,7 @@ export function useScenarioPanelLogic(
     scenarioNodeOverridesMap,
     scenarioCompositeOverridesMap,
     pendingChanges,
+    setPendingChanges,
     validationResults,
     tones,
     theme,
@@ -683,6 +683,9 @@ export function useScenarioPanelLogic(
     isSavingOverride: updateOverridesMutation.isPending,
     isValidatingOverride: validateOverride.isPending,
     onValidateOverride: handleValidateOverrideRequest,
+    onRequestCreateScenario: () => setConfirmNewScenarioOpen(true),
+    scenarios,
+    onSelectScenario: (id) => void handleScenarioSelect(id),
   };
 
   const renameDialogProps: RenameScenarioDialogProps = {

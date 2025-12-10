@@ -3,8 +3,10 @@
 import { NewApiNodeModal } from "@/components/forms/NewApiNodeModal";
 import { NewNodeModal } from "@/components/forms/NewNodeModal";
 import { GraphAddNodeMenu } from "@/components/graph/GraphAddNodeMenu";
+import { GraphAiBar } from "@/components/graph/GraphAiBar";
 import { GraphCanvas } from "@/components/graph/GraphCanvas";
 import { Inspector } from "@/components/panels/Inspector";
+import { LibraryPanel } from "@/components/panels/LibraryPanel";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,9 +22,18 @@ import { CompositeGraphProvider } from "@/graph/providers/CompositeGraphProvider
 import { apiClient } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/hooks";
 import {
+  PENDING_COMPOSITE_INSERT_KEY,
+  PENDING_COMPOSITE_REFRESH_KEY
+} from "@/lib/composites/constants";
+import {
   normalizeCompositeNodes,
   serializeCompositeGraph,
 } from "@/lib/composites/graph";
+import type {
+  PendingCompositeInsertPayload,
+  PendingCompositeRefreshPayload,
+  TransformCompositeSessionPayload,
+} from "@/lib/composites/types";
 import { deriveEdgesFromCompute } from "@/lib/layout/graph";
 import type {
   Composite,
@@ -31,23 +42,16 @@ import type {
   CompositeUpdateInput,
   Node,
 } from "@/lib/types";
-import { formatNumber } from "@/lib/utils";
 import { useUIStore } from "@/store/uiState";
+import { formatNumber } from "@/utils/format";
 import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Layers, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  COMPOSITE_TRANSFORM_BUFFER_KEY,
-  PENDING_COMPOSITE_INSERT_KEY,
-  PENDING_COMPOSITE_REFRESH_KEY,
-} from "@/lib/composites/constants";
-import type {
-  PendingCompositeInsertPayload,
-  PendingCompositeRefreshPayload,
-  TransformCompositeSessionPayload,
-} from "@/lib/composites/types";
+  type CompositeRootInfo
+} from "./ExposedRootsManager";
 
 interface CompositeEditorProps {
   initialComposite?: Composite | null;
@@ -124,8 +128,12 @@ function CompositeEditorLayout({
   const [abandonDialogOpen, setAbandonDialogOpen] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
   const [recomputing, setRecomputing] = useState(false);
-  const toastRefs = useRef<Map<string, string>>(new Map());
-  const blockingErrorToast = useRef<string | null>(null);
+  // Exposed roots state removed as per user request
+  const [exposedRoots, setExposedRoots] = useState<Record<string, CompositeRootInfo>>(
+    (initialComposite?.graph_data as any)?.exposed_roots || {}
+  );
+  const toastRefs = useRef<Map<string, string | number>>(new Map());
+  const blockingErrorToast = useRef<string | number | null>(null);
 
   useEffect(() => {
     setScenarioPanelOpen(false);
@@ -182,7 +190,7 @@ function CompositeEditorLayout({
             actionLabel="Voir le nœud >"
             onAction={() => {
               setSelectedNodeId(edge.target);
-              toast.dismiss(t.id);
+              toast.dismiss(t as string | number);
             }}
           />
         ),
@@ -219,7 +227,7 @@ function CompositeEditorLayout({
               actionLabel="Voir le nœud >"
               onAction={() => {
                 setSelectedNodeId(leafId);
-                toast.dismiss(t.id);
+                toast.dismiss(t as string | number);
               }}
             />
           ),
@@ -262,10 +270,13 @@ function CompositeEditorLayout({
       setError(null);
       setSaving(true);
       try {
-        const payload = {
-          name: editorName,
-          graph_data: graphData,
-        };
+          const payload = {
+            name: editorName,
+            graph_data: {
+              ...graphData,
+              exposed_roots: exposedRoots,
+            },
+          };
 
         let saved: Composite;
         if (compositeId) {
@@ -349,6 +360,15 @@ function CompositeEditorLayout({
       setRecomputing(false);
     }
   }, [graphActions, analysis.leaves, nodes]);
+
+  // Auto-compute on mount
+  const hasAutoComputed = useRef(false);
+  useEffect(() => {
+    if (!hasAutoComputed.current && nodes.length > 0) {
+      hasAutoComputed.current = true;
+      handleRecompute();
+    }
+  }, [nodes.length, handleRecompute]);
 
   const queueCompositeRefresh = useCallback(
     (projectId: string, compositeIdValue: string) => {
@@ -551,6 +571,17 @@ function CompositeEditorLayout({
             <Button
               variant="ghost"
               size="icon"
+              onClick={() => {
+                const { toggleLibraryPanel } = useUIStore.getState();
+                toggleLibraryPanel();
+              }}
+              title="Bibliothèque de composites"
+            >
+              <Layers className="h-5 w-5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               title="Recalculer le composite"
               onClick={() => handleRecompute()}
               disabled={recomputing || nodes.length === 0}
@@ -575,8 +606,10 @@ function CompositeEditorLayout({
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1">
+        <div className="flex-1 relative overflow-hidden">
           <GraphCanvas />
+          <GraphAiBar mode="composite" />
+          <LibraryPanelWrapper />
         </div>
         <Inspector />
       </div>
@@ -623,6 +656,16 @@ function CompositeEditorLayout({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function LibraryPanelWrapper() {
+  const libraryPanelOpen = useUIStore((s) => s.libraryPanelOpen);
+  if (!libraryPanelOpen) return null;
+  return (
+    <div className="absolute left-0 top-0 z-10 h-full shadow-xl">
+      <LibraryPanel />
     </div>
   );
 }
@@ -717,7 +760,9 @@ function analyzeComposite(nodes: Node[]) {
 
   // Count outgoing edges, resolving slugs to IDs
   const outgoing = new Map<string, number>();
-  nodes.forEach((node) => outgoing.set(node.id, 0));
+  nodes.forEach((node) => {
+    if (node.id) outgoing.set(node.id, 0);
+  });
   derivedEdges.forEach((edge) => {
     // Try to resolve source by ID first, then by slug
     const sourceId = nodeIds.has(edge.source) ? edge.source : slugToId.get(edge.source);
@@ -727,7 +772,7 @@ function analyzeComposite(nodes: Node[]) {
   });
 
   const leaves = nodes
-    .filter((node) => (outgoing.get(node.id) || 0) === 0)
+    .filter((node) => node.id && (outgoing.get(node.id) || 0) === 0)
     .map((node) => node.id);
 
   return { edges: derivedEdges, missingSources, leaves, invalidEdges };

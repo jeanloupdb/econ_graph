@@ -1,8 +1,9 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import type { Node } from "@/lib/types";
-import { formatNumber } from "@/lib/utils";
-import { AlertCircle, Layers, Settings2 } from "lucide-react";
+import { formatNumber } from "@/utils/format";
+import { AlertCircle, Layers, Settings2, Sparkles } from "lucide-react";
 import type React from "react";
 
 type TonePalette = { bg: string; border: string; text: string };
@@ -29,6 +30,7 @@ interface ValueCardProps {
   valueStyle?: React.CSSProperties;
   activeScenarioName?: string | null;
   activeScenarioColor?: string | null;
+  onSmartFix?: () => void;
 }
 
 export function ValueCard({
@@ -47,6 +49,7 @@ export function ValueCard({
   valueStyle,
   activeScenarioName,
   activeScenarioColor,
+  onSmartFix,
 }: ValueCardProps) {
   const containerStyle: React.CSSProperties = color
     ? {
@@ -66,7 +69,7 @@ export function ValueCard({
           <ComparisonRow
             label={
               scenarioAName === "baseline"
-                ? "Baseline (valeurs réelles)"
+                ? "Baseline (valeurs de base)"
                 : scenarioAName || "Scénario"
             }
             value={compareData.value_a}
@@ -76,7 +79,7 @@ export function ValueCard({
           <ComparisonRow
             label={
               scenarioBName === "baseline"
-                ? "Baseline (valeurs réelles)"
+                ? "Baseline (valeurs de base)"
                 : scenarioBName || "Scénario"
             }
             value={compareData.value_b}
@@ -168,9 +171,22 @@ export function ValueCard({
         </div>
 
         {hasError && (
-          <div className="mt-2 text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
-            <AlertCircle className="h-4 w-4" />
-            <div className="leading-relaxed">{node.computation_error}</div>
+          <div className="mt-2 text-xs text-red-700 dark:text-red-300 flex flex-col gap-2">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+              <div className="leading-relaxed">{node.computation_error}</div>
+            </div>
+            {onSmartFix && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="self-start h-6 px-2 text-xs gap-1.5 border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300 dark:hover:bg-indigo-900 ml-6"
+                onClick={onSmartFix}
+              >
+                <Sparkles className="h-3 w-3" />
+                Fix with AI
+              </Button>
+            )}
           </div>
         )}
 

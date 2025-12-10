@@ -8,7 +8,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.core.db import Base
-from app.models import node, edge, project, composite  # import models to register metadata
+from app.models import node, edge, project, composite, project_collaborator  # import models to register metadata
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -29,6 +29,9 @@ target_metadata = Base.metadata
 # ... etc.
 
 
+from app.core.config import settings
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
@@ -41,7 +44,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = os.getenv("DATABASE_URL")
+    url = settings.db_url
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -62,7 +65,7 @@ def run_migrations_online() -> None:
 
     """
     configuration = config.get_section(config.config_ini_section)
-    configuration["sqlalchemy.url"] = os.getenv("DATABASE_URL")
+    configuration["sqlalchemy.url"] = settings.db_url
 
     connectable = engine_from_config(
         configuration,

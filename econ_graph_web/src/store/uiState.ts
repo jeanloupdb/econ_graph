@@ -9,6 +9,7 @@ import type { InteractionMode } from '../lib/types';
 interface UIState {
   // Interaction mode (always 'select')
   mode: InteractionMode;
+  setMode: (mode: InteractionMode) => void;
 
   // Panel visibility
   inspectorOpen: boolean;
@@ -16,6 +17,9 @@ interface UIState {
   setInspectorOpen: (open: boolean) => void;
   scenarioPanelOpen: boolean;
   setScenarioPanelOpen: (open: boolean) => void;
+  libraryPanelOpen: boolean;
+  toggleLibraryPanel: () => void;
+  setLibraryPanelOpen: (open: boolean) => void;
 
   // Node selection
   selectedNodeId: string | null;
@@ -70,9 +74,17 @@ interface UIState {
   highlightedNodeId: string | null;
   flashNodeHighlight: (nodeId: string | null, durationMs?: number) => void;
 
+  // AI Assistant visibility
+  aiAssistantOpen: boolean;
+  setAiAssistantOpen: (open: boolean) => void;
+
   // Computing state (reload/refresh)
   isComputing: boolean;
   setIsComputing: (isComputing: boolean) => void;
+
+  // Edit Node Modal
+  editNodeModalOpen: boolean;
+  setEditNodeModalOpen: (open: boolean) => void;
 }
 
 let highlightTimeout: number | null = null;
@@ -93,9 +105,13 @@ export const useUIStore = create<UIState>((set) => ({
   sidePanelWidth: 448, // ~28rem default
   scenarioPanelHighlightId: null,
   highlightedNodeId: null,
+  aiAssistantOpen: false,
   isComputing: false,
+  editNodeModalOpen: false,
 
   // Actions
+  setMode: (mode) => set({ mode }),
+  setEditNodeModalOpen: (open) => set({ editNodeModalOpen: open }),
   toggleInspector: () =>
     set((state) => ({
       inspectorOpen: !state.inspectorOpen,
@@ -116,7 +132,18 @@ export const useUIStore = create<UIState>((set) => ({
       selectedNodeId: open ? null : state.selectedNodeId,
       selectedEdgeId: open ? null : state.selectedEdgeId,
       selectedEdgeIds: open ? [] : state.selectedEdgeIds,
+      libraryPanelOpen: open ? false : state.libraryPanelOpen,
     })),
+
+  libraryPanelOpen: false,
+  toggleLibraryPanel: () =>
+    set((state) => ({
+      libraryPanelOpen: !state.libraryPanelOpen,
+      // If opening library, close other panels? Maybe not, library is on the left usually.
+      // But for now let's keep it independent or maybe close inspector if it's too crowded?
+      // Let's keep it independent for now as it's likely on the left.
+    })),
+  setLibraryPanelOpen: (open) => set({ libraryPanelOpen: open }),
 
   setSelectedNodeId: (id) =>
     set((state) => ({
@@ -231,7 +258,10 @@ export const useUIStore = create<UIState>((set) => ({
       panelStack: [],
       scenarioPanelHighlightId: null,
       highlightedNodeId: null,
+      aiAssistantOpen: false,
     })),
+
+  setAiAssistantOpen: (open) => set({ aiAssistantOpen: open }),
 
   setIsComputing: (isComputing) => set({ isComputing }),
 }));

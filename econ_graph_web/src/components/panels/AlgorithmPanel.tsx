@@ -1,17 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { CodeEditor } from '@/components/ui/code-editor';
-import { Lightbulb, Save, Calculator, Loader2, Maximize2, Minimize2, X } from 'lucide-react';
-import { useGraphData } from '@/graph/context/GraphDataContext';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { useGraphActions } from '@/graph/context/GraphActionsContext';
-import { useUIStore } from '@/store/uiState';
-import { useProjectStore } from '@/store/projectState';
+import { useGraphData } from '@/graph/context/GraphDataContext';
 import { useNodeTones } from '@/lib/api/hooks';
+import { useProjectStore } from '@/store/projectState';
+import { useUIStore } from '@/store/uiState';
+import { Calculator, Lightbulb, Loader2, Maximize2, Minimize2, Save, Sparkles, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface AlgorithmPanelProps {
   nodeId: string;
@@ -32,6 +32,60 @@ export function AlgorithmPanel({ nodeId }: AlgorithmPanelProps) {
   const popPanel = useUIStore((s) => s.popPanel);
   const [fullscreen, setFullscreen] = useState(false);
   const [saving, setSaving] = useState(false);
+  
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [aiPromptOpen, setAiPromptOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+
+  const handleGenerateAi = async (force = false) => {
+    if (!force) {
+      setAiPromptOpen(true);
+      return;
+    }
+
+
+    
+    setAiPromptOpen(false);
+    setIsGeneratingAi(true);
+    setSuggestions([]); // Clear previous suggestions
+    setDefinition(''); // Clear to show ghost text
+    try {
+      const context = {
+        nodeId: currentNode?.id,
+        label: currentNode?.label,
+        unit: (currentNode as any)?.unit,
+        description: (currentNode as any)?.notes,
+        inputs: inputNodeOptions.map(n => ({ 
+          id: n.id, 
+          label: n.label,
+          unit: (n as any)?.unit,
+          description: (n as any)?.notes
+        })),
+        currentCode: definition, // Pass existing code for modification
+      };
+      
+      const res = await fetch('http://localhost:8000/ai/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: aiPrompt || `Generate a Python compute function for node '${currentNode?.label}' (${currentNode?.id}). Inputs: ${inputNodeOptions.map(n => n.id).join(', ')}.`,
+          context
+        }),
+      });
+      
+      const data = await res.json();
+      if (data.text) {
+        setDefinition(data.text);
+        setSuggestions([]);
+      }
+    } catch (error) {
+      console.error("AI Generation failed", error);
+      // setInlineError("Erreur lors de la génération IA"); // Assuming inlineError logic exists or is handled elsewhere
+    } finally {
+      setIsGeneratingAi(false);
+    }
+  };
   // Templates helpers
   const buildParams = (n: number) => inputNodeOptions.slice(0, n).map((x) => x.id).join(', ') || Array.from({ length: n }).map((_, i) => `x${i+1}`).join(', ');
   const insertTemplate = (tpl: 'constant' | 'expression' | 'condition' | 'math') => {
@@ -60,28 +114,18 @@ export function AlgorithmPanel({ nodeId }: AlgorithmPanelProps) {
   useEffect(() => {
     if (currentNode?.computation_definition) {
       setDefinition(currentNode.computation_definition);
-    } else {
-      // Pre-fill template
-      if (inputNodeOptions.length === 0) {
-        setDefinition((prev) => (prev?.trim() ? prev : 'def compute():\n    return 1'));
+    } else if (!definition.trim()) {
+      // Pre-fill with standard default
+      if (inputNodeOptions.length > 0) {
+        const firstVar = inputNodeOptions[0].id;
+        setDefinition(`def compute(${firstVar}):\n    # Exemple par défaut\n    return 42 * ${firstVar}`);
       } else {
-        const baseInputs = inputNodeOptions.slice(0, 3).map((n) => n.id);
-        const params = baseInputs.join(', ') || 'input1, input2';
-        const example = baseInputs.join(' + ') || 'input1 + input2';
-        setDefinition((prev) => prev?.trim() ? prev : `def compute(${params}):\n    return ${example}`);
+        setDefinition('def compute():\n    # Exemple par défaut\n    return 42');
       }
     }
   }, [currentNode?.computation_definition, nodeId, inputNodeOptions]);
 
-  const placeholder = useMemo(() => {
-    if (inputNodeOptions.length === 0) {
-      return 'def compute():\n    return 1';
-    }
-    const exInputs = inputNodeOptions.slice(0, 2).map((n) => n.id);
-    const params = exInputs.join(', ') || 'input1, input2';
-    const sum = exInputs.join(' + ') || 'input1 + input2';
-    return `def compute(${params}):\n    # Calculez le résultat\n    return ${sum}`;
-  }, [inputNodeOptions]);
+  const placeholder = "";
 
   const handleSave = async () => {
     setInlineError(null);
@@ -133,7 +177,7 @@ export function AlgorithmPanel({ nodeId }: AlgorithmPanelProps) {
       inputNodeOptions.map((n) => ({
         id: n.id,
         label: n.label,
-        tone: toneMap?.[n.id]?.tone,
+        tone: (toneMap as any)?.[n.id]?.tone,
         isComposite: Boolean(n.composite_id),
       })),
     [inputNodeOptions, toneMap]
@@ -142,19 +186,57 @@ export function AlgorithmPanel({ nodeId }: AlgorithmPanelProps) {
   const EditorBlock = (
     <div className="space-y-3 py-3">
       <div className="space-y-2 relative group">
+        {/* AI Prompt Dialog */}
+        <Dialog open={aiPromptOpen} onOpenChange={setAiPromptOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Générer avec l'IA</DialogTitle>
+              <DialogDescription>
+                Décrivez ce que le nœud doit calculer. L'IA utilisera les variables disponibles.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-2">
+              <Textarea
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="Ex: Calcule la moyenne pondérée des entrées si elles sont positives..."
+                className="min-h-[100px]"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAiPromptOpen(false)}>Annuler</Button>
+              <Button onClick={() => handleGenerateAi(true)} disabled={isGeneratingAi}>
+                {isGeneratingAi ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+                Générer
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <div className="flex items-center gap-2">
           <Label>Algorithme Python *</Label>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 text-zinc-500 hover:text-zinc-900"
-            title="Aide: exemples de code pour démarrer"
-            onClick={() => setHelpOpen(true)}
-            aria-label="Aide algorithme"
-          >
-            <Lightbulb className="h-4 w-4" />
-          </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-zinc-500 hover:text-zinc-900"
+              title="Aide: exemples de code pour démarrer"
+              onClick={() => setHelpOpen(true)}
+              aria-label="Aide algorithme"
+            >
+              <Lightbulb className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/20 gap-1.5"
+              onClick={() => setAiPromptOpen(true)}
+              disabled={isGeneratingAi}
+            >
+              {isGeneratingAi ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+              IA
+            </Button>
         </div>
         {/* Discreet helper button (appears on hover) */}
         <button
@@ -182,7 +264,7 @@ export function AlgorithmPanel({ nodeId }: AlgorithmPanelProps) {
                   <button
                     type="button"
                     className="w-full text-left px-3 py-2 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                    onClick={() => { insertTemplate(opt.id as any); setTemplateMenuOpen(false); setSelectedTemplate(opt.id as any); }}
+                    onClick={() => { insertTemplate(opt.id as any); setTemplateMenuOpen(false); }}
                   >
                     {opt.label}
                   </button>
@@ -201,6 +283,8 @@ export function AlgorithmPanel({ nodeId }: AlgorithmPanelProps) {
           variables={variableOptions}
           showVariablePalette
           enableCompletion={false}
+          suggestions={isGeneratingAi ? [] : suggestions}
+          isLoading={isGeneratingAi}
           showSnippets
         />
         {/* Help modal with example snippets */}

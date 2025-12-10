@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback } from "react";
 import { useGraphActions } from "@/graph/context/GraphActionsContext";
 import { useGraphData } from "@/graph/context/GraphDataContext";
 import { apiClient, APIClientError } from "@/lib/api/client";
 import type { Composite, CompositeGraphData, NodeCreate } from "@/lib/types";
-import { useUIStore } from "@/store/uiState";
 import { useGraphStore } from "@/store/graphState";
+import { useUIStore } from "@/store/uiState";
+import { useCallback } from "react";
 
 export interface InsertCompositeOptions {
   slug?: string | null;
@@ -24,11 +24,13 @@ function findFinalCompositeNode(
     return null;
   }
   const outgoing = new Map<string, number>();
-  nodes.forEach((node) => outgoing.set(node.id, 0));
+  nodes.forEach((node) => {
+    if (node.id) outgoing.set(node.id, 0);
+  });
   (graph?.edges ?? []).forEach((edge) => {
     outgoing.set(edge.source, (outgoing.get(edge.source) || 0) + 1);
   });
-  const leaves = nodes.filter((node) => (outgoing.get(node.id) || 0) === 0);
+  const leaves = nodes.filter((node) => node.id && (outgoing.get(node.id) || 0) === 0);
   return leaves[0] ?? null;
 }
 

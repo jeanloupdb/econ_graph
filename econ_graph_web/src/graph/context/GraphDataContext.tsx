@@ -1,5 +1,5 @@
-import { createContext, useContext } from 'react';
 import type { Node } from '@/lib/types';
+import { createContext, useContext } from 'react';
 
 export interface NodePositionUpdate {
   id: string;
@@ -9,6 +9,7 @@ export interface NodePositionUpdate {
 
 export interface GraphDataContextValue {
   nodes: Node[];
+  edges?: any[]; // Using any[] temporarily or import Edge type if available
   isLoading: boolean;
   refresh: () => void | Promise<unknown>;
   persistNodePositions: (updates: NodePositionUpdate[]) => Promise<void>;

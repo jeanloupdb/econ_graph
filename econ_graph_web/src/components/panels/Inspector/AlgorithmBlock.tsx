@@ -1,8 +1,9 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { CodeEditor } from "@/components/ui/code-editor";
-import { Calculator, ChevronDown, Edit3 } from "lucide-react";
 import type { NodeToneKey } from "@/lib/api/hooks";
+import { ChevronDown, Code2, Edit3 } from "lucide-react";
 
 interface AlgorithmBlockProps {
   code?: string | null;
@@ -22,30 +23,35 @@ export function AlgorithmBlock({ code, variables, onEdit }: AlgorithmBlockProps)
   }
 
   return (
-    <details className="rounded-md border border-zinc-200 dark:border-zinc-800 group">
-      <summary className="px-3 py-2 cursor-pointer select-none text-sm text-zinc-700 dark:text-zinc-200 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <ChevronDown className="h-4 w-4 text-zinc-500 transition-transform group-open:rotate-180" />
-          <Calculator className="h-4 w-4" />
-          Algorithme
+    <details className="rounded-xl border-2 border-zinc-200 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-950 shadow-sm group" open>
+      <summary className="flex items-center justify-between px-4 py-3 bg-zinc-50 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+        <div className="flex items-center gap-2.5">
+          <ChevronDown className="h-4 w-4 text-zinc-400 transition-transform group-open:rotate-180" />
+          <div className="h-8 w-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-600 dark:text-zinc-400">
+            <Code2 className="h-4 w-4" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Logique de calcul</div>
+          </div>
         </div>
         {onEdit && (
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               onEdit();
             }}
-            className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-            title="Modifier l'algorithme"
-            aria-label="Modifier l'algorithme"
+            className="h-8 px-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
           >
-            <Edit3 className="h-3.5 w-3.5 text-zinc-600 dark:text-zinc-400" />
-            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Modifier</span>
-          </button>
+            <Edit3 className="h-3.5 w-3.5 mr-1.5" />
+            Modifier
+          </Button>
         )}
       </summary>
-      <div className="p-3">
+      
+      <div className="relative group">
         <CodeEditor
           value={normalized}
           onChange={() => {}}
@@ -55,7 +61,10 @@ export function AlgorithmBlock({ code, variables, onEdit }: AlgorithmBlockProps)
           showVariablePalette={false}
           enableCompletion={false}
           variables={variables}
+          className="border-0"
         />
+        {/* Overlay to indicate read-only but allow scroll */}
+        <div className="absolute inset-0 pointer-events-none bg-zinc-50/0" />
       </div>
     </details>
   );

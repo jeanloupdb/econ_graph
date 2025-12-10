@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 
 interface VariableHoverCardProps {
   id: string;
@@ -9,13 +8,17 @@ interface VariableHoverCardProps {
   y: number;
 }
 
+import { createPortal } from 'react-dom';
+
 export function VariableHoverCard({ id, label, x, y }: VariableHoverCardProps) {
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div
-      className="pointer-events-none absolute z-20 px-3 py-2 text-xs rounded-md bg-zinc-900 text-zinc-50 shadow-xl border border-zinc-800"
+      className="pointer-events-none fixed z-[9999] px-3 py-2 text-xs rounded-md bg-zinc-900 text-zinc-50 shadow-xl border border-zinc-800"
       style={{
-        left: Math.max(8, x),
-        top: Math.max(8, y),
+        left: x,
+        top: y,
         transform: 'translate(-50%, -100%)',
       }}
       role="tooltip"
@@ -24,7 +27,8 @@ export function VariableHoverCard({ id, label, x, y }: VariableHoverCardProps) {
       {label && (
         <div className="opacity-70 text-[11px] leading-tight mt-0.5">{id}</div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
 

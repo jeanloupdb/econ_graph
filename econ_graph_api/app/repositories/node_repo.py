@@ -28,7 +28,11 @@ def to_model(payload) -> Node:
         provider_timeout=getattr(payload, 'provider_timeout', None),
         provider_cache_ttl=getattr(payload, 'provider_cache_ttl', None),
         provider_last_fetched_at=getattr(payload, 'provider_last_fetched_at', None),
+
         provider_last_error=getattr(payload, 'provider_last_error', None),
+        # UI Position
+        pos_x=getattr(payload, 'pos_x', None),
+        pos_y=getattr(payload, 'pos_y', None),
     )
     node_id = getattr(payload, 'id', None)
     if node_id:

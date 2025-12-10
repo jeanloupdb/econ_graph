@@ -37,8 +37,6 @@ services:
       timeout: 3s
       retries: 10
 
-
-
   api:
     build: *build-config-api
     image: econ-api:latest
@@ -77,8 +75,7 @@ services:
     command: npm run dev
     volumes:
       # Mount source code for hot reload in development
-      - ./econ_graph_web/src:/app/src:ro
-      - ./econ_graph_web/public:/app/public:ro
+      - ./econ_graph_web:/app
 
 volumes:
   db_data:

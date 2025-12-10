@@ -1,35 +1,62 @@
 'use client';
 
+import { Topbar } from '@/components/chrome/Topbar';
+import { CanvasHelper } from '@/components/graph/CanvasHelper';
+import { GraphAiBar } from '@/components/graph/GraphAiBar';
 import { GraphCanvas } from '@/components/graph/GraphCanvas';
 import { Inspector } from '@/components/panels/Inspector';
+import { LibraryPanel } from '@/components/panels/LibraryPanel';
 import { ScenarioPanel } from '@/components/panels/ScenarioPanel';
-import { Topbar } from '@/components/chrome/Topbar';
-import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
-import { useUIStore } from '@/store/uiState';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useProjectStore } from '@/store/projectState';
 import { ProjectGraphProvider } from '@/graph/providers/ProjectGraphProvider';
-import { useInsertCompositeNode } from '@/graph/hooks/useInsertCompositeNode';
-import { PENDING_COMPOSITE_INSERT_KEY, PENDING_COMPOSITE_REFRESH_KEY } from '@/lib/composites/constants';
+import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
+import { useProjectStore } from '@/store/projectState';
+import { useUIStore } from '@/store/uiState';
+import { useEffect, useRef } from 'react';
+
+import { useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useState } from 'react';
+import { toast } from 'sonner';
+
 import { useGraphActions } from '@/graph/context/GraphActionsContext';
 import { useGraphData } from '@/graph/context/GraphDataContext';
-import { toast } from 'sonner';
-import type { PendingCompositeInsertPayload, PendingCompositeRefreshPayload } from '@/lib/composites/types';
-import { useQueryClient } from '@tanstack/react-query';
+import { useInsertCompositeNode } from '@/graph/hooks/useInsertCompositeNode';
 import { queryKeys, useComputeWithScenario } from '@/lib/api/hooks';
+import { PENDING_COMPOSITE_INSERT_KEY, PENDING_COMPOSITE_REFRESH_KEY } from '@/lib/composites/constants';
+import type { PendingCompositeInsertPayload, PendingCompositeRefreshPayload } from '@/lib/composites/types';
 import { useScenarioStore } from '@/store/scenarioState';
 
-export default function GraphPage() {
+function GraphPageContent() {
   const inspectorOpen = useUIStore((state) => state.inspectorOpen);
   const scenarioPanelOpen = useUIStore((state) => state.scenarioPanelOpen);
   const setScenarioPanelOpen = useUIStore((state) => state.setScenarioPanelOpen);
   const resetDetailPanels = useUIStore((state) => state.resetDetailPanels);
+  
   const loadProjects = useProjectStore((s) => s.load);
+  const projects = useProjectStore((s) => s.projects);
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
+  const setCurrentProject = useProjectStore((s) => s.setCurrentProject);
+  
+  const searchParams = useSearchParams();
+  const projectIdParam = searchParams.get('project');
+
   const prevProjectIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     loadProjects();
   }, [loadProjects]);
+
+  // Sync URL project param with store
+  useEffect(() => {
+    if (projectIdParam && projects.length > 0) {
+      // Only switch if the project exists in the loaded list
+      const targetProject = projects.find(p => p.id === projectIdParam);
+      if (targetProject && currentProjectId !== projectIdParam) {
+        setCurrentProject(projectIdParam);
+      }
+    }
+  }, [projectIdParam, projects, currentProjectId, setCurrentProject]);
+
   useEffect(() => {
     if (prevProjectIdRef.current === currentProjectId) {
       return;
@@ -53,12 +80,16 @@ export default function GraphPage() {
       <PendingCompositeInsertHandler />
       <PendingCompositeRefreshHandler />
       <ScenarioAutoLoader />
+      <ProjectAutoComputer />
       <div className="flex h-screen flex-col">
         <Topbar />
 
         <div className="flex flex-1 overflow-hidden">
-          <div className="flex-1">
+          <div className="flex-1 relative overflow-hidden">
             <GraphCanvas />
+            <CanvasHelper />
+            <GraphAiBar />
+            <LibraryPanelWrapper />
           </div>
 
           {scenarioPanelOpen ? (
@@ -270,4 +301,51 @@ function ScenarioAutoLoader() {
   }, [currentProjectId, activeScenarioId, computeWithScenario, setScenarioComputedValues]);
 
   return null;
+}
+
+function ProjectAutoComputer() {
+  const currentProjectId = useProjectStore((s) => s.currentProjectId);
+  const graphActions = useGraphActions();
+  const computedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!currentProjectId) return;
+    if (computedRef.current === currentProjectId) return;
+
+    const compute = async () => {
+      if (graphActions.computeProject) {
+        try {
+          await graphActions.computeProject();
+          computedRef.current = currentProjectId;
+          // toast.success("Projet recalculé");
+        } catch (e) {
+          console.error("Auto-compute failed", e);
+        }
+      }
+    };
+
+    // Small delay to ensure everything is ready
+    const timer = setTimeout(compute, 500);
+    return () => clearTimeout(timer);
+  }, [currentProjectId, graphActions]);
+
+  return null;
+}
+
+export default function GraphPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">Loading...</div>}>
+      <GraphPageContent />
+    </Suspense>
+  );
+}
+
+function LibraryPanelWrapper() {
+  const libraryPanelOpen = useUIStore((s) => s.libraryPanelOpen);
+  if (!libraryPanelOpen) return null;
+  return (
+    <div className="absolute left-0 top-0 z-10 h-full shadow-xl">
+      <LibraryPanel />
+    </div>
+  );
 }

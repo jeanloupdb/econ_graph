@@ -1,8 +1,8 @@
 'use client';
 
+import { Info } from 'lucide-react';
 import * as React from 'react';
 import { createPortal } from 'react-dom';
-import { Info } from 'lucide-react';
 
 interface InfoHintProps {
   title?: string;
@@ -68,7 +68,7 @@ export function InfoHint({ title, children, side = 'right' }: InfoHintProps) {
   return (
     <span
       ref={anchorRef}
-      className="relative inline-flex items-center cursor-help align-middle"
+      className="relative inline-flex items-center cursor-default align-middle group"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
       onFocus={() => setOpen(true)}
@@ -76,17 +76,15 @@ export function InfoHint({ title, children, side = 'right' }: InfoHintProps) {
       aria-haspopup="dialog"
       aria-expanded={open}
     >
-      <span className="inline-flex items-center justify-center h-4 w-4 rounded-full border border-zinc-400 text-zinc-500 dark:border-zinc-600 dark:text-zinc-300 bg-white dark:bg-zinc-900">
-        <Info className="h-3 w-3" />
-      </span>
+      <Info className="h-4 w-4 text-zinc-400 transition-colors group-hover:text-blue-500" />
       {open && coords && typeof window !== 'undefined' && createPortal(
         <div
-          className="fixed z-[9999] pointer-events-none"
-          style={{ top: coords.top, left: coords.left, width: 420 }}
+          className="fixed z-[9999] pointer-events-none animate-in fade-in zoom-in-95 duration-200"
+          style={{ top: coords.top, left: coords.left, width: 320 }}
           role="tooltip"
         >
-          <div className="rounded-md border border-zinc-200 bg-white p-3 text-xs text-zinc-700 shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
-            {title && <div className="mb-1 font-semibold text-zinc-900 dark:text-zinc-100">{title}</div>}
+          <div className="rounded-xl border border-zinc-200/50 bg-white/90 p-4 text-xs text-zinc-600 shadow-xl backdrop-blur-xl dark:border-zinc-800/50 dark:bg-zinc-900/90 dark:text-zinc-300">
+            {title && <div className="mb-1.5 font-semibold text-zinc-900 dark:text-zinc-100">{title}</div>}
             <div className="leading-relaxed whitespace-normal break-words">
               {children}
             </div>

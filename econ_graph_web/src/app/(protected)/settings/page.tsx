@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Settings as SettingsIcon, Server, Globe } from 'lucide-react';
+import { UserMenu } from '@/components/chrome/UserMenu';
 
 export default function SettingsPage() {
   const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
@@ -17,12 +18,15 @@ export default function SettingsPage() {
                 Configure your preferences and application settings
               </p>
             </div>
-            <Link href="/graph">
-              <Button variant="outline">
-                <ArrowLeft className="h-4 w-4" />
-                Back to Graph
-              </Button>
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link href="/dashboard">
+                <Button variant="outline">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to Dashboard
+                </Button>
+              </Link>
+              <UserMenu />
+            </div>
           </div>
         </div>
       </div>

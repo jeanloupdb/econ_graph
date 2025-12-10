@@ -322,3 +322,6 @@ check_*.sh
 
 # Fichiers temporaires
 tmp_*
+
+# Whitelist web lib
+!econ_graph_web/src/lib/

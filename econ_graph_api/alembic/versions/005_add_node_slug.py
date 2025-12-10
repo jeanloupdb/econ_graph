@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "005_add_node_slug"
-down_revision = "004_add_composites_table"
+down_revision = "004"
 branch_labels = None
 depends_on = None
 

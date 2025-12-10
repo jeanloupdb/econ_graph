@@ -1,8 +1,8 @@
 'use client';
 
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, Pencil, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { ChevronDown, Pencil, Share2, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { forwardRef } from 'react';
 
@@ -16,6 +16,7 @@ interface DashboardCardProps {
   onOpen?: () => void;
   onRename?: () => void;
   onDelete?: () => void;
+  onShare?: () => void;
   usageTrigger?: ReactNode;
   className?: string;
   iconWrapperClassName?: string;
@@ -46,6 +47,7 @@ export const DashboardCard = forwardRef<HTMLDivElement, DashboardCardProps>(
       footerClassName,
       hoverClassName = 'hover:border-zinc-300',
       footerHighlightClassName = 'text-zinc-500 dark:text-zinc-400',
+      onShare,
     },
     ref,
   ) => {
@@ -69,43 +71,43 @@ export const DashboardCard = forwardRef<HTMLDivElement, DashboardCardProps>(
           }
         }}
         className={cn(
-          'group rounded-2xl border bg-white/90 dark:bg-zinc-900/70 p-4 transition-all',
-          clickable && cn('cursor-pointer hover:shadow-lg', hoverClassName),
+          'group relative rounded-2xl border border-zinc-200/50 bg-white dark:bg-zinc-900/50 p-5 transition-all duration-300',
+          clickable && cn('cursor-pointer hover:shadow-xl hover:-translate-y-1 hover:border-zinc-300/50 dark:hover:border-zinc-700/50', hoverClassName),
           className,
         )}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-4">
             <div
               className={cn(
-                'rounded-xl bg-zinc-100 p-2 dark:bg-zinc-800',
+                'rounded-xl bg-zinc-50 p-2.5 ring-1 ring-zinc-900/5 dark:bg-zinc-800/50 dark:ring-white/10',
                 iconWrapperClassName,
               )}
             >
               {icon}
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <div className="flex items-center gap-2">
-                <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">{title}</h3>
+                <h3 className="text-base font-semibold text-zinc-900 dark:text-white tracking-tight">{title}</h3>
                 {onRename && (
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 text-zinc-400 hover:text-zinc-700"
+                    className="h-6 w-6 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity hover:text-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     onClick={(e) => {
                       e.stopPropagation();
                       onRename();
                     }}
                   >
                     <span className="sr-only">Renommer</span>
-                    <Pencil className="h-4 w-4" />
+                    <Pencil className="h-3.5 w-3.5" />
                   </Button>
                 )}
                 {badge}
               </div>
               {subtitle && (
-                <p className="text-[11px] uppercase tracking-wide text-zinc-400">
+                <p className="text-[10px] uppercase tracking-wider font-medium text-zinc-500 dark:text-zinc-400">
                   {subtitle}
                 </p>
               )}
@@ -124,6 +126,21 @@ export const DashboardCard = forwardRef<HTMLDivElement, DashboardCardProps>(
             >
               <span className="sr-only">Supprimer</span>
               <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+          {onShare && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="text-zinc-400 hover:text-blue-500"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShare();
+              }}
+            >
+              <span className="sr-only">Partager</span>
+              <Share2 className="h-4 w-4" />
             </Button>
           )}
         </div>

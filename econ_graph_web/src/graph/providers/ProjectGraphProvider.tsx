@@ -1,12 +1,12 @@
-import { useMemo, useCallback } from 'react';
-import type { ReactNode } from 'react';
-import { GraphDataProvider, type NodePositionUpdate } from '@/graph/context/GraphDataContext';
 import { GraphActionsProvider } from '@/graph/context/GraphActionsContext';
-import { useProjectStore } from '@/store/projectState';
-import { useProjectNodes, queryKeys } from '@/lib/api/hooks';
+import { GraphDataProvider, type NodePositionUpdate } from '@/graph/context/GraphDataContext';
 import { apiClient } from '@/lib/api/client';
+import { queryKeys, useProjectNodes } from '@/lib/api/hooks';
 import type { Node, NodeCreate, NodeUpdate } from '@/lib/types';
+import { useProjectStore } from '@/store/projectState';
 import { useQueryClient } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
+import { useCallback, useMemo } from 'react';
 
 interface ProjectGraphProviderProps {
   children: ReactNode;
@@ -81,9 +81,19 @@ export function ProjectGraphProvider({ children }: ProjectGraphProviderProps) {
         await apiClient.post(`/compute/nodes/${id}`, {});
         refreshNodes();
       },
+      computeProject: async () => {
+        if (!currentProjectId) return;
+        await apiClient.post(`/compute/all?project=${currentProjectId}`, {});
+        refreshNodes();
+      },
       refreshNodes,
+      refreshScenarios: () => {
+        if (currentProjectId) {
+            queryClient.invalidateQueries({ queryKey: queryKeys.scenarios(currentProjectId) });
+        }
+      }
     };
-  }, [currentProjectId, invalidateExposedRoots, nodes, refreshNodes]);
+  }, [currentProjectId, invalidateExposedRoots, nodes, refreshNodes, queryClient]);
 
   return (
     <GraphDataProvider value={dataValue}>

@@ -1,21 +1,21 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { AiInput } from '@/components/ui/ai-input';
+import { Button } from '@/components/ui/button';
+import { CodeEditor } from '@/components/ui/code-editor';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { InfoHint } from '@/components/ui/info-hint';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Select } from '@/components/ui/select';
-import { CodeEditor } from '@/components/ui/code-editor';
-import { X, Calculator, Loader2, Maximize2, Minimize2, Lightbulb } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { InfoHint } from '@/components/ui/info-hint';
-import type { Node, NodeCreate, NodeUnit, NodeUpdate } from '@/lib/types';
-import { useUIStore } from '@/store/uiState';
-import { useGraphData } from '@/graph/context/GraphDataContext';
 import { useGraphActions } from '@/graph/context/GraphActionsContext';
-import { useProjectStore } from '@/store/projectState';
-import { useNodeTones } from '@/lib/api/hooks';
+import { useGraphData } from '@/graph/context/GraphDataContext';
 import type { NodeToneKey } from '@/lib/api/hooks';
+import { useNodeTones } from '@/lib/api/hooks';
+import type { Node, NodeCreate, NodeUnit, NodeUpdate } from '@/lib/types';
+import { useProjectStore } from '@/store/projectState';
+import { useUIStore } from '@/store/uiState';
+import { Loader2, Maximize2, Minimize2, Sparkles } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface NewNodeModalProps {
   open: boolean;
@@ -57,11 +57,14 @@ export function NewNodeModal({ open, onClose, nodeId }: NewNodeModalProps) {
   const [code, setCode] = useState('');
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<'none' | 'constant' | 'expression' | 'condition' | 'math'>('none');
-  const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
+
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [aiPromptOpen, setAiPromptOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
 
   const existingNode = useMemo(() => {
     if (!nodeId) return undefined;
@@ -88,20 +91,7 @@ export function NewNodeModal({ open, onClose, nodeId }: NewNodeModalProps) {
       if (def) setCode(def);
       setSlugManuallyEdited(true);
     } else {
-      if (!code.trim()) {
-        if (availableNodes.length === 0) {
-          setCode('def compute():\n    return 1');
-        } else {
-          const exInputs = availableNodes
-            .slice(0, 2)
-            .map((n) => resolveCompositeSlug(n))
-            .filter(Boolean);
-          const params = exInputs.filter(Boolean).join(', ') || 'a, b';
-          const sum = exInputs.filter(Boolean).join(' + ') || 'a + b';
-          const placeholder = `def compute(${params}):\n    # Définissez le résultat via une seule expression\n    return ${sum}`;
-          setCode(placeholder);
-        }
-      }
+
       if (!slug.trim()) {
         setSlug(kebabify(label || resolveCompositeSlug(existingNode) || 'nouveau-noeud'));
       }
@@ -127,7 +117,7 @@ export function NewNodeModal({ open, onClose, nodeId }: NewNodeModalProps) {
           if (!variableId) {
             return null;
           }
-          const tone = (toneMap?.[n.id]?.tone || undefined) as
+          const tone = ((toneMap as Record<string, { tone?: NodeToneKey }> | undefined)?.[n.id]?.tone || undefined) as
             | NodeToneKey
             | undefined;
           return {
@@ -143,8 +133,8 @@ export function NewNodeModal({ open, onClose, nodeId }: NewNodeModalProps) {
           ): entry is {
             id: string;
             label: string;
-            tone?: NodeToneKey;
-            isComposite?: boolean;
+            tone: NodeToneKey | undefined;
+            isComposite: boolean;
           } => Boolean(entry)
         ),
     [availableNodes, toneMap]
@@ -214,6 +204,7 @@ export function NewNodeModal({ open, onClose, nodeId }: NewNodeModalProps) {
         if (computeAvailable) {
           setIsComputing(true);
           await computeAvailable(created.id);
+          setIsComputing(false);
         }
         setSelectedNodeId(created.id);
       } else {
@@ -228,6 +219,7 @@ export function NewNodeModal({ open, onClose, nodeId }: NewNodeModalProps) {
         if (computeAvailable) {
           setIsComputing(true);
           await computeAvailable(nodeId);
+          setIsComputing(false);
         }
         setSelectedNodeId(nodeId);
       }
@@ -239,28 +231,68 @@ export function NewNodeModal({ open, onClose, nodeId }: NewNodeModalProps) {
     }
   };
 
-  // Templates
-  const buildParams = (n: number) =>
-    availableNodes
-      .slice(0, n)
-      .map((x) => resolveCompositeSlug(x).trim())
-      .filter(Boolean)
-      .join(', ') || Array.from({ length: n }).map((_, i) => `x${i + 1}`).join(', ');
-  const insertTemplate = (tpl: 'constant' | 'expression' | 'condition' | 'math') => {
-    if (tpl === 'constant') {
-      setCode('def compute():\n    return 42');
-    } else if (tpl === 'expression') {
-      const params = buildParams(2) || 'a, b';
-      const [a, b] = (params.split(',').map((s) => s.trim()) as string[]);
-      setCode(`def compute(${params}):\n    return ${a} + ${b}`);
-    } else if (tpl === 'condition') {
-      const params = buildParams(2) || 'signal, seuil';
-      const [s, t] = (params.split(',').map((s) => s.trim()) as string[]);
-      setCode(`def compute(${params}):\n    if ${s} is None or ${t} is None:\n        return 0\n    if ${s} > ${t}:\n        return 1\n    else:\n        return 0`);
-    } else if (tpl === 'math') {
-      const p = buildParams(1) || 'x';
-      const varName = p.split(',')[0].trim();
-      setCode(`def compute(${p}):\n    # Exemple: racine carrée sécurisée\n    v = ${varName} if ${varName} is not None else 0\n    return math.sqrt(abs(v))`);
+  // Default code initialization
+  useEffect(() => {
+    if (!open) return;
+    
+    // Only set default if we are creating a new node and code is empty
+    if (!nodeId && !code.trim()) {
+      if (availableVariableIds.length > 0) {
+        const firstVar = availableVariableIds[0];
+        setCode(`def compute(${firstVar}):\n    # Exemple par défaut\n    return 42 * ${firstVar}`);
+      } else {
+        setCode(`def compute():\n    # Exemple par défaut\n    return 42`);
+      }
+    }
+  }, [open, nodeId, availableVariableIds]);
+
+  const suggestions: string[] = []; // No more ghost text suggestions
+
+  const handleGenerateAi = async (force = false) => {
+    if (!force) {
+      setAiPromptOpen(true);
+      return;
+    }
+
+
+    
+    setAiPromptOpen(false);
+    setIsGeneratingAi(true);
+    setAiSuggestions([]); // Clear previous suggestions
+    setCode(''); // Clear to show ghost text
+    try {
+      const context = {
+        label: label || "Nouveau nœud",
+        unit: unit,
+        description: notes,
+        inputs: availableNodes.map(n => ({ 
+          id: resolveCompositeSlug(n), 
+          label: n.label,
+          unit: (n as any)?.unit,
+          description: (n as any)?.notes
+        })),
+        currentCode: code, // Pass existing code for modification
+      };
+      
+      const res = await fetch('http://localhost:8000/ai/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: aiPrompt || `Generate a Python compute function for a node named '${label}'. Inputs available: ${availableVariableIds.join(', ')}.`,
+          context
+        }),
+      });
+      
+      const data = await res.json();
+      if (data.text) {
+        setCode(data.text);
+        setAiSuggestions([]);
+      }
+    } catch (error) {
+      console.error("AI Generation failed", error);
+      setInlineError("Erreur lors de la génération IA");
+    } finally {
+      setIsGeneratingAi(false);
     }
   };
 
@@ -268,309 +300,245 @@ export function NewNodeModal({ open, onClose, nodeId }: NewNodeModalProps) {
 
   return (
     <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-3xl max-h-[92vh] overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-950 flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-zinc-200 p-4 dark:border-zinc-800">
-          <div className="text-lg font-semibold">{nodeId ? 'Modifier le nœud' : 'Créer un nœud'}</div>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
+      <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+        <DialogContent 
+          className={`
+            flex flex-col !gap-0 overflow-hidden duration-300 !p-0
+            ${fullscreen 
+              ? 'w-screen h-screen max-w-none translate-x-0 translate-y-0 left-0 top-0 rounded-none !border-2 !border-zinc-300 dark:!border-zinc-400 [&>button.absolute]:hidden bg-zinc-100 dark:bg-zinc-950' 
+              : 'max-w-[95vw] w-full lg:max-w-7xl h-[95vh] rounded-xl !border-2 !border-zinc-300 dark:!border-zinc-400 shadow-2xl bg-white dark:bg-zinc-900'
+            }
+          `}
+          onPointerDownOutside={(e) => fullscreen && e.preventDefault()}
+          onInteractOutside={(e) => fullscreen && e.preventDefault()}
+        >
+          {/* Header - Normal Mode */}
+          {!fullscreen && (
+            <DialogHeader className="p-6 pb-4 border-b border-zinc-200 dark:border-zinc-700 shrink-0">
+              <DialogTitle className="text-xl">
+                {nodeId ? 'Modifier le nœud' : 'Créer un nouveau nœud'}
+              </DialogTitle>
+              <DialogDescription>
+                Configurez les propriétés et la logique de calcul de votre nœud.
+              </DialogDescription>
+            </DialogHeader>
+          )}
 
-        {/* Content (scrollable) */}
-        <div className="flex-1 overflow-y-auto p-4 custom-scroll">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Label>Label</Label>
-                <InfoHint title="Nom lisible">
-                  Nom affiché sur le graphe et dans l’inspector. Exemple: « Croissance PIB réel ».
-                </InfoHint>
+          {/* Header - Fullscreen Mode */}
+          {fullscreen && (
+            <div className="flex items-center justify-between px-4 py-2 shrink-0 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-700 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <Maximize2 className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Éditeur Plein Écran</div>
+                </div>
               </div>
-              <Input
-                value={label}
-                onChange={(e) => {
-                  const v = e.currentTarget.value;
-                  setLabel(v);
-                  if (!nodeId && !slugManuallyEdited) {
-                    setSlug(kebabify(v || 'nouveau-noeud'));
-                  }
-                }}
-                placeholder="Ex: Croissance PIB réel"
-              />
-            </div>
-            <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <Label>Code interne</Label>
-                <InfoHint title="Slug utilisé dans les formules">
-                  Ce code est utilisé comme paramètre dans <code>compute(...)</code>. Il doit être unique dans le projet.
-                </InfoHint>
-              </div>
-              <Input
-                value={slug}
-                onChange={(e) => {
-                  const value = kebabify(e.currentTarget.value);
-                  setSlug(value);
-                  setSlugManuallyEdited(true);
-                }}
-                disabled={!!nodeId}
-                placeholder="croissance_pib_reel"
-              />
-              {nodeId ? (
-                <p className="text-xs text-zinc-500">Le code ne peut pas être modifié après création pour l’instant.</p>
-              ) : null}
-              <p className="text-[11px] text-zinc-500 font-mono mt-1">
-                ID technique: {existingNode?.id ?? 'sera généré automatiquement'}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Label>Unité (libre)</Label>
-                <InfoHint title="Unité de la valeur">
-                  Texte libre visible partout. Exemples: « milliards de dollars », « % du PIB », « liste des résultats ».
-                </InfoHint>
-              </div>
-              <Input
-                value={unit as any}
-                onChange={(e) => setUnit(e.currentTarget.value as any)}
-                placeholder="milliards de dollars, liste des résultats, …"
-                list="unit-suggestions"
-              />
-              <datalist id="unit-suggestions">
-                <option value="percent" />
-                <option value="bps" />
-                <option value="level" />
-                <option value="index" />
-                <option value="currency" />
-              </datalist>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Label>Notes (optionnel)</Label>
-                <InfoHint title="Définition pour le décideur">
-                  Courte explication, contexte, portée. Exemple: « Montant de cash disponible hors réserves réglementaires ».
-                </InfoHint>
-              </div>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.currentTarget.value)}
-                placeholder="Définition courte à l’attention du décideur"
-                className="w-full h-20 resize-vertical rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-2 text-sm"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Label>Définition Python</Label>
-                <InfoHint title="Comment remplir ?">
-                  Écrivez une fonction <code>def compute(...):</code> qui retourne un nombre (<code>float</code>). Utilisez les IDs de nœuds comme paramètres (et variables).
-                  Exemple: <code>def compute(C, I, G, NX): return C + I + G + NX</code>
-                </InfoHint>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 text-zinc-500 hover:text-zinc-900"
-                  title="Aide: exemples de code pour démarrer"
-                  onClick={() => setHelpOpen(true)}
-                  aria-label="Aide définition Python"
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setFullscreen(false)} 
+                  className="gap-2 bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700"
                 >
-                  <Lightbulb className="h-4 w-4" />
+                  <Minimize2 className="h-3.5 w-3.5" />
+                  Réduire
                 </Button>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => setFullscreen(true)}>
-                <Maximize2 className="h-4 w-4 mr-1" /> Plein écran
-              </Button>
             </div>
-            {/* Discreet helper button near editor */}
-            <div className="relative group">
-              <button
-                type="button"
-                className="absolute right-0 -top-8 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100 text-xs px-2 py-1"
-                title="Aide: templates d'exemples (mieux avec bases Python)"
-                aria-label="Templates d'exemples"
-                onClick={() => setTemplateMenuOpen((v) => !v)}
-              >
-                •••
-              </button>
-            {templateMenuOpen && (
-              <div className="absolute z-20 right-0 mt-2 w-56 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg">
-                <div className="px-3 py-2 text-[12px] text-zinc-600 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-800">
-                  Exemples pour démarrer. Idéalement, apprenez les bases de Python.
-                </div>
-                <ul className="py-1 text-sm">
-                  {[
-                    { id: 'constant', label: 'Constante' },
-                    { id: 'expression', label: 'Expression' },
-                    { id: 'condition', label: 'Condition' },
-                    { id: 'math', label: 'Math' },
-                  ].map((opt) => (
-                    <li key={opt.id}>
-                      <button
-                        type="button"
-                        className="w-full text-left px-3 py-2 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                        onClick={() => { insertTemplate(opt.id as any); setTemplateMenuOpen(false); setSelectedTemplate(opt.id as any); }}
-                      >
-                        {opt.label}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            </div>
-            <CodeEditor
-              value={code}
-              onChange={setCode}
-              language="python"
-              height="360px"
-              availableConstants={availableVariableIds}
-              variables={availableVariableOptions}
-              showVariablePalette
-              enableCompletion={false}
-              showSnippets
-            />
-            {/* Astuce en bas retirée (demande) */}
-            {inlineError && (
-              <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950 dark:text-red-300 border border-red-200 dark:border-red-800 rounded p-2">
-                {inlineError}
-              </div>
-            )}
-          </div>
-          </div>
-        </div>
+          )}
 
-        {/* Footer (always visible) */}
-        <div className="flex items-center justify-between border-t border-zinc-200 p-4 dark:border-zinc-800">
-          <div className="text-xs text-zinc-500 flex items-center gap-2">
-            <Calculator className="h-3 w-3" /> {detectedInputs.length > 0 ? `${detectedInputs.length} variable(s) détectée(s)` : 'Aucune variable détectée'}
+          {/* Content */}
+          <div className={`flex-1 overflow-y-auto custom-scroll min-h-0 ${fullscreen ? 'p-4' : 'p-6'}`}>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
+              {/* Left Column: General Info - Hidden in Fullscreen */}
+              <div className={`lg:col-span-4 space-y-6 ${fullscreen ? 'hidden' : ''}`}>
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                    <div className="h-6 w-1 bg-blue-500 rounded-full" />
+                    Informations générales
+                  </h3>
+                  
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Label</Label>
+                        <InfoHint title="Nom lisible">
+                          Nom affiché sur le graphe. Ex: "Croissance PIB"
+                        </InfoHint>
+                      </div>
+                      <Input
+                        value={label}
+                        onChange={(e) => {
+                          const v = e.currentTarget.value;
+                          setLabel(v);
+                          if (!nodeId && !slugManuallyEdited) {
+                            setSlug(kebabify(v || 'nouveau-noeud'));
+                          }
+                        }}
+                        placeholder="Ex: Croissance PIB réel"
+                        className="h-10 bg-zinc-50/50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 focus:ring-blue-500/20"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Code interne (Slug)</Label>
+                        <InfoHint title="Identifiant unique">
+                          Utilisé dans les formules Python. Doit être unique.
+                        </InfoHint>
+                      </div>
+                      <div className="relative">
+                        <Input
+                          value={slug}
+                          onChange={(e) => {
+                            const value = kebabify(e.currentTarget.value);
+                            setSlug(value);
+                            setSlugManuallyEdited(true);
+                          }}
+                          disabled={!!nodeId}
+                          placeholder="croissance_pib_reel"
+                          className="h-10 font-mono text-xs bg-zinc-50/50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 focus:ring-blue-500/20"
+                        />
+                        {nodeId && (
+                          <div className="absolute inset-y-0 right-3 flex items-center">
+                            <span className="text-[10px] text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">Lecture seule</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Unité</Label>
+                      </div>
+                      <Input
+                        value={unit as any}
+                        onChange={(e) => setUnit(e.currentTarget.value as any)}
+                        placeholder="Ex: %, M$, points..."
+                        list="unit-suggestions"
+                        className="h-10 bg-zinc-50/50 dark:bg-zinc-800/50 border-zinc-200 dark:border-zinc-700 focus:ring-blue-500/20"
+                      />
+                      <datalist id="unit-suggestions">
+                        <option value="percent" />
+                        <option value="bps" />
+                        <option value="level" />
+                        <option value="index" />
+                        <option value="currency" />
+                      </datalist>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Notes</Label>
+                      </div>
+                      <textarea
+                        value={notes}
+                        onChange={(e) => setNotes(e.currentTarget.value)}
+                        placeholder="Description ou contexte..."
+                        className="w-full h-24 resize-none rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-800/50 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Logic */}
+              <div className={`${fullscreen ? 'lg:col-span-12' : 'lg:col-span-8'} flex flex-col h-full min-h-[400px]`}>
+                
+                {/* AI-First Section */}
+                <div className="mb-6 space-y-3 shrink-0">
+                  <div className="space-y-1.5">
+                     <Label className="text-base font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-blue-500" />
+                        Assistant IA
+                     </Label>
+                     <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                        Décrivez ce que ce nœud doit calculer. L'IA générera la formule Python pour vous.
+                     </p>
+                  </div>
+                  <AiInput
+                    value={aiPrompt}
+                    onChange={setAiPrompt}
+                    onGenerate={() => handleGenerateAi(true)}
+                    isGenerating={isGeneratingAi}
+                    placeholder="Modifie le code pour ajouter une condition..."
+                  />
+                  
+
+                </div>
+
+                {/* Code Editor Section (Result) */}
+                <div className="flex-1 flex flex-col min-h-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+                      <div className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                      Code Python (Résultat)
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => setFullscreen(true)} title="Plein écran">
+                        <Maximize2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className={`flex-1 relative rounded-xl border border-zinc-200 dark:border-zinc-700 overflow-hidden shadow-sm bg-white dark:bg-zinc-900 group hover:border-zinc-300 dark:hover:border-zinc-600 transition-colors ${fullscreen ? 'shadow-2xl ring-1 ring-black/5 dark:ring-white/5' : ''}`}>
+                    <CodeEditor
+                      value={code}
+                      onChange={setCode}
+                      language="python"
+                      height="100%"
+                      className="h-full border-0"
+                      availableConstants={availableVariableIds}
+                      variables={availableVariableOptions}
+                      showVariablePalette
+                      enableCompletion={false}
+                      suggestions={isGeneratingAi ? [] : (aiSuggestions.length > 0 ? aiSuggestions : suggestions)}
+                      isLoading={isGeneratingAi}
+                      placeholder="# Le code généré apparaîtra ici..."
+                    />
+                  </div>
+
+                  {inlineError && (
+                    <div className="mt-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-3 flex items-start gap-2 animate-in slide-in-from-top-2">
+                      <div className="h-1.5 w-1.5 rounded-full bg-red-500 mt-1.5 shrink-0" />
+                      <p className="text-xs font-medium text-red-600 dark:text-red-400">{inlineError}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={onClose}>Fermer</Button>
-            <Button onClick={handleCreate} disabled={!canCreate || saving}>
+
+          {/* Footer */}
+          <div className="p-4 border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 flex justify-end gap-3 shrink-0">
+            <Button variant="ghost" onClick={onClose} className="hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50">
+              Annuler
+            </Button>
+            <Button 
+              onClick={handleCreate} 
+              disabled={!canCreate || saving}
+              className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20"
+            >
               {saving ? (
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{nodeId ? 'Enregistrement…' : 'Création…'}</>
               ) : (
-                nodeId ? 'Enregistrer' : 'Créer'
+                nodeId ? 'Enregistrer les modifications' : 'Créer le nœud'
               )}
             </Button>
           </div>
-        </div>
-      </div>
-    </div>
-    {/* Fullscreen editor overlay */}
-    {fullscreen && (
-      <div className="fixed inset-0 z-[100] bg-white dark:bg-zinc-950 flex flex-col">
-        <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-3 py-2">
-          <div className="text-sm font-medium">Définition Python — Plein écran</div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setFullscreen(false)}>
-              <Minimize2 className="h-4 w-4 mr-1" /> Réduire
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => setFullscreen(false)}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-        <div className="flex-1 min-h-0 flex flex-col">
-          {/* Discreet helper in fullscreen (top-right) */}
-          <div className="relative px-3 py-2 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 group">
-            <button
-              type="button"
-              className="absolute right-3 top-2 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100 text-xs px-2 py-1"
-              title="Aide: templates d'exemples (mieux avec bases Python)"
-              aria-label="Templates d'exemples"
-              onClick={() => setTemplateMenuOpen((v) => !v)}
-            >
-              •••
-            </button>
-            {templateMenuOpen && (
-              <div className="absolute z-20 right-3 mt-6 w-56 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg">
-                <div className="px-3 py-2 text-[12px] text-zinc-600 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-800">
-                  Exemples pour démarrer. Idéalement, apprenez les bases de Python.
-                </div>
-                <ul className="py-1 text-sm">
-                  {[
-                    { id: 'constant', label: 'Constante' },
-                    { id: 'expression', label: 'Expression' },
-                    { id: 'condition', label: 'Condition' },
-                    { id: 'math', label: 'Math' },
-                  ].map((opt) => (
-                    <li key={opt.id}>
-                      <button
-                        type="button"
-                        className="w-full text-left px-3 py-2 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                        onClick={() => { insertTemplate(opt.id as any); setTemplateMenuOpen(false); setSelectedTemplate(opt.id as any); }}
-                      >
-                        {opt.label}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-          <CodeEditor
-            value={code}
-            onChange={setCode}
-            language="python"
-            height={'calc(100vh - 94px)'}
-            availableConstants={availableVariableIds}
-            variables={availableVariableOptions}
-            showVariablePalette
-            enableCompletion={false}
-            showSnippets
-          />
-        </div>
-        <div className="border-t border-zinc-200 dark:border-zinc-800 p-2 flex justify-end">
-          <Button onClick={handleCreate} disabled={!canCreate || saving}>
-            {saving ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Créer</>
-            ) : (
-              'Créer'
-            )}
-          </Button>
-        </div>
-      </div>
-    )}
-    {/* Full help modal with examples (always mounted so the ampoule works in both modes) */}
-    <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Exemples pour démarrer</DialogTitle>
-          <DialogDescription>
-            Inspirez-vous de ces modèles. Conseil: maîtriser les bases de Python rend l’outil plus efficace.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {[
-            { t: 'Somme simple', c: `def compute(a, b):\n    return (a or 0) + (b or 0)` },
-            { t: 'Seuil (if/else)', c: `def compute(signal, seuil):\n    if signal is None or seuil is None:\n        return 0\n    return 1 if signal > seuil else 0` },
-            { t: 'Normalisation', c: `def compute(x):\n    v = 0 if x is None else x\n    return (v - 100) / 10` },
-            { t: 'Constante', c: `def compute():\n    return 42` },
-          ].map((ex, i) => (
-            <div key={i} className="rounded-md border border-zinc-200 dark:border-zinc-800 p-3">
-              <div className="text-sm font-semibold mb-2">{ex.t}</div>
-              <pre className="text-xs bg-zinc-50 dark:bg-zinc-900 p-2 rounded overflow-auto"><code>{ex.c}</code></pre>
-              <div className="mt-2 flex justify-end">
-                <Button size="sm" onClick={() => { setCode(ex.c); setHelpOpen(false); }}>Insérer ce code</Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </DialogContent>
-    </Dialog>
-    {/* Compact scrollbar styling */}
-    <style>{`
-      .custom-scroll { scrollbar-gutter: stable both-edges; }
-      .custom-scroll::-webkit-scrollbar { height: 8px; width: 10px; }
-      .custom-scroll::-webkit-scrollbar-thumb { background: rgba(100,100,100,.35); border-radius: 8px; }
-      .custom-scroll::-webkit-scrollbar-track { background: transparent; }
-    `}</style>
+        </DialogContent>
+      </Dialog>
+
+      {/* Styles */}
+      <style>{`
+        .custom-scroll { scrollbar-gutter: stable; }
+        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: rgba(161, 161, 170, 0.3); border-radius: 10px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: rgba(161, 161, 170, 0.5); }
+      `}</style>
     </>
   );
 }

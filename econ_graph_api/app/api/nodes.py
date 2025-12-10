@@ -336,10 +336,12 @@ def update_node(node_id: str, payload: NodeUpdate, project: str | None = Query(d
     if ir is False:
         raise HTTPException(status_code=422, detail="value_computed outside plausible_range")
     # Sync edges
-    if getattr(payload, 'computation_definition', None):
-        params = extract_compute_params(payload.computation_definition or '')
-        if params:
-            sync_edges_for_node(db, project or n.project_id, n.id, params)
+    # If computation_definition is in payload (even if None/empty), we must sync edges
+    if 'computation_definition' in payload.model_dump(exclude_unset=True):
+        comp_def = getattr(payload, 'computation_definition', '') or ''
+        params = extract_compute_params(comp_def)
+        # Always sync, passing empty params if no computation (clears edges)
+        sync_edges_for_node(db, project or n.project_id, n.id, params)
     roots = _collect_composite_roots(db, [n]) if n.composite_id else {}
     return node_to_dict(n, roots.get(n.composite_id))
 

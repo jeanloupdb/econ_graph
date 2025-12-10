@@ -1,27 +1,33 @@
 "use client";
 
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { CodeEditor } from "@/components/ui/code-editor";
 import { IconSwitch } from "@/components/ui/icon-switch";
 import { Input } from "@/components/ui/input";
 import {
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Code2,
-  Hash,
-  Info,
-  Loader2,
-  RefreshCw,
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
+import type { ComputeNodeResponse, Node, ScenarioCompositeOverride, ScenarioNodeOverride } from "@/lib/types";
+import {
+    Check,
+    ChevronDown,
+    ChevronRight,
+    Code2,
+    Hash,
+    Info,
+    Loader2,
+    RefreshCw,
 } from "lucide-react";
-import type { Node, ScenarioCompositeOverride, ScenarioNodeOverride, ComputeNodeResponse } from "@/lib/types";
-import type React from "react";
+import React from "react";
 import type { OverrideTarget } from "./types";
 import { formatDisplayNumber } from "./utils";
 
@@ -45,6 +51,7 @@ export interface ParameterCardProps {
   scenarioNodeOverridesMap: Record<string, ScenarioNodeOverride>;
   scenarioCompositeOverridesMap: Record<string, ScenarioCompositeOverride>;
   pendingChanges: Record<string, boolean>;
+  setPendingChanges: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   validationResults: ValidationMap;
   tones: any;
   theme: any;
@@ -94,6 +101,7 @@ export function ParameterCard({
   scenarioNodeOverridesMap,
   scenarioCompositeOverridesMap,
   pendingChanges,
+  setPendingChanges,
   validationResults,
   tones,
   theme,
@@ -230,12 +238,49 @@ export function ParameterCard({
     }
   };
 
+  const hasDeviation =
+    scenarioEditable &&
+    scenarioValue !== null &&
+    scenarioValue !== undefined &&
+    node.value_computed !== null &&
+    node.value_computed !== undefined &&
+    Math.abs(scenarioValue - node.value_computed) > 0.000001;
+
+  let diffPercent: number | null = null;
+  let isPositive = false;
+  let isNegative = false;
+
+  if (hasDeviation && node.value_computed != null && scenarioValue != null) {
+      const refValue = node.value_computed;
+      const newValue = scenarioValue;
+      if (refValue !== 0) {
+          diffPercent = ((newValue - refValue) / Math.abs(refValue)) * 100;
+      }
+      isPositive = diffPercent !== null && diffPercent > 0;
+      isNegative = diffPercent !== null && diffPercent < 0;
+  }
+
+  let badgeColorClass = "bg-amber-500"; // Default/Neutral
+  let borderColorClass = "border-amber-500/50";
+  let textColorClass = "text-amber-400";
+
+  if (isPositive) {
+    badgeColorClass = "bg-emerald-500"; // Positive -> Green
+    borderColorClass = "border-emerald-500/50";
+    textColorClass = "text-emerald-400";
+  }
+  if (isNegative) {
+    badgeColorClass = "bg-red-500"; // Negative -> Red
+    borderColorClass = "border-red-500/50";
+    textColorClass = "text-red-400";
+  }
+
   return (
     <div
       key={elementKey}
-      className={`border rounded-lg bg-white dark:bg-zinc-950/40 shadow-sm transition-shadow ${
+      className={`relative border rounded-lg bg-white dark:bg-zinc-950/40 shadow-sm transition-shadow ${
         isHighlighted ? "ring-2 ring-amber-400" : ""
-      }`}
+      } ${!scenarioEditable ? "opacity-75 grayscale-[0.5]" : ""}`}
       style={cardStyle}
       ref={(el) => {
         highlightRefs.current[targetKey] = el;
@@ -252,10 +297,43 @@ export function ParameterCard({
               {parentCompositeLabel}
             </div>
           )}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium text-sm text-zinc-900 dark:text-zinc-100">
+          <div className="flex items-center gap-2 min-w-0">
+            {/* Deviation Badge & Tooltip (Inline) */}
+            {hasDeviation && (
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="relative flex items-center justify-center mr-1.5 cursor-help shrink-0">
+                      <div className={`w-4 h-4 rounded-full ${badgeColorClass} shadow-sm animate-pulse`} />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent 
+                    side="top" 
+                    className={`bg-zinc-950 text-white text-base rounded-xl p-4 shadow-[0_0_30px_-5px_rgba(0,0,0,0.6)] border ${borderColorClass} flex flex-col items-center gap-1 min-w-[200px] z-[9999]`}
+                  >
+                    <div className="font-bold whitespace-nowrap flex items-center gap-2 text-lg">
+                      {diffPercent != null ? (
+                        <>
+                          <span className={textColorClass}>
+                            {diffPercent > 0 ? '+' : ''}{diffPercent.toFixed(1)}%
+                          </span>
+                          <span className="text-zinc-300 font-medium text-base">d&apos;écart</span>
+                        </>
+                      ) : (
+                        'Valeur différente'
+                      )}
+                    </div>
+                    <div className="text-sm text-zinc-400 whitespace-nowrap font-medium">
+                      Par rapport à la baseline
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            <span className={`font-medium text-sm text-zinc-900 dark:text-zinc-100 ${isExpanded ? "" : "truncate"}`}>
               {displayLabel}
             </span>
+            {/* Removed "Modifié" badge */}
             {mode === "formula" && (
               <span className="inline-flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-300">
                 <Code2 className="h-3 w-3" />
@@ -273,9 +351,11 @@ export function ParameterCard({
           </div>
         </div>
         <div className="text-right text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-          {summaryValue}
+          <span className={hasDeviation ? "text-amber-700 dark:text-amber-300 font-extrabold text-base" : ""}>
+            {summaryValue}
+          </span>
           {node.unit && summaryValue !== "—" && (
-            <span className="text-[11px] font-normal text-zinc-500 dark:text-zinc-400 ml-1">
+            <span className={`text-[11px] font-normal ml-1 ${hasDeviation ? "text-amber-700/80 dark:text-amber-300/80 font-medium" : "text-zinc-500 dark:text-zinc-400"}`}>
               {node.unit}
             </span>
           )}

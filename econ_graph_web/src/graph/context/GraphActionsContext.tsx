@@ -1,5 +1,5 @@
-import { createContext, useContext } from 'react';
 import type { Node, NodeCreate, NodeUpdate } from '@/lib/types';
+import { createContext, useContext } from 'react';
 
 export interface GraphActionsContextValue {
   mode: 'project' | 'composite';
@@ -8,7 +8,9 @@ export interface GraphActionsContextValue {
   updateNode: (id: string, payload: NodeUpdate) => Promise<Node>;
   deleteNode: (id: string) => Promise<void>;
   computeNode?: (id: string) => Promise<void>;
+  computeProject?: () => Promise<void>;
   refreshNodes: () => void;
+  refreshScenarios?: () => void;
 }
 
 const missing = () => {
@@ -22,7 +24,9 @@ const defaultValue: GraphActionsContextValue = {
   updateNode: async () => missing(),
   deleteNode: async () => missing(),
   computeNode: undefined,
+  computeProject: undefined,
   refreshNodes: () => missing(),
+  refreshScenarios: undefined,
 };
 
 const GraphActionsContext = createContext<GraphActionsContextValue>(defaultValue);

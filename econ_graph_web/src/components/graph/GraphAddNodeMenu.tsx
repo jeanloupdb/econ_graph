@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { Layers, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Layers, Plus } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
 interface GraphAddNodeMenuProps {
   onCreateNode: () => void;
@@ -71,18 +71,7 @@ export function GraphAddNodeMenu({
                 Créer un nœud API
               </button>
             )}
-            {onInsertComposite && (
-              <button
-                onClick={() => {
-                  onInsertComposite();
-                  setOpen(false);
-                }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-900 transition-colors"
-              >
-                <Layers className="h-4 w-4" />
-                Insérer un composite
-              </button>
-            )}
+
             {onCreateComposite && (
               <button
                 onClick={() => {

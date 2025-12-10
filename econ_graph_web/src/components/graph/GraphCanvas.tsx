@@ -1,46 +1,50 @@
 'use client';
 
+
+import { useGraphData } from '@/graph/context/GraphDataContext';
+import { useInsertCompositeNode } from '@/graph/hooks/useInsertCompositeNode';
+import { useTheme } from '@/lib/api/hooks';
+import { computeBottomUpLayout } from '@/lib/layout/custom';
+import { deriveEdgesFromCompute } from '@/lib/layout/graph';
+import { cn } from '@/lib/utils';
+import { useGraphStore } from '@/store/graphState';
+import { useUIStore } from '@/store/uiState';
+import { Loader2 } from 'lucide-react';
+import { useTheme as useNextTheme } from 'next-themes';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import ReactFlow, {
-  Background,
-  Controls,
-  MiniMap,
-  Node as ReactFlowNode,
-  Edge,
-  NodeTypes,
-  EdgeTypes,
-  useNodesState,
-  useEdgesState,
-  ReactFlowProvider,
-  useReactFlow,
+    Background,
+    BackgroundVariant,
+    Controls,
+    Edge,
+    MiniMap,
+    Node as ReactFlowNode,
+    ReactFlowProvider,
+    useEdgesState,
+    useNodesState,
+    useReactFlow
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { useTheme } from '@/lib/api/hooks';
-import { deriveEdgesFromCompute } from '@/lib/layout/graph';
-import { useUIStore } from '@/store/uiState';
-import { useGraphStore } from '@/store/graphState';
-import { useGraphData } from '@/graph/context/GraphDataContext';
-import { CustomNode } from './CustomNode';
 import { CustomEdge } from './CustomEdge';
-import { Loader2 } from 'lucide-react';
-import { computeElkLayout } from '@/lib/layout/elk';
-import { computeBottomUpLayout } from '@/lib/layout/custom';
+import { CustomNode } from './CustomNode';
 
-const nodeTypes: NodeTypes = {
-  custom: CustomNode,
-};
-
-const edgeTypes: EdgeTypes = {
-  default: CustomEdge,
-  dependency: CustomEdge,
-  influence: CustomEdge,
-  correlation: CustomEdge,
-};
-
-function GraphCanvasInner() {
-  const { nodes: nodesData, isLoading: nodesLoading, persistNodePositions } = useGraphData();
+function GraphCanvasInner({ readOnly }: { readOnly?: boolean }) {
+  const { resolvedTheme } = useNextTheme();
+  const maskColor = resolvedTheme === 'dark' ? 'rgba(0, 0, 0, 0.3)' : 'rgba(0, 0, 0, 0.15)';
+  const { nodes: nodesData, edges: explicitEdges, isLoading: nodesLoading, persistNodePositions } = useGraphData();
   const { data: theme } = useTheme();
   const reactFlowInstance = useReactFlow();
+
+  const nodeTypes = useMemo(() => ({
+    custom: CustomNode,
+  }), []);
+
+  const edgeTypes = useMemo(() => ({
+    default: CustomEdge,
+    dependency: CustomEdge,
+    influence: CustomEdge,
+    correlation: CustomEdge,
+  }), []);
 
   const mode = useUIStore((state) => state.mode);
   const selectedNodeId = useUIStore((state) => state.selectedNodeId);
@@ -48,8 +52,10 @@ function GraphCanvasInner() {
   const selectedEdgeId = useUIStore((state) => state.selectedEdgeId);
   const selectedEdgeIds = useUIStore((state) => state.selectedEdgeIds);
   const setSelectedEdgeId = useUIStore((state) => state.setSelectedEdgeId);
+  const setSelectedEdgeIds = useUIStore((state) => state.setSelectedEdgeIds);
   const selectedNodeIds = useUIStore((state) => state.selectedNodeIds);
   const setSelectedNodeIds = useUIStore((state) => state.setSelectedNodeIds);
+  const setInspectorOpen = useUIStore((state) => state.setInspectorOpen);
   const setScenarioPanelOpen = useUIStore((state) => state.setScenarioPanelOpen);
   const connectionSource = useUIStore((state) => state.connectionSource);
   const setConnectionSource = useUIStore((state) => state.setConnectionSource);
@@ -129,7 +135,8 @@ function GraphCanvasInner() {
     }
 
     // Derive edges from compute() to drive highlights and layout
-    const derivedEdges = nodesData.flatMap((n) =>
+    // If explicit edges are provided (e.g. viewer mode), use them. Otherwise derive from compute.
+    const derivedEdges = explicitEdges || nodesData.flatMap((n) =>
       deriveEdgesFromCompute(
         { id: n.id, computation_definition: (n as any).computation_definition || undefined },
         { resolveSlug: (slug) => slugToId.get(slug) }
@@ -168,6 +175,12 @@ function GraphCanvasInner() {
         y: Math.floor(index / 8) * 140,
       };
 
+      // Determine selection status
+      // A node is selected if it is in selectedNodeIds OR if it is an ancestor of the primary selectedNodeId
+      const isExplicitlySelected = selectedNodeIds?.includes(node.id);
+      const isAncestor = ancestorSet.has(node.id);
+      const isSelected = isExplicitlySelected || isAncestor;
+
       const isRelevant = !!selectedNodeId && (selectedNodeId === node.id || ancestorSet.has(node.id));
       const dimOthers = !!selectedNodeId;
 
@@ -175,8 +188,8 @@ function GraphCanvasInner() {
         id: node.id,
         type: 'custom',
         position,
-        selected: selectedNodeId === node.id || ancestorSet.has(node.id),
-        style: dimOthers ? (isRelevant ? { opacity: 1 } : { opacity: 0.25 }) : undefined,
+        selected: isExplicitlySelected,
+        style: dimOthers ? (isRelevant ? { opacity: 1 } : { opacity: 0.5 }) : undefined,
         data: {
           ...node,
           isSelected: false,
@@ -208,7 +221,7 @@ function GraphCanvasInner() {
 
     // Apply selection styles: selected edges OR edges incoming to selected node and its ancestors
     const selectedNode = nodesData.find(n => n.id === selectedNodeId);
-    const incomingStroke = theme?.edge_types?.dependency?.stroke || '#3b82f6';
+    const incomingStroke = (theme as any)?.edge_types?.dependency?.stroke || '#3b82f6';
     const highlightTargets = new Set<string>();
     if (selectedNodeId) highlightTargets.add(selectedNodeId);
     ancestorSet.forEach(id => highlightTargets.add(id));
@@ -217,7 +230,7 @@ function GraphCanvasInner() {
       const isSelectedByEdge = selectedEdgeIds.includes(edge.id);
       const isIncomingToHighlighted = highlightTargets.size > 0 && highlightTargets.has(edge.target);
       const highlight = isSelectedByEdge || isIncomingToHighlighted;
-      const stroke = isIncomingToHighlighted ? incomingStroke : (theme?.edge_types?.dependency?.stroke || '#3b82f6');
+      const stroke = isIncomingToHighlighted ? incomingStroke : ((theme as any)?.edge_types?.dependency?.stroke || '#3b82f6');
       return {
         ...edge,
         style: highlight
@@ -228,7 +241,7 @@ function GraphCanvasInner() {
     });
 
     setReactFlowEdges(styledEdges);
-  }, [nodesData, nodePositions, selectedEdgeIds, selectedNodeId, setReactFlowNodes, setReactFlowEdges, computeHierarchicalPositions, setNodePositions, slugToId, theme?.edge_types?.dependency?.stroke]);
+  }, [nodesData, explicitEdges, nodePositions, selectedEdgeIds, selectedNodeId, selectedNodeIds, setReactFlowNodes, setReactFlowEdges, computeHierarchicalPositions, setNodePositions, slugToId, (theme as any)?.edge_types?.dependency?.stroke]);
 
   // ELK layout on demand
   const layoutInProgress = useGraphStore((s) => s.layoutInProgress);
@@ -247,7 +260,7 @@ function GraphCanvasInner() {
         const current = (reactFlowNodes || []).map((n) => ({ id: n.id, x: n.position.x, y: n.position.y }));
         if (current.length > 0) pushPositionsSnapshot(current as any);
         // Custom bottom-up layout: sinks at bottom, parents centered above
-        const derived = nodesData.flatMap((n) =>
+        const derived = explicitEdges || nodesData.flatMap((n) =>
           deriveEdgesFromCompute(
             { id: n.id, computation_definition: (n as any).computation_definition || undefined },
             { resolveSlug: (slug) => slugToId.get(slug) }
@@ -270,48 +283,70 @@ function GraphCanvasInner() {
         setLayoutInProgress(false);
       }
     })();
-  }, [layoutInProgress, nodesData, reactFlowNodes, pushPositionsSnapshot, setNodePositions, setReactFlowNodes, setLayoutInProgress, slugToId]);
+  }, [layoutInProgress, nodesData, explicitEdges, reactFlowNodes, pushPositionsSnapshot, setNodePositions, setReactFlowNodes, setLayoutInProgress, slugToId]);
 
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: ReactFlowNode) => {
-      // Select node and auto-select all its parents (ancestors)
-      setSelectedNodeId(node.id);
-      const derived = nodesData.flatMap((n) =>
-        deriveEdgesFromCompute(
-          { id: n.id, computation_definition: (n as any).computation_definition || undefined },
-          { resolveSlug: (slug) => slugToId.get(slug) }
-        )
-      );
-      const inMap = new Map<string, string[]>();
-      nodesData.forEach((n) => inMap.set(n.id, []));
-      derived.forEach((e) => {
-        (inMap.get(e.target) || []).push(e.source);
-      });
-      const ancestors: string[] = [];
-      const seen = new Set<string>();
-      const stack = [...(inMap.get(node.id) || [])];
-      while (stack.length) {
-        const cur = stack.pop()!;
-        if (seen.has(cur)) continue;
-        seen.add(cur);
-        ancestors.push(cur);
-        (inMap.get(cur) || []).forEach((p) => {
-          if (!seen.has(p)) stack.push(p);
-        });
+      if (mode === 'ai-select') {
+        // Toggle selection for AI context
+        const currentIds = selectedNodeIds || [];
+        if (currentIds.includes(node.id)) {
+          setSelectedNodeIds(currentIds.filter(id => id !== node.id));
+        } else {
+          setSelectedNodeIds([...currentIds, node.id]);
+        }
+        return;
       }
-      setSelectedNodeIds([node.id, ...ancestors]);
+
+      // Select only the clicked node
+      setSelectedNodeId(node.id);
+      setSelectedNodeIds([node.id]);
+      
+      // Open inspector
+      setInspectorOpen(true);
     },
-    [setSelectedNodeId, setSelectedNodeIds, nodesData, slugToId]
+    [setSelectedNodeId, setSelectedNodeIds, mode, selectedNodeIds, setInspectorOpen]
   );
+
+  // Helper to get all ancestors of a node
+  const getAncestors = useCallback((nodeId: string) => {
+    const derived = explicitEdges || nodesData.flatMap((n) =>
+      deriveEdgesFromCompute(
+        { id: n.id, computation_definition: (n as any).computation_definition || undefined },
+        { resolveSlug: (slug) => slugToId.get(slug) }
+      )
+    );
+    const inMap = new Map<string, string[]>();
+    nodesData.forEach((n) => inMap.set(n.id, []));
+    derived.forEach((e) => {
+      if (!inMap.has(e.target)) inMap.set(e.target, []);
+      inMap.get(e.target)!.push(e.source);
+    });
+    
+    const ancestors = new Set<string>();
+    const stack = [...(inMap.get(nodeId) || [])];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (ancestors.has(cur)) continue;
+      ancestors.add(cur);
+      (inMap.get(cur) || []).forEach((p) => {
+        if (!ancestors.has(p)) stack.push(p);
+      });
+    }
+    return Array.from(ancestors);
+  }, [explicitEdges, nodesData, slugToId]);
 
   const onNodeDragStop = useCallback(
     async (_event: React.MouseEvent, node: ReactFlowNode) => {
       const draggedId = node.id;
-      const isGroup =
-        Array.isArray(selectedNodeIds) &&
-        selectedNodeIds.length > 0 &&
-        selectedNodeIds.includes(draggedId);
-      const persistIds = isGroup ? Array.from(new Set(selectedNodeIds)) : [draggedId];
+      // Determine if we were dragging a group (selected node) or single node
+      const isSelected = selectedNodeIds?.includes(draggedId);
+      let persistIds = [draggedId];
+      
+      if (isSelected) {
+        const ancestors = getAncestors(draggedId);
+        persistIds = [draggedId, ...ancestors];
+      }
 
       const updates: { id: string; x: number; y: number }[] = [];
       persistIds.forEach((id) => {
@@ -328,7 +363,7 @@ function GraphCanvasInner() {
         }
       }
     },
-    [persistNodePositions, reactFlowNodes, selectedNodeIds, setNodePosition]
+    [persistNodePositions, reactFlowNodes, selectedNodeIds, setNodePosition, getAncestors]
   );
 
   // Group-drag: move ancestors and/or selection visually while dragging
@@ -336,13 +371,19 @@ function GraphCanvasInner() {
 
   const onNodeDragStart = useCallback((_: React.MouseEvent, node: ReactFlowNode) => {
     const draggedId = node.id;
-    // Only group-drag when selection exists AND the dragged node is part of the selection
-    if (!selectedNodeIds || selectedNodeIds.length === 0 || !selectedNodeIds.includes(draggedId)) { dragStateRef.current = null; return; }
-    const groupIds = Array.from(new Set(selectedNodeIds));
+    const isSelected = selectedNodeIds?.includes(draggedId);
+    
+    let groupIds = [draggedId];
+    if (isSelected) {
+      // If selected, move node AND all ancestors
+      const ancestors = getAncestors(draggedId);
+      groupIds = [draggedId, ...ancestors];
+    }
+    
     const startMap = new Map<string, { x: number; y: number }>();
     (reactFlowNodes || []).forEach((n) => { if (groupIds.includes(n.id)) startMap.set(n.id, { x: n.position.x, y: n.position.y }); });
     dragStateRef.current = { startPos: { x: node.position.x, y: node.position.y }, startMap, groupIds };
-  }, [selectedNodeIds, reactFlowNodes]);
+  }, [selectedNodeIds, reactFlowNodes, getAncestors]);
 
   const onNodeDrag = useCallback((_: React.MouseEvent, node: ReactFlowNode) => {
     const st = dragStateRef.current;
@@ -404,14 +445,136 @@ function GraphCanvasInner() {
     setScenarioPanelOpen(false);
   }, [mode, setSelectedNodeId, setSelectedEdgeId, setSelectedNodeIds, setConnectionSource, setScenarioPanelOpen]);
 
-  // Get node color based on status
+  const insertCompositeNode = useInsertCompositeNode();
+
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const onDrop = useCallback(
+    async (event: React.DragEvent) => {
+      event.preventDefault();
+      const compositeId = event.dataTransfer.getData('application/reactflow/composite');
+
+      if (compositeId && reactFlowInstance) {
+        const position = reactFlowInstance.screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY,
+        });
+
+        try {
+          await insertCompositeNode(compositeId, { position });
+        } catch (error) {
+          console.error('Failed to drop composite:', error);
+        }
+      }
+    },
+    [insertCompositeNode, reactFlowInstance]
+  );
+
+  // Get node color based on status/tone
   const getNodeStyle = useCallback((node: ReactFlowNode) => {
-    const status = node.data.status;
-    const backgroundColor = (theme && theme.node_status && theme.node_status[status]?.bg) || '#f4f4f5';
+    // Replicate CustomNode logic for tone
+    const data = node.data;
+    const hasError = (!!data.computation_error) || (!!(data as any).provider_last_error);
+    
+    // Determine topology
+    const edges = reactFlowEdges || [];
+    const hasOutputs = edges.some((e) => e.source === node.id);
+    const isLeaf = !hasOutputs;
+    const inputs = edges.filter((e) => e.target === node.id);
+    const isRoot = inputs.length === 0;
+
+    const tone: 'error' | 'root' | 'leaf' | 'intermediate' = hasError ? 'error' : (isRoot ? 'root' : (isLeaf ? 'leaf' : 'intermediate'));
+    
+    // Get color from theme
+    const toneColors = (theme as any)?.node_tone?.[tone];
+    // Use border color for MiniMap as it's more opaque/visible than the background tint
+    const backgroundColor = toneColors?.border || toneColors?.bg || '#f4f4f5';
+    
     return { backgroundColor };
-  }, [theme]);
+  }, [theme, reactFlowEdges]);
 
   const interactiveMode = mode === 'select' || mode === 'connect';
+
+  const lastSelectionRef = useRef<{ nodes: string[]; edges: string[] }>({ nodes: [], edges: [] });
+  const selectedNodeIdRef = useRef(selectedNodeId);
+  useEffect(() => { selectedNodeIdRef.current = selectedNodeId; }, [selectedNodeId]);
+
+  const onSelectionChange = useCallback(
+    ({ nodes, edges }: { nodes: ReactFlowNode[]; edges: Edge[] }) => {
+      if (mode === 'select' || mode === 'lasso') {
+        const nodeIds = nodes.map((n) => n.id).sort();
+        const edgeIds = edges.map((e) => e.id).sort();
+        
+        const last = lastSelectionRef.current;
+        const nodesChanged = 
+          nodeIds.length !== last.nodes.length || 
+          !nodeIds.every((id, i) => id === last.nodes[i]);
+          
+        const edgesChanged = 
+          edgeIds.length !== last.edges.length || 
+          !edgeIds.every((id, i) => id === last.edges[i]);
+
+        if (!nodesChanged && !edgesChanged) return;
+
+        // CRITICAL: Check if the new selection matches the current store state.
+        // If it does, we MUST NOT call setSelectedNodeIds, otherwise we trigger an infinite loop
+        // (Store update -> useEffect -> ReactFlow nodes update -> onSelectionChange -> Store update)
+        if (nodesChanged) {
+           const currentStoreIds = selectedNodeIds || [];
+           if (nodeIds.length === currentStoreIds.length) {
+             const sortedStore = [...currentStoreIds].sort();
+             const isSame = nodeIds.every((id, i) => id === sortedStore[i]);
+             if (isSame) {
+               // Update ref to match current state but skip store update
+               lastSelectionRef.current = { nodes: nodeIds, edges: edgeIds };
+               return; 
+             }
+           }
+        }
+
+        lastSelectionRef.current = { nodes: nodeIds, edges: edgeIds };
+
+        if (edgesChanged) {
+          setSelectedEdgeIds(edgeIds);
+        }
+
+        if (nodesChanged) {
+          // If selection is empty, clear everything
+          if (nodeIds.length === 0) {
+            setSelectedNodeIds([]);
+            // Only clear if currently set (avoid redundant updates)
+            if (selectedNodeIdRef.current) setSelectedNodeId(null);
+            return;
+          }
+
+          // Update selectedNodeIds
+          setSelectedNodeIds(nodeIds);
+
+          // Handle primary selection (selectedNodeId)
+          const currentPrimary = selectedNodeIdRef.current;
+          if (nodeIds.length === 1) {
+            // If it's a new single selection (e.g. Lasso), set it as primary
+            if (nodeIds[0] !== currentPrimary) {
+              setSelectedNodeId(nodeIds[0]);
+            }
+          } else {
+            // Multi-selection: if the primary node is no longer in the selection, clear it
+            if (currentPrimary && !nodeIds.includes(currentPrimary)) {
+              setSelectedNodeId(null);
+            }
+            // If no primary node but we have selection, maybe pick the first one? 
+            if (!currentPrimary && nodeIds.length > 0) {
+               setSelectedNodeId(nodeIds[0]);
+            }
+          }
+        }
+      }
+    },
+    [mode, setSelectedNodeIds, setSelectedEdgeIds, setSelectedNodeId]
+  );
 
   if (isLoading) {
     return (
@@ -421,13 +584,19 @@ function GraphCanvasInner() {
     );
   }
 
+
+
+// ... (inside GraphCanvasInner)
+
+
   return (
-    <div className="h-full w-full relative">
+    <div className="h-full w-full relative bg-white dark:bg-zinc-900">
       <ReactFlow
         nodes={reactFlowNodes}
         edges={reactFlowEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onSelectionChange={onSelectionChange}
         onNodeDragStart={onNodeDragStart}
         onNodeDrag={onNodeDrag}
         onNodeClick={onNodeClick}
@@ -440,16 +609,28 @@ function GraphCanvasInner() {
         fitView
         minZoom={0.05}
         maxZoom={2.5}
-        nodesDraggable={interactiveMode}
+        selectNodesOnDrag={false}
+        nodesDraggable={!readOnly && interactiveMode}
         nodesConnectable={false}
-        elementsSelectable={mode === 'select' || mode === 'lasso'}
-        className="bg-zinc-50 dark:bg-zinc-900"
+        elementsSelectable={!readOnly && (mode === 'select' || mode === 'lasso')}
+        onDrop={onDrop}
+        onDragOver={onDragOver}
+        className={cn(
+          "bg-transparent",
+          mode === 'ai-select' && "!cursor-crosshair"
+        )}
       >
-        <Background />
+        <Background 
+          variant={BackgroundVariant.Lines} 
+          gap={48} 
+          size={1} 
+          color="#808080" 
+          style={{ opacity: 0.15 }}
+        />
         <Controls />
         <MiniMap
           nodeColor={(node) => getNodeStyle(node).backgroundColor}
-          maskColor="rgba(0, 0, 0, 0.05)"
+          maskColor={maskColor}
           className="!bg-zinc-100 dark:!bg-zinc-800 !border !border-zinc-200 dark:!border-zinc-700"
         />
       </ReactFlow>
@@ -468,10 +649,10 @@ function GraphCanvasInner() {
   );
 }
 
-export function GraphCanvas() {
+export function GraphCanvas({ readOnly }: { readOnly?: boolean }) {
   return (
     <ReactFlowProvider>
-      <GraphCanvasInner />
+      <GraphCanvasInner readOnly={readOnly} />
     </ReactFlowProvider>
   );
 }

@@ -1,5 +1,8 @@
 "use client";
 
+import {
+  Select
+} from "@/components/ui/select";
 import type {
   ComputeNodeResponse,
   Node,
@@ -7,11 +10,11 @@ import type {
   ScenarioCompositeOverride,
   ScenarioNodeOverride,
 } from "@/lib/types";
-import { Layers } from "lucide-react";
+import { Layers, Plus } from "lucide-react";
 import type React from "react";
 import { ParameterCard } from "./ParameterCard";
-import { makeVirtualNodeFromParam } from "./utils";
 import type { CompositeSection, OverrideTarget } from "./types";
+import { makeVirtualNodeFromParam } from "./utils";
 
 export interface ScenarioParametersProps {
   projectId: string | null;
@@ -29,6 +32,7 @@ export interface ScenarioParametersProps {
   scenarioNodeOverridesMap: Record<string, ScenarioNodeOverride>;
   scenarioCompositeOverridesMap: Record<string, ScenarioCompositeOverride>;
   pendingChanges: Record<string, boolean>;
+  setPendingChanges: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   validationResults: Record<string, { ok: boolean; message: string }>;
   tones: any;
   theme: any;
@@ -60,6 +64,9 @@ export interface ScenarioParametersProps {
     code: string;
     realValue: number;
   }) => Promise<{ ok: boolean; result?: number | null; error?: string | null }>;
+  onRequestCreateScenario: () => void;
+  scenarios: Scenario[];
+  onSelectScenario: (id: string) => void;
 }
 
 interface RenderOptions {
@@ -86,6 +93,7 @@ export function ScenarioParameters({
   scenarioNodeOverridesMap,
   scenarioCompositeOverridesMap,
   pendingChanges,
+  setPendingChanges,
   validationResults,
   tones,
   theme,
@@ -103,6 +111,9 @@ export function ScenarioParameters({
   isSavingOverride,
   isValidatingOverride,
   onValidateOverride,
+  onRequestCreateScenario,
+  scenarios,
+  onSelectScenario,
 }: ScenarioParametersProps) {
   const renderCard = (node: Node, options?: RenderOptions) => {
     const targetKey = options?.overrideKey || node.id;
@@ -129,6 +140,7 @@ export function ScenarioParameters({
         scenarioNodeOverridesMap={scenarioNodeOverridesMap}
         scenarioCompositeOverridesMap={scenarioCompositeOverridesMap}
         pendingChanges={pendingChanges}
+        setPendingChanges={setPendingChanges}
         validationResults={validationResults}
         tones={tones}
         theme={theme}
@@ -172,15 +184,53 @@ export function ScenarioParameters({
           ) : (
             <>
               <div className="w-2.5 h-2.5 rounded-full bg-zinc-400" />
-              <span>Pour la Baseline (valeurs réelles)</span>
+              <span>Pour la Baseline (valeurs de base)</span>
             </>
           )}
         </div>
       </div>
 
-      {!scenarioEditable && (
-        <div className="text-sm text-zinc-600 dark:text-zinc-400 border border-dashed border-zinc-300 dark:border-zinc-700 rounded px-3 py-2 bg-zinc-50 dark:bg-zinc-900/40">
-          Baseline sélectionnée : paramètres en lecture seule.
+      {!activeScenarioId && (
+        <div className="flex flex-col items-center justify-center py-6 px-4 text-center space-y-3 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50/50 dark:bg-zinc-900/20 mb-4">
+          <div className="space-y-1">
+            <h4 className="font-medium text-zinc-900 dark:text-zinc-100 text-sm">
+              Mode Baseline (Lecture seule)
+            </h4>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-[280px] mx-auto">
+              Les valeurs ci-dessous sont fixes. Pour simuler des impacts, créez ou sélectionnez un scénario.
+            </p>
+          </div>
+          
+          {scenarios.length > 0 ? (
+            <div className="w-full max-w-[200px]">
+              <Select
+                value=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    onSelectScenario(e.target.value);
+                  }
+                }}
+                className="h-8 text-xs"
+              >
+                <option value="" disabled>
+                  Sélectionner un scénario
+                </option>
+                {scenarios.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ) : (
+            <button
+              onClick={onRequestCreateScenario}
+              className="inline-flex items-center justify-center px-3 py-1.5 rounded text-xs font-medium bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1.5" />
+              Créer un scénario
+            </button>
+          )}
         </div>
       )}
 

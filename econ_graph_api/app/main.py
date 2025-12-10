@@ -9,6 +9,8 @@ from app.api.compute import router as compute_router
 from app.api.ui import router as ui_router
 from app.api.providers import router as providers_router
 from app.api.scenarios import router as scenarios_router
+from app.api.auth import router as auth_router
+from app.api.ai import router as ai_router
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.core.db import SessionLocal, Base, engine
@@ -29,16 +31,19 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",  # Alternative port
+        "*",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+from app.api.viewer import router as viewer_router
+
+# ... (imports)
+
 # Include routers
+app.include_router(auth_router)
 app.include_router(nodes_router)
 # Rules router disabled: focusing API on graph CRUD only
 app.include_router(compute_router)
@@ -47,6 +52,8 @@ app.include_router(ui_router)
 app.include_router(providers_router)
 app.include_router(scenarios_router)
 app.include_router(composites_router)
+app.include_router(ai_router)
+app.include_router(viewer_router)
 
 
 # Configure Prometheus metrics
@@ -69,6 +76,22 @@ async def startup_event():
     try:
         Base.metadata.create_all(bind=engine)
         logger.info("DB schema ensured via create_all()")
+        
+        # Ensure project columns (public_view_token)
+        def ensure_project_columns():
+            column_statements = [
+                "ALTER TABLE project ADD COLUMN IF NOT EXISTS public_view_token VARCHAR(64)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_project_public_view_token ON project (public_view_token)",
+            ]
+            db = SessionLocal()
+            try:
+                for stmt in column_statements:
+                    db.execute(text(stmt))
+                db.commit()
+                logger.info("Project columns ensured")
+            finally:
+                db.close()
+
         # Ensure required node columns exist for legacy databases
         def ensure_node_columns():
             column_statements = [
@@ -108,9 +131,10 @@ async def startup_event():
                 db.close()
 
         try:
+            ensure_project_columns()
             ensure_node_columns()
         except Exception as e:
-            logger.warning("ensure node columns failed", error=str(e))
+            logger.warning("ensure columns failed", error=str(e))
     except Exception as e:
         logger.warning("create_all failed", error=str(e))
     # Ensure default project exists so the UI lists at least one project

@@ -4,12 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { Node } from "@/lib/types";
 import {
-  Edit3,
-  ExternalLink,
-  Layers,
-  Loader2,
-  Trash2,
-  X,
+    Edit3,
+    ExternalLink,
+    Layers,
+    Loader2,
+    Trash2,
+    X
 } from "lucide-react";
 
 interface InspectorHeaderProps {
@@ -22,6 +22,7 @@ interface InspectorHeaderProps {
   onEditNode: () => void;
   onEditApiNode: () => void;
   onTransformToComposite: () => void;
+  selectedNodeIds?: string[];
   onDelete: () => void;
   onClose: () => void;
 }
@@ -36,11 +37,12 @@ export function InspectorHeader({
   onEditNode,
   onEditApiNode,
   onTransformToComposite,
+  selectedNodeIds,
   onDelete,
   onClose,
 }: InspectorHeaderProps) {
   return (
-    <div className="flex items-center justify-between border-b border-zinc-200 p-4 dark:border-zinc-800">
+    <div className="flex items-center justify-between border-b border-zinc-200 p-4 dark:border-zinc-800 flex-wrap gap-2">
       <div className="min-w-0 flex items-center gap-3">
         <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/30">
           {isCompositeNode && (
@@ -100,18 +102,23 @@ export function InspectorHeader({
               <Button
                 variant="outline"
                 size="sm"
+                className="h-8 gap-2 border-dashed"
                 onClick={onTransformToComposite}
+                title={
+                  (selectedNodeIds?.length || 0) > 1
+                    ? "Créer un composite à partir de la sélection"
+                    : "Transformer en composite (avec dépendances)"
+                }
                 disabled={transforming}
-                title="Transformer en composite"
               >
                 {transforming ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <>
-                    <Layers className="h-4 w-4 mr-2" />
-                    Transformer
-                  </>
+                  <Layers className="h-3.5 w-3.5" />
                 )}
+                {(selectedNodeIds?.length || 0) > 1
+                  ? `Transformer (${selectedNodeIds?.length})`
+                  : "Transformer"}
               </Button>
             )}
             <div className="relative group">

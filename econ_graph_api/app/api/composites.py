@@ -53,8 +53,9 @@ def _validate_graph(graph: CompositeGraphData) -> None:
         outgoing[edge.source] = outgoing.get(edge.source, 0) + 1
 
     leaves = [node_id for node_id in node_ids if outgoing.get(node_id, 0) == 0]
-    if len(leaves) != 1:
-        raise HTTPException(status_code=400, detail="Composite must contain exactly one final node.")
+    # Relaxed validation: Allow multiple leaves or no leaves during creation/editing
+    # if len(leaves) != 1:
+    #     raise HTTPException(status_code=400, detail="Composite must contain exactly one final node.")
 
 
 def _query_composite_usage(db: Session, composite_id: str):
@@ -111,7 +112,8 @@ def get_composite_usage(composite_id: str, db: Session = Depends(get_db)):
 @router.post("", response_model=CompositeOut, status_code=201)
 def create_composite(payload: CompositeCreate, db: Session = Depends(get_db)):
     graph = payload.graph_data
-    _validate_graph(graph)
+    if graph and graph.nodes:
+        _validate_graph(graph)
 
     composite_id = payload.id or str(uuid4())
     existing = db.query(Composite).filter(Composite.id == composite_id).first()
@@ -122,7 +124,7 @@ def create_composite(payload: CompositeCreate, db: Session = Depends(get_db)):
     composite = Composite(
         id=composite_id,
         name=payload.name,
-        graph_data=graph.model_dump(mode="json"),
+        graph_data=graph.model_dump(mode="json") if graph else {"nodes": [], "edges": []},
         created_at=now,
         updated_at=now,
     )

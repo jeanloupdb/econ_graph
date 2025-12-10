@@ -1,19 +1,22 @@
 'use client';
 
-import { useMemo } from 'react';
-import { Handle, Position, NodeProps, useReactFlow } from 'reactflow';
-import { formatNumber } from '@/lib/utils';
-import { Calculator, Layers } from 'lucide-react';
-import type { Node } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { useUIStore } from '@/store/uiState';
-import { useScenarioStore } from '@/store/scenarioState';
-import { useTheme, useNodeTones } from '@/lib/api/hooks';
-import { useGraphData } from '@/graph/context/GraphDataContext';
-import { getNodeDisplayIdentifier } from '@/lib/nodes';
-import { resolveTonePalette } from '@/lib/nodeStyles';
-import { useProjectStore } from '@/store/projectState';
 import { useGraphActions } from '@/graph/context/GraphActionsContext';
+import { useGraphData } from '@/graph/context/GraphDataContext';
+import { useNodeTones, useTheme } from '@/lib/api/hooks';
+import { deriveEdgesFromCompute } from '@/lib/layout/graph';
+import { getNodeDisplayIdentifier } from '@/lib/nodes';
+import { resolveTonePalette } from "@/lib/nodeStyles";
+import type { Node } from '@/lib/types';
+import { cn } from "@/lib/utils";
+import { useProjectStore } from '@/store/projectState';
+import { useScenarioStore } from '@/store/scenarioState';
+import { useUIStore } from '@/store/uiState';
+import { formatNumber } from "@/utils/format";
+import { Calculator, Layers, Pencil, Sparkles } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import React, { useCallback, useMemo } from 'react';
+import { Handle, NodeProps, NodeToolbar, Position, useReactFlow } from 'reactflow';
 
 export function CustomNode({ data, id, selected }: NodeProps<Node>) {
   // Minimal: no explicit selection linkage here
@@ -59,13 +62,18 @@ export function CustomNode({ data, id, selected }: NodeProps<Node>) {
   const { data: toneEntries } = useNodeTones(currentProjectId);
   // Determine unified tone
   const tone: 'error' | 'root' | 'leaf' | 'intermediate' = hasError ? 'error' : (isRoot ? 'root' : (isLeaf ? 'leaf' : 'intermediate'));
-  const toneColors = theme?.node_tone?.[tone];
+  const toneColors = (theme as any)?.node_tone?.[tone];
   const baseStyle: React.CSSProperties | undefined = toneColors
-    ? { backgroundColor: toneColors.bg, borderColor: toneColors.border }
+    ? { borderColor: toneColors.border }
     : undefined;
   const compositeStyle: React.CSSProperties | undefined = isCompositeNode
-    ? { backgroundColor: 'rgba(251, 191, 36, 0.18)', borderColor: '#f59e0b' }
+    ? { borderColor: '#f59e0b' }
     : undefined;
+
+  // Tint style for the inner layer
+  const tintStyle: React.CSSProperties | undefined = toneColors
+    ? { backgroundColor: toneColors.bg }
+    : (isCompositeNode ? { backgroundColor: 'rgba(251, 191, 36, 0.18)' } : undefined);
 
   const pushPanel = useUIStore((s) => s.pushPanel);
   const setSelectedNodeId = useUIStore((s) => s.setSelectedNodeId);
@@ -114,7 +122,7 @@ export function CustomNode({ data, id, selected }: NodeProps<Node>) {
   }, [edges]);
 
   const getToneForNode = (nodeId: string): 'root' | 'leaf' | 'intermediate' | 'error' => {
-    const explicitTone = toneEntries?.[nodeId]?.tone;
+    const explicitTone = (toneEntries as any)?.[nodeId]?.tone;
     if (explicitTone) {
       return explicitTone;
     }
@@ -134,95 +142,270 @@ export function CustomNode({ data, id, selected }: NodeProps<Node>) {
     return getNodeDisplayIdentifier(sourceNode) || sourceId;
   };
 
+  const router = useRouter();
+  const setAiAssistantOpen = useUIStore((s) => s.setAiAssistantOpen);
+  const aiAssistantOpen = useUIStore((s) => s.aiAssistantOpen);
+  const setSelectedNodeIds = useUIStore((s) => s.setSelectedNodeIds);
+  const setMode = useUIStore((s) => s.setMode);
+  const setEditNodeModalOpen = useUIStore((s) => s.setEditNodeModalOpen);
+
+  const getAncestors = useCallback(() => {
+    const slugToId = new Map<string, string>();
+    graphNodes.forEach((n) => {
+      if (n.slug) slugToId.set(n.slug, n.id);
+      slugToId.set(n.id, n.id);
+    });
+
+    const derived = graphNodes.flatMap((n) =>
+      deriveEdgesFromCompute(
+        { id: n.id, computation_definition: (n as any).computation_definition || undefined },
+        { resolveSlug: (slug) => slugToId.get(slug) }
+      )
+    );
+    const inMap = new Map<string, string[]>();
+    graphNodes.forEach((n) => inMap.set(n.id, []));
+    derived.forEach((e) => {
+      if (!inMap.has(e.target)) inMap.set(e.target, []);
+      inMap.get(e.target)!.push(e.source);
+    });
+    
+    const ancestors = new Set<string>();
+    const stack = [...(inMap.get(id) || [])];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (ancestors.has(cur)) continue;
+      ancestors.add(cur);
+      (inMap.get(cur) || []).forEach((p) => {
+        if (!ancestors.has(p)) stack.push(p);
+      });
+    }
+    return Array.from(ancestors);
+  }, [graphNodes, id]);
+
+  const [isHovered, setIsHovered] = React.useState(false);
+
   return (
-    <div
-      className={`rounded-lg border p-3 ${containerSelected} ${highlightAnimationClass} min-w-[220px] relative transition-transform`}
-      style={{ ...(baseStyle || {}), ...(compositeStyle || {}), boxShadow }}
-    >
+    <>
+      <NodeToolbar
+        isVisible={selected && !aiAssistantOpen}
+        position={Position.Right}
+        align="start"
+        offset={10}
+        className="flex flex-col gap-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-lg p-1"
+      >
+        <button
+          className="flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors w-full justify-start"
+          onClick={() => {
+            if (isCompositeNode && data.composite_id) {
+              router.push(`/composites/${data.composite_id}`);
+            } else {
+              setEditNodeModalOpen(true);
+            }
+          }}
+          title="Modifier"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+          <span>Modifier</span>
+        </button>
+        
+        <button
+          className="group/ai flex items-center gap-2 px-2 py-1.5 text-xs font-medium rounded transition-all hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 dark:hover:from-blue-900/20 dark:hover:to-purple-900/20 w-full justify-start"
+          onClick={() => {
+            const ancestors = getAncestors();
+            setSelectedNodeIds([id, ...ancestors]);
+            setMode('ai-select');
+            setAiAssistantOpen(true);
+          }}
+        >
+          <Sparkles className="w-3.5 h-3.5 text-blue-500 group-hover/ai:text-purple-500 transition-colors" />
+          <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent group-hover/ai:from-blue-500 group-hover/ai:to-purple-500">
+            Assistant
+          </span>
+        </button>
+      </NodeToolbar>
 
-      {/* Algorithm label removed in graph view */}
+      <div
+        className={cn(
+          'relative rounded-xl border transition-all duration-200 group min-w-[250px] bg-white dark:bg-zinc-900 p-4 !overflow-visible', // Force overflow visible
+          containerSelected,
+          highlightAnimationClass
+        )}
+        style={{
+          ...baseStyle,
+          ...compositeStyle,
+          boxShadow,
+        }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        {/* Tint Layer */}
+        <div className="absolute inset-0 z-0 pointer-events-none rounded-xl" style={tintStyle} />
 
-      <Handle type="target" position={Position.Top} className="w-3 h-3" />
+        <Handle type="target" position={Position.Top} className="w-3 h-3 z-20" />
 
-      <div className="space-y-2">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex flex-col gap-0.5">
-            <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono flex items-center gap-2 flex-wrap">
-              <span>
-                {displaySlug}
-                {!comparisonEnabled && (
-                  <>
-                    {' = '}
-                    <span className="text-zinc-900 dark:text-zinc-100 font-semibold">
-                      {displayValue == null ? '—' : formatNumber(displayValue)}
-                    </span>
-                    <span className="text-[10px]">{data.unit}</span>
-                  </>
-                )}
-              </span>
-            </div>
-            <div className="flex items-center gap-1 text-xs">
+        <div className="space-y-3 relative z-10">
+          <div className="flex flex-col gap-1.5">
+            {/* Label (Name) at top */}
+            <div className="flex items-center gap-2">
               {isCompositeNode && (
-                <Layers className="h-3 w-3 text-amber-600 dark:text-amber-300" />
+                <Layers className="h-4 w-4 text-amber-600 dark:text-amber-300" />
               )}
-              <h3 className="font-medium leading-tight truncate max-w-[180px]">
+              <h3 className="font-medium leading-tight text-base text-zinc-900 dark:text-zinc-100 truncate max-w-[220px]">
                 {data.label}
               </h3>
               {isComputed && (
                 <Calculator
-                  className={`h-3 w-3 ${
+                  className={`h-3.5 w-3.5 ${
                     hasError ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
                   }`}
                 />
               )}
             </div>
-          </div>
-        </div>
 
-        {/* Comparison mode: show A/B values */}
-        {comparisonEnabled && compareData && (
-          <div className="mt-1 space-y-0.5 text-[11px] text-zinc-700 dark:text-zinc-200">
-            <div className="flex items-baseline gap-2">
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-blue-500" />
-              </span>
-              <span className="font-mono">
-                {compareData.value_a == null ? '—' : formatNumber(compareData.value_a)}
-              </span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              </span>
-              <span className="font-mono">
-                {compareData.value_b == null ? '—' : formatNumber(compareData.value_b)}
+            {/* ID = Value below */}
+            <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono flex items-center gap-2 flex-wrap">
+              <span>
+                {displaySlug}
+                {!comparisonEnabled && (
+                  <>
+                    {' = '}
+                    <span className="text-zinc-900 dark:text-zinc-100 font-bold text-base">
+                      {displayValue == null ? '—' : formatNumber(displayValue)}
+                    </span>
+                    <span className="text-[10px] ml-0.5">{data.unit}</span>
+                  </>
+                )}
               </span>
             </div>
           </div>
-        )}
 
-        {/* Hide verbose preview for decision leaves; keep for others */}
-        {!comparisonEnabled && isComputed && !isLeaf && (
-          <div className="text-[10px] text-zinc-600 dark:text-zinc-400 mt-1">
-            <div className="flex items-center gap-1">
-              <span className="font-mono truncate max-w-[190px]">{(data.computation_definition || '').slice(0, 42)}{(data.computation_definition || '').length > 42 ? '…' : ''}</span>
-            </div>
-            {hasError && (
-              <div className="mt-1">
-                <Badge variant="destructive" className="text-[9px]">Erreur</Badge>
+          {/* Deviation Badge & Tooltip */}
+          {(() => {
+             let hasDeviation = false;
+             let diffPercent: number | null = null;
+             let refValue: number | null = null;
+             let newValue: number | null = null;
+
+             if (comparisonEnabled && compareData) {
+                if (compareData.value_a != null && compareData.value_b != null) {
+                   const diff = Math.abs(compareData.value_a - compareData.value_b);
+                   if (diff > 0.000001) {
+                      hasDeviation = true;
+                      // User Request: "B en fonction de A" -> (B - A) / A
+                      // So A is Reference, B is New Value
+                      refValue = compareData.value_a; 
+                      newValue = compareData.value_b;
+                      if (refValue !== 0) {
+                         diffPercent = ((newValue - refValue) / Math.abs(refValue)) * 100;
+                      }
+                   }
+                }
+             } else if (activeScenarioId && scenarioData) {
+                const base = data.value_computed;
+                const scen = scenarioData.scenario_value;
+                if (base != null && scen != null) {
+                   const diff = Math.abs(scen - base);
+                   if (diff > 0.000001) {
+                      hasDeviation = true;
+                      // Scenario vs Baseline: Baseline is Reference
+                      refValue = base;
+                      newValue = scen;
+                      if (refValue !== 0) {
+                         diffPercent = ((newValue - refValue) / Math.abs(refValue)) * 100;
+                      }
+                   }
+                }
+             }
+
+             if (!hasDeviation) return null;
+
+             const isPositive = diffPercent !== null && diffPercent > 0; // Increase
+             const isNegative = diffPercent !== null && diffPercent < 0; // Decrease
+             
+             // User Logic: Positive = Green, Negative = Red
+             
+             let badgeColorClass = "bg-amber-500"; // Default/Neutral
+             let borderColorClass = "border-amber-500/50";
+             let textColorClass = "text-amber-400";
+
+             if (isPositive) {
+                badgeColorClass = "bg-emerald-500"; // Positive -> Green
+                borderColorClass = "border-emerald-500/50";
+                textColorClass = "text-emerald-400";
+             }
+             if (isNegative) {
+                badgeColorClass = "bg-red-500"; // Negative -> Red
+                borderColorClass = "border-red-500/50";
+                textColorClass = "text-red-400";
+             }
+
+             return (
+               <>
+                 <div className={`absolute -top-6 -right-6 w-7 h-7 rounded-full ${badgeColorClass} shadow-md ring-2 ring-white dark:ring-zinc-900 z-30 flex items-center justify-center animate-pulse`} />
+                 
+                 {/* Tooltip on Node Hover */}
+                 {isHovered && (
+                   <div className="absolute bottom-full right-0 mb-4 z-[100] w-max pointer-events-none">
+                     <div className={`bg-zinc-950 text-white text-base rounded-xl p-4 shadow-[0_0_30px_-5px_rgba(0,0,0,0.6)] border ${borderColorClass} flex flex-col items-end gap-1 animate-in fade-in zoom-in-95 duration-150 slide-in-from-bottom-2 min-w-[220px]`}>
+                       <div className="font-bold whitespace-nowrap flex items-center gap-2 text-lg">
+                         {diffPercent != null ? (
+                           <>
+                             <span className={textColorClass}>
+                               {diffPercent > 0 ? '+' : ''}{diffPercent.toFixed(1)}%
+                             </span>
+                             <span className="text-zinc-300 font-medium text-base">d&apos;écart</span>
+                           </>
+                         ) : (
+                           'Valeur différente'
+                         )}
+                       </div>
+                       <div className="text-sm text-zinc-400 whitespace-nowrap font-medium">
+                         {comparisonEnabled ? 'Entre A et B' : 'Par rapport à la baseline'}
+                       </div>
+                     </div>
+                     {/* Arrow */}
+                     <div className={`w-4 h-4 bg-zinc-950 transform rotate-45 absolute bottom-[-8px] right-6 border-r border-b ${borderColorClass}`} />
+                   </div>
+                 )}
+               </>
+             );
+          })()}
+
+          {/* Comparison mode: show A/B values */}
+          {comparisonEnabled && compareData && (
+            <div className="mt-1 space-y-0.5 text-[11px] text-zinc-700 dark:text-zinc-200">
+              <div className="flex items-baseline gap-2">
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-blue-500" />
+                </span>
+                <span className="font-mono font-semibold">
+                  {compareData.value_a == null ? '—' : formatNumber(compareData.value_a)}
+                </span>
               </div>
-            )}
-            {inputs.length > 0 && (
-              <div className="mt-1 flex flex-wrap gap-1">
-                {inputs.slice(0,3).map((src, idx) => {
+              <div className="flex items-baseline gap-2">
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                </span>
+                <span className="font-mono font-semibold">
+                  {compareData.value_b == null ? '—' : formatNumber(compareData.value_b)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Dependencies (Inputs) */}
+          {!comparisonEnabled && isComputed && !isLeaf && inputs.length > 0 && (
+            <div className="pt-1 border-t border-zinc-200/50 dark:border-zinc-700/50">
+              <div className="flex flex-wrap gap-1.5">
+                {inputs.slice(0, 3).map((src, idx) => {
                   const sourceNode = nodesById.get(src);
                   const toneKey = getToneForNode(src);
-                  const palette = resolveTonePalette(toneKey, theme?.node_tone);
+                  const palette = resolveTonePalette(toneKey, (theme as any)?.node_tone);
                   const isCompositeSource = Boolean(sourceNode?.composite_id);
                   return (
                     <span
                       key={`${src}-${idx}`}
-                      className={`text-[9px] font-mono px-2 py-0.5 rounded border inline-flex items-center gap-1 ${
+                      className={`text-[10px] font-mono px-2 py-0.5 rounded border inline-flex items-center gap-1 ${
                         isCompositeSource
                           ? 'shadow-[inset_0_0_0_1px_rgba(245,158,11,0.35)]'
                           : ''
@@ -239,20 +422,25 @@ export function CustomNode({ data, id, selected }: NodeProps<Node>) {
                   );
                 })}
                 {inputs.length > 3 && (
-                  <Badge variant="secondary" className="text-[9px]">+{inputs.length - 3}</Badge>
+                  <Badge variant="secondary" className="text-[10px]">+{inputs.length - 3}</Badge>
                 )}
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {/* Error Badge only */}
+          {hasError && (
+            <div className="mt-1">
+              <Badge variant="destructive" className="text-[9px]">Erreur</Badge>
+            </div>
+          )}
+        </div>
+
+        {/* No source handle for decision (leaf) nodes */}
+        {!isLeaf && (
+          <Handle type="source" position={Position.Bottom} className="w-3 h-3" />
         )}
       </div>
-
-      {/* No source handle for decision (leaf) nodes */}
-      {!isLeaf && (
-        <Handle type="source" position={Position.Bottom} className="w-3 h-3" />
-      )}
-
-      {/* Decision badge removed by request */}
-    </div>
+    </>
   );
 }

@@ -4,9 +4,12 @@ from sqlalchemy.orm import Session
 from typing import List, Dict, Optional, Set
 from datetime import datetime
 from app.core.db import get_db
+from app.core.deps import get_current_user
 from app.models.project import Project
 from app.models.composite import Composite
 from app.models.edge import Edge
+from app.models.user import User
+from app.models.project_collaborator import ProjectCollaborator
 from app.schemas.project import (
     ProjectCreate,
     ProjectUpdate,
@@ -14,12 +17,14 @@ from app.schemas.project import (
     ProjectExposedRootsResponse,
     ProjectExposedRoot,
     CompositeExposedRoot,
+    ProjectCollaboratorOut,
+    CollaboratorAdd,
 )
 from app.models.node import Node
 from app.api.nodes import _collect_composite_roots, _extract_composite_root_info
 from app.schemas.composite import CompositeGraphData
 from pydantic import ValidationError
-from sqlalchemy import text, select
+from sqlalchemy import text, select, or_
 from app.services import composite_root_cache, scenario_cache
 
 logger = logging.getLogger(__name__)
@@ -315,25 +320,59 @@ def _flatten_composite_root_entry(
 
 
 @router.get("", response_model=List[ProjectOut])
-def list_projects(db: Session = Depends(get_db)):
-    return db.query(Project).order_by(Project.updated_at.desc()).all()
+def list_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.query(Project).outerjoin(ProjectCollaborator).filter(
+        or_(
+            Project.user_id == current_user.id,
+            ProjectCollaborator.user_id == current_user.id
+        )
+    ).order_by(Project.updated_at.desc()).distinct().all()
 
 
 @router.post("", response_model=ProjectOut, status_code=201)
-def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
+def create_project(payload: ProjectCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if db.query(Project).filter(Project.id == payload.id).first():
         raise HTTPException(status_code=409, detail="Project id already exists")
-    p = Project(id=payload.id, name=payload.name, created_at=datetime.utcnow(), updated_at=datetime.utcnow())
+    p = Project(
+        id=payload.id, 
+        name=payload.name, 
+        user_id=current_user.id,
+        created_at=datetime.utcnow(), 
+        updated_at=datetime.utcnow()
+    )
     db.add(p)
     db.flush()
     return p
 
 
-@router.patch("/{project_id}", response_model=ProjectOut)
-def update_project(project_id: str, payload: ProjectUpdate, db: Session = Depends(get_db)):
+def _get_project_with_access(db: Session, project_id: str, user: User, required_role: str = "viewer") -> Project:
     p = db.query(Project).filter(Project.id == project_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Owner always has access
+    if p.user_id == user.id:
+        return p
+    
+    # Check collaborator
+    collab = db.query(ProjectCollaborator).filter(
+        ProjectCollaborator.project_id == project_id,
+        ProjectCollaborator.user_id == user.id
+    ).first()
+    
+    if not collab:
+        raise HTTPException(status_code=403, detail="Not authorized to access this project")
+        
+    if required_role == "editor" and collab.role != "editor":
+        raise HTTPException(status_code=403, detail="Editor access required")
+        
+    return p
+
+
+@router.patch("/{project_id}", response_model=ProjectOut)
+def update_project(project_id: str, payload: ProjectUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    p = _get_project_with_access(db, project_id, current_user, required_role="editor")
+    
     data = payload.model_dump(exclude_unset=True)
     if 'name' in data and data['name']:
         p.name = data['name']
@@ -343,21 +382,135 @@ def update_project(project_id: str, payload: ProjectUpdate, db: Session = Depend
 
 
 @router.delete("/{project_id}", status_code=204)
-def delete_project(project_id: str, db: Session = Depends(get_db)):
+def delete_project(project_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     p = db.query(Project).filter(Project.id == project_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Project not found")
+    
+    if p.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the project owner can delete it")
+
     # Deleting a project should cascade delete nodes/edges via FK constraints
     db.delete(p)
     db.flush()
     return
 
 
-@router.get("/{project_id}/exposed-roots", response_model=ProjectExposedRootsResponse)
-def get_project_exposed_roots(project_id: str, db: Session = Depends(get_db)):
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
+@router.post("/{project_id}/share", response_model=ProjectOut)
+def share_project(project_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p:
         raise HTTPException(status_code=404, detail="Project not found")
+    
+    if p.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only owner can manage public link")
+    
+    import secrets
+    if not p.public_view_token:
+        p.public_view_token = secrets.token_urlsafe(32)
+        db.flush()
+    
+    return p
+
+
+@router.delete("/{project_id}/share", response_model=ProjectOut)
+def revoke_project_share(project_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if p.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only owner can manage public link")
+    
+    p.public_view_token = None
+    db.flush()
+    return p
+
+
+@router.get("/{project_id}/collaborators", response_model=List[ProjectCollaboratorOut])
+def list_collaborators(project_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Check access (viewer is enough to see collaborators?)
+    # Usually yes, or maybe only owner/editor? Let's say viewer.
+    p = _get_project_with_access(db, project_id, current_user, required_role="viewer")
+    
+    collabs = db.query(ProjectCollaborator).filter(ProjectCollaborator.project_id == project_id).all()
+    results = []
+    for c in collabs:
+        u = db.query(User).filter(User.id == c.user_id).first()
+        if u:
+            results.append({
+                "user_id": u.id,
+                "username": u.username,
+                "email": u.email,
+                "role": c.role
+            })
+    return results
+
+
+@router.post("/{project_id}/collaborators", response_model=ProjectCollaboratorOut)
+def add_collaborator(project_id: str, payload: CollaboratorAdd, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if p.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only owner can manage collaborators")
+        
+    target_user = db.query(User).filter(
+        or_(User.email == payload.email_or_username, User.username == payload.email_or_username)
+    ).first()
+    
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    if target_user.id == p.user_id:
+        raise HTTPException(status_code=400, detail="Cannot add owner as collaborator")
+        
+    collab = db.query(ProjectCollaborator).filter(
+        ProjectCollaborator.project_id == project_id,
+        ProjectCollaborator.user_id == target_user.id
+    ).first()
+    
+    if collab:
+        collab.role = payload.role
+    else:
+        collab = ProjectCollaborator(project_id=project_id, user_id=target_user.id, role=payload.role)
+        db.add(collab)
+        
+    db.flush()
+    
+    return {
+        "user_id": target_user.id,
+        "username": target_user.username,
+        "email": target_user.email,
+        "role": collab.role
+    }
+
+
+@router.delete("/{project_id}/collaborators/{user_id}", status_code=204)
+def remove_collaborator(project_id: str, user_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    p = db.query(Project).filter(Project.id == project_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if p.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only owner can manage collaborators")
+        
+    collab = db.query(ProjectCollaborator).filter(
+        ProjectCollaborator.project_id == project_id,
+        ProjectCollaborator.user_id == user_id
+    ).first()
+    
+    if collab:
+        db.delete(collab)
+        db.flush()
+    return
+
+
+@router.get("/{project_id}/exposed-roots", response_model=ProjectExposedRootsResponse)
+def get_project_exposed_roots(project_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Viewer access is enough
+    project = _get_project_with_access(db, project_id, current_user, required_role="viewer")
 
     nodes = db.query(Node).filter(Node.project_id == project_id).all()
     if not nodes:
@@ -475,13 +628,16 @@ def make_short_id(label: str) -> str:
 
 
 @router.post("/{project_id}/refactor-ids", response_model=dict)
-def refactor_project_ids(project_id: str, db: Session = Depends(get_db)):
+def refactor_project_ids(project_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Refactor node IDs within a project to short, valid identifiers.
     - Generates unique short IDs per node within the project
     - Updates edges source/target
     - Updates computation_definition: replaces parameter names and identifiers via word-boundary matching
     - Rebuilds foreign keys with ON UPDATE CASCADE, ON DELETE CASCADE
     """
+    # Editor access required
+    _get_project_with_access(db, project_id, current_user, required_role="editor")
+
     # Load all nodes in project
     nodes = db.query(Node).filter(Node.project_id == project_id).all()
     if not nodes:
@@ -605,7 +761,7 @@ def _sanitize_backref_artifacts(code: str) -> str:
 
 
 @router.post("/{project_id}/normalize-compute", response_model=dict)
-def normalize_compute(project_id: str, db: Session = Depends(get_db)):
+def normalize_compute(project_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Normalize compute definitions to explicit param signatures and remove kwargs usages.
 
     For each node in the project with a computation definition:
@@ -614,6 +770,9 @@ def normalize_compute(project_id: str, db: Session = Depends(get_db)):
     - Replace kwargs.get('p') or kwargs['p'] with direct param 'p'
     - Save and optionally resync edges (they already reflect params used to build signature)
     """
+    # Editor access required
+    _get_project_with_access(db, project_id, current_user, required_role="editor")
+
     nodes = db.query(Node).filter(Node.project_id == project_id).all()
     if not nodes:
         return {"updated": 0}
@@ -665,8 +824,11 @@ def _extract_params_from_compute(code: str) -> list[str]:
 
 
 @router.post("/{project_id}/rebuild-edges", response_model=dict)
-def rebuild_edges(project_id: str, db: Session = Depends(get_db)):
+def rebuild_edges(project_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Rebuild dependency edges for all nodes from their compute() param lists."""
+    # Editor access required
+    _get_project_with_access(db, project_id, current_user, required_role="editor")
+
     nodes = db.query(Node).filter(Node.project_id == project_id).all()
     created = 0
     deleted = 0

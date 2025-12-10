@@ -17,6 +17,17 @@ class ProjectOut(BaseModel):
   name: str
   created_at: datetime
   updated_at: datetime
+  public_view_token: Optional[str] = None
+
+  class Config:
+    from_attributes = True
+
+
+class ViewerProjectOut(BaseModel):
+  id: str
+  name: str
+  updated_at: datetime
+  # No created_at, no public_view_token (it's in the URL), no owner info unless needed
 
   class Config:
     from_attributes = True
@@ -45,3 +56,18 @@ class CompositeExposedRoot(BaseModel):
 class ProjectExposedRootsResponse(BaseModel):
   project_roots: List[ProjectExposedRoot]
   composite_roots: List[CompositeExposedRoot]
+
+
+class ProjectCollaboratorOut(BaseModel):
+  user_id: str
+  username: str
+  email: str
+  role: str # "viewer" | "editor"
+
+  class Config:
+    from_attributes = True
+
+
+class CollaboratorAdd(BaseModel):
+  email_or_username: str
+  role: Literal["viewer", "editor"]

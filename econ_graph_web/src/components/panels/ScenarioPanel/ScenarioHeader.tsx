@@ -73,20 +73,6 @@ export function ScenarioHeader({
           </h2>
         </div>
         <div className="flex items-center gap-1">
-          <div className="relative group">
-            <button
-              type="button"
-              onClick={onRequestCreateScenario}
-              className="flex items-center justify-center w-8 h-8 rounded bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600 shadow-sm transition-all"
-              aria-label="Créer un nouveau scénario"
-            >
-              <Plus className="w-4 h-4 text-zinc-700 dark:text-zinc-200" />
-            </button>
-            <div className="tooltip-trigger absolute right-0 top-full mt-2 px-2 py-1 bg-zinc-900 dark:bg-zinc-700 text-white text-xs rounded whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-[9999]">
-              Créer un nouveau scénario
-              <div className="absolute right-3 bottom-full w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-zinc-900 dark:border-b-zinc-700" />
-            </div>
-          </div>
           <button
             type="button"
             onClick={onClose}
@@ -151,6 +137,16 @@ export function ScenarioHeader({
               </button>
             );
           })}
+
+          <button
+            type="button"
+            onClick={onRequestCreateScenario}
+            className="flex items-center justify-center w-6 h-6 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+            title="Créer un nouveau scénario"
+            aria-label="Créer un nouveau scénario"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
         </div>
       </div>
 

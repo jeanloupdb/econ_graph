@@ -3,33 +3,32 @@
 import { useGraphActions } from "@/graph/context/GraphActionsContext";
 import { useGraphData } from "@/graph/context/GraphDataContext";
 import { useGraphRelationships } from "@/graph/hooks/useGraphRelationships";
-import { deriveEdgesFromCompute } from "@/lib/layout/graph";
+import { useInsertCompositeNode } from "@/graph/hooks/useInsertCompositeNode";
 import { apiClient } from "@/lib/api/client";
-import { useNode, useNodeTones, useScenarios, useTheme } from "@/lib/api/hooks";
-import type { Node } from "@/lib/types";
+import { type NodeToneKey, queryKeys, useNode, useNodeTones, useScenarios, useTheme } from "@/lib/api/hooks";
+import { serializeCompositeGraph } from "@/lib/composites/graph";
+import { deriveEdgesFromCompute } from "@/lib/layout/graph";
+import type { TonePalette } from "@/lib/nodeStyles";
+import {
+    DEFAULT_TONE_COLORS,
+    FALLBACK_TONE_PALETTE,
+} from "@/lib/nodeStyles";
+import type { Composite, CompositeCreateInput, CompositeGraphEdge, Node } from "@/lib/types";
 import { useProjectStore } from "@/store/projectState";
 import { useScenarioStore } from "@/store/scenarioState";
 import { useUIStore } from "@/store/uiState";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type React from "react";
-import { serializeCompositeGraph } from "@/lib/composites/graph";
-import type { CompositeGraphEdge } from "@/lib/types";
-import { COMPOSITE_TRANSFORM_BUFFER_KEY } from "@/lib/composites/constants";
-import type { TransformCompositeSessionPayload } from "@/lib/composites/types";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ValueCard } from "./ValueCard";
-import { InspectorHeader } from "./InspectorHeader";
-import { InspectorBreadcrumbs } from "./InspectorBreadcrumbs";
-import { DependenciesList } from "./DependenciesList";
-import { CompositeInputs } from "./CompositeInputs";
 import { AlgorithmBlock } from "./AlgorithmBlock";
+import { CompositeInputs } from "./CompositeInputs";
+import { DependenciesList } from "./DependenciesList";
+import { InspectorBreadcrumbs } from "./InspectorBreadcrumbs";
+import { InspectorHeader } from "./InspectorHeader";
 import { ProviderBlock } from "./ProviderBlock";
-import type { NodeToneKey, TonePalette } from "@/lib/nodeStyles";
-import {
-  DEFAULT_TONE_COLORS,
-  FALLBACK_TONE_PALETTE,
-} from "@/lib/nodeStyles";
+import { ValueCard } from "./ValueCard";
 
 export function useInspectorData() {
   const selectedNodeId = useUIStore((state) => state.selectedNodeId);
@@ -47,11 +46,14 @@ export function useInspectorData() {
   const setScenarioPanelHighlight = useUIStore(
     (s) => s.setScenarioPanelHighlight
   );
+  const setLibraryPanelOpen = useUIStore((s) => s.setLibraryPanelOpen);
+  const queryClient = useQueryClient();
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
 
   const graphActions = useGraphActions();
+  const insertCompositeNode = useInsertCompositeNode();
   const computeFn = graphActions.computeNode;
   const canCompute = typeof computeFn === "function";
   const { nodes: allNodesData, isLoading: nodesLoading } = useGraphData();
@@ -60,6 +62,13 @@ export function useInspectorData() {
     dependents: dependentsIds,
     ancestors: ancestorsIds,
   } = useGraphRelationships(selectedNodeId);
+
+  const errorInputNodes = useMemo(() => {
+    if (!depsIds || depsIds.length === 0) return [];
+    return allNodesData.filter(
+      (n) => depsIds.includes(n.id) && !!n.computation_error
+    );
+  }, [depsIds, allNodesData]);
   const baseNode = useMemo(
     () => allNodesData.find((n) => n.id === selectedNodeId),
     [allNodesData, selectedNodeId]
@@ -112,12 +121,14 @@ export function useInspectorData() {
   const scenarioBId = useScenarioStore((s) => s.scenarioBId);
   const { data: scenarios = [] } = useScenarios(currentProjectId);
 
-  const [showEditModal, setShowEditModal] = useState(false);
+  const showEditModal = useUIStore((s) => s.editNodeModalOpen);
+  const setShowEditModal = useUIStore((s) => s.setEditNodeModalOpen);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [showEditApiModal, setShowEditApiModal] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
   const [computePending, setComputePending] = useState(false);
   const [transforming, setTransforming] = useState(false);
+  const [smartFixOpen, setSmartFixOpen] = useState(false);
 
   const [navHistory, setNavHistory] = useState<string[]>([]);
   const [navIndex, setNavIndex] = useState<number>(-1);
@@ -355,44 +366,79 @@ export function useInspectorData() {
     [allNodesData, toneEntries]
   );
 
+  const selectedNodeIds = useUIStore((state) => state.selectedNodeIds);
+
   const handleTransformToComposite = useCallback(async () => {
-    if (
-      !canTransformToComposite ||
-      !typedNode ||
-      !selectedNodeId ||
-      !currentProjectId
-    ) {
-      return;
-    }
-    setTransforming(true);
-    try {
-      const [dependencies, ancestors, dependents] = await Promise.all([
+    if (!currentProjectId) return;
+    
+    // Determine which nodes to transform
+    let nodesToTransformIds: Set<string>;
+    
+    if (selectedNodeIds && selectedNodeIds.length > 1) {
+      // Multi-selection mode: use explicitly selected nodes
+      nodesToTransformIds = new Set(selectedNodeIds);
+    } else if (selectedNodeId) {
+      // Single selection mode: use node + ancestors (existing behavior)
+      if (!canTransformToComposite || !typedNode) return;
+      
+      const [dependencies, ancestors] = await Promise.all([
         apiClient.get<string[]>(`/nodes/${selectedNodeId}/dependencies`),
         apiClient.get<string[]>(`/nodes/${selectedNodeId}/ancestors`),
-        apiClient.get<string[]>(`/nodes/${selectedNodeId}/dependents`),
       ]);
-      const allNodeIds = new Set<string>([
+      
+      nodesToTransformIds = new Set([
         selectedNodeId,
         ...((ancestors as string[]) || []),
       ]);
-      if (allNodeIds.size <= 1 && (dependencies || []).length === 0) {
+      
+      if (nodesToTransformIds.size <= 1 && (dependencies || []).length === 0) {
         toast.error("Ce nœud n'a aucune dépendance à transformer.");
-        setTransforming(false);
         return;
       }
+    } else {
+      return;
+    }
+
+    setTransforming(true);
+    try {
+      // Find external dependents (nodes NOT in the selection that depend on nodes IN the selection)
+      // We do this client-side using allNodesData to avoid multiple API calls
+      const externalDependents = new Set<string>();
+      
+      // Helper to check dependencies of a node
+      const checkNodeDependencies = (node: Node) => {
+        // We need to parse dependencies from computation_definition or use a helper
+        // Since we don't have a direct dependency list in Node, we rely on the graph structure
+        // But we can use deriveEdgesFromCompute which is available
+        const edges = deriveEdgesFromCompute(
+           { id: node.id, computation_definition: node.computation_definition || undefined },
+           { resolveSlug: (slug) => allNodesData.find(n => n.slug === slug)?.id }
+        );
+        
+        // If any edge source is in nodesToTransformIds, this node is a dependent
+        const dependsOnSelection = edges.some(e => nodesToTransformIds.has(e.source));
+        if (dependsOnSelection && !nodesToTransformIds.has(node.id)) {
+          externalDependents.add(node.id);
+        }
+      };
+
+      allNodesData.forEach(checkNodeDependencies);
+
       const nodesToClone = allNodesData.filter((node) =>
-        allNodeIds.has(node.id)
+        nodesToTransformIds.has(node.id)
       );
-      if (nodesToClone.length !== allNodeIds.size) {
+      
+      if (nodesToClone.length !== nodesToTransformIds.size) {
         toast.error(
           "Impossible de récupérer tous les nœuds nécessaires pour la transformation."
         );
         setTransforming(false);
         return;
       }
+      
       const dependencyMap = new Map<string, string[]>();
       await Promise.all(
-        Array.from(allNodeIds).map(async (nodeId) => {
+        Array.from(nodesToTransformIds).map(async (nodeId) => {
           try {
             const deps = await apiClient.get<string[]>(`/nodes/${nodeId}/dependencies`);
             dependencyMap.set(nodeId, deps);
@@ -402,43 +448,54 @@ export function useInspectorData() {
           }
         })
       );
+      
       const explicitEdges: CompositeGraphEdge[] = [];
       dependencyMap.forEach((sources, targetId) => {
         sources
-          .filter((sourceId) => allNodeIds.has(sourceId))
+          .filter((sourceId) => nodesToTransformIds.has(sourceId))
           .forEach((sourceId) => {
             explicitEdges.push({ source: sourceId, target: targetId });
           });
       });
+      
       const graphData = serializeCompositeGraph(nodesToClone as Node[], {
         edges: explicitEdges,
       });
-      const payload: TransformCompositeSessionPayload = {
-        initialGraphData: graphData,
-        initialName: typedNode.label,
-        projectId: currentProjectId,
-        replaceNodeId: selectedNodeId,
-        replaceNodeSlug: typedNode.slug,
-        replaceNodeLabel: typedNode.label,
-        nodesToDelete: Array.from(allNodeIds),
-        originalPosition: {
-          x: (typedNode.pos_x ?? null) as number | null,
-          y: (typedNode.pos_y ?? null) as number | null,
-        },
-        dependentsToResync: dependents || [],
+      
+      // Determine label and slug for the new composite
+      const primaryNode = typedNode || nodesToClone[nodesToClone.length - 1];
+      // Use the primary selected node's label if available, otherwise default
+      const initialName = selectedNodeId && typedNode 
+        ? typedNode.label 
+        : "Nouveau Composite";
+        
+      // 1. Create Composite
+      const payload: CompositeCreateInput = {
+        name: initialName,
+        graph_data: {
+          ...graphData,
+          exposed_roots: {},
+        } as any,
       };
-      if (typeof window !== "undefined") {
-        window.sessionStorage.setItem(
-          COMPOSITE_TRANSFORM_BUFFER_KEY,
-          JSON.stringify(payload)
-        );
-      }
-      router.push(
-        `/composites/new?return=graph&project=${currentProjectId}&transform=1`
+
+      await apiClient.post<Composite, CompositeCreateInput>(
+        "/composites",
+        payload
       );
+
+      // We do NOT modify the current graph (no deletion, no insertion) as per user request.
+      // The composite is just added to the library.
+
+      queryClient.invalidateQueries({ queryKey: queryKeys.composites });
+      setLibraryPanelOpen(true);
+      toast.success("Composite créé avec succès", {
+        description: `"${initialName}" a été ajouté à votre bibliothèque.`,
+        duration: 5000,
+      });
+
     } catch (error: any) {
-      console.error("Failed to prepare transform payload", error);
-      toast.error(error?.message || "Impossible de préparer le composite.");
+      console.error("Failed to transform to composite", error);
+      toast.error(error?.message || "Impossible de créer le composite.");
     } finally {
       setTransforming(false);
     }
@@ -446,9 +503,11 @@ export function useInspectorData() {
     allNodesData,
     canTransformToComposite,
     currentProjectId,
-    router,
     selectedNodeId,
+    selectedNodeIds,
     typedNode,
+    queryClient,
+    setLibraryPanelOpen
   ]);
 
   const handleOpenCompositeEditor = useCallback(() => {
@@ -472,6 +531,28 @@ export function useInspectorData() {
   const handleRequestDelete = useCallback(() => {
     setConfirmDeleteOpen(true);
   }, []);
+
+  const handleOpenSmartFix = useCallback(() => {
+    setSmartFixOpen(true);
+  }, []);
+
+  const handleApplySmartFix = useCallback(
+    async (newCode: string) => {
+      if (!selectedNodeId) return;
+      try {
+        await graphActions.updateNode(selectedNodeId, {
+          computation_definition: newCode,
+        });
+        // Optionally recompute immediately
+        if (canCompute) {
+          computeFn!(selectedNodeId);
+        }
+      } catch (error) {
+        toast.error("Failed to apply fix");
+      }
+    },
+    [graphActions, selectedNodeId, canCompute, computeFn]
+  );
 
   const handleBreadcrumbNavigate = useCallback(
     (index: number, nodeId: string) => {
@@ -529,7 +610,7 @@ export function useInspectorData() {
       graphMode === "composite"
         ? compositeToneKey || defaultToneKey
         : toneEntries[typedNode.id]?.tone || defaultToneKey;
-    const color = toneColorMap?.[toneKey] || null;
+    const color = toneColorMap ? toneColorMap[toneKey as NodeToneKey] : null;
     const realValue = typedNode.value_computed ?? null;
     const scenarioData =
       activeScenarioId &&
@@ -565,6 +646,7 @@ export function useInspectorData() {
       valueStyle: color ? { color: color.text } : undefined,
       activeScenarioName: activeScenario?.name || null,
       activeScenarioColor: activeScenario?.color || null,
+      onSmartFix: handleOpenSmartFix,
     } satisfies React.ComponentProps<typeof ValueCard>;
   }, [
     typedNode,
@@ -584,6 +666,7 @@ export function useInspectorData() {
     isCompositeNode,
     displayIdentifier,
     openScenarioPanel,
+    handleOpenSmartFix,
   ]);
 
   const algorithmProps = algorithmCode
@@ -665,6 +748,7 @@ export function useInspectorData() {
     onTransformToComposite: handleTransformToComposite,
     onDelete: handleRequestDelete,
     onClose: handleClose,
+    selectedNodeIds: useUIStore((s) => s.selectedNodeIds),
   } satisfies React.ComponentProps<typeof InspectorHeader>;
 
   const breadcrumbProps = {
@@ -709,5 +793,10 @@ export function useInspectorData() {
     deletePending,
     selectedNodeId,
     scrollRef,
+    smartFixOpen,
+    setSmartFixOpen,
+    handleApplySmartFix,
+    errorInputNodes,
+    onNavigate: navigateToNode,
   };
 }
