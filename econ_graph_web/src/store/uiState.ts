@@ -4,12 +4,16 @@
  */
 
 import { create } from 'zustand';
-import type { InteractionMode } from '../lib/types';
+import type { InteractionMode, ViewMode } from '../lib/types';
 
 interface UIState {
   // Interaction mode (always 'select')
   mode: InteractionMode;
   setMode: (mode: InteractionMode) => void;
+
+  // View mode (baseline, scenario, comparison)
+  viewMode: ViewMode;
+  setViewMode: (mode: ViewMode) => void;
 
   // Panel visibility
   inspectorOpen: boolean;
@@ -24,6 +28,7 @@ interface UIState {
   // Node selection
   selectedNodeId: string | null;
   setSelectedNodeId: (id: string | null) => void;
+  selectNodeWithoutInspector: (id: string | null) => void;
 
   // Edge selection
   selectedEdgeId: string | null;
@@ -77,6 +82,8 @@ interface UIState {
   // AI Assistant visibility
   aiAssistantOpen: boolean;
   setAiAssistantOpen: (open: boolean) => void;
+  aiPromptPrefill: string;
+  setAiPromptPrefill: (text: string) => void;
 
   // Computing state (reload/refresh)
   isComputing: boolean;
@@ -85,6 +92,31 @@ interface UIState {
   // Edit Node Modal
   editNodeModalOpen: boolean;
   setEditNodeModalOpen: (open: boolean) => void;
+
+  // Developer Mode (vs Visualizer)
+  developerMode: boolean;
+  setDeveloperMode: (mode: boolean) => void;
+
+  // Node Editor State
+  nodeEditorMode: 'create' | 'edit' | 'create-api' | 'edit-api' | null;
+  setNodeEditorMode: (mode: 'create' | 'edit' | 'create-api' | 'edit-api' | null) => void;
+  nodeEditorNodeId: string | null;
+  setNodeEditorNodeId: (id: string | null) => void;
+  nodeEditorFullscreenOpen: boolean;
+  setNodeEditorFullscreenOpen: (open: boolean) => void;
+
+  // Node Creation Draft
+  nodeCreationDraft: {
+    label: string;
+    unit: string;
+    notes: string;
+    code: string;
+    slug: string;
+    url: string;
+    jsonPath: string;
+  };
+  setNodeCreationDraft: (draft: Partial<UIState['nodeCreationDraft']>) => void;
+  resetNodeCreationDraft: () => void;
 }
 
 let highlightTimeout: number | null = null;
@@ -92,6 +124,7 @@ let highlightTimeout: number | null = null;
 export const useUIStore = create<UIState>((set) => ({
   // Initial state
   mode: 'select',
+  viewMode: 'baseline',
   inspectorOpen: true,
   scenarioPanelOpen: false,
   selectedNodeId: null,
@@ -106,11 +139,46 @@ export const useUIStore = create<UIState>((set) => ({
   scenarioPanelHighlightId: null,
   highlightedNodeId: null,
   aiAssistantOpen: false,
+  aiPromptPrefill: '',
   isComputing: false,
   editNodeModalOpen: false,
+  developerMode: true,
+
+  // Node Editor State
+  nodeEditorMode: null,
+  nodeEditorNodeId: null,
+  nodeEditorFullscreenOpen: false,
+  setNodeEditorMode: (mode) => set({ nodeEditorMode: mode }),
+  setNodeEditorNodeId: (id) => set({ nodeEditorNodeId: id }),
+  setNodeEditorFullscreenOpen: (open) => set({ nodeEditorFullscreenOpen: open }),
+
+  // Node Creation Draft
+  nodeCreationDraft: {
+    label: '',
+    unit: '',
+    notes: '',
+    code: '',
+    slug: '',
+    url: '',
+    jsonPath: '',
+  },
+  setNodeCreationDraft: (draft) => set((state) => ({ nodeCreationDraft: { ...state.nodeCreationDraft, ...draft } })),
+  resetNodeCreationDraft: () => set({
+    nodeCreationDraft: {
+      label: '',
+      unit: '',
+      notes: '',
+      code: '',
+      slug: '',
+      url: '',
+      jsonPath: '',
+    }
+  }),
 
   // Actions
   setMode: (mode) => set({ mode }),
+  setViewMode: (mode) => set({ viewMode: mode }),
+  setDeveloperMode: (mode) => set({ developerMode: mode }),
   setEditNodeModalOpen: (open) => set({ editNodeModalOpen: open }),
   toggleInspector: () =>
     set((state) => ({
@@ -152,6 +220,15 @@ export const useUIStore = create<UIState>((set) => ({
       inspectorOpen: id !== null,
       // Selecting a node re-focuses on the inspector
       scenarioPanelOpen: id !== null ? false : state.scenarioPanelOpen,
+      // Reset panel navigation when selecting a node directly
+      panelStack: id ? [] as any : state.panelStack,
+    })),
+
+  selectNodeWithoutInspector: (id: string | null) =>
+    set((state) => ({
+      selectedNodeId: id,
+      selectedEdgeId: null, // Clear edge selection when selecting a node
+      // Don't open inspector, keep current state
       // Reset panel navigation when selecting a node directly
       panelStack: id ? [] as any : state.panelStack,
     })),
@@ -262,6 +339,7 @@ export const useUIStore = create<UIState>((set) => ({
     })),
 
   setAiAssistantOpen: (open) => set({ aiAssistantOpen: open }),
+  setAiPromptPrefill: (text) => set({ aiPromptPrefill: text }),
 
   setIsComputing: (isComputing) => set({ isComputing }),
 }));

@@ -22,6 +22,7 @@ import {
     ChevronDown,
     ChevronRight,
     Code2,
+    Edit3,
     Hash,
     Info,
     Loader2,
@@ -74,6 +75,10 @@ export interface ParameterCardProps {
   >;
   setValidationResults: React.Dispatch<React.SetStateAction<ValidationMap>>;
   setSelectedNodeId: (id: string) => void;
+  selectedNodeIds: string[];
+  setSelectedNodeIds: (ids: string[]) => void;
+  addSelectedNode: (id: string) => void;
+  removeSelectedNode: (id: string) => void;
   isSavingOverride: boolean;
   isValidatingOverride: boolean;
   onValidateOverride: (params: {
@@ -116,6 +121,10 @@ export function ParameterCard({
   setOverrideCodes,
   setValidationResults,
   setSelectedNodeId,
+  selectedNodeIds,
+  setSelectedNodeIds,
+  addSelectedNode,
+  removeSelectedNode,
   isSavingOverride,
   isValidatingOverride,
   onValidateOverride,
@@ -201,6 +210,39 @@ export function ParameterCard({
   const displayLabel = parameterLabel || node.label;
   const summaryValue = scenarioEditable ? appliedDisplay : baselineDisplay;
 
+  // Selection state
+  const isSelected = overrideTarget.type === "node" && !isVirtual && selectedNodeIds.includes(node.id);
+
+  const handleCardClick = (e: React.MouseEvent) => {
+
+    // Don't handle selection for virtual nodes
+    if (isVirtual || overrideTarget.type !== "node") {
+      toggleRowExpansion(targetKey);
+      return;
+    }
+
+    if (e.ctrlKey || e.metaKey) {
+      // Multi-selection with Ctrl/Cmd
+      if (isSelected) {
+        removeSelectedNode(node.id);
+      } else {
+        addSelectedNode(node.id);
+      }
+    } else if (e.shiftKey) {
+      // Add to selection with Shift
+      if (!isSelected) {
+        addSelectedNode(node.id);
+      }
+    } else {
+      // Single selection - set selectedNodeIds for visual selection
+      setSelectedNodeIds([node.id]);
+      // Keep scenario panel open by NOT calling setSelectedNodeId
+      // which would open the inspector and close the scenario panel
+    }
+
+    toggleRowExpansion(targetKey);
+  };
+
   const handleValidateFormula = async () => {
     if (
       node.value_computed === null ||
@@ -278,18 +320,26 @@ export function ParameterCard({
   return (
     <div
       key={elementKey}
-      className={`relative border rounded-lg bg-white dark:bg-zinc-950/40 shadow-sm transition-shadow ${
+      className={`relative border rounded-lg shadow-sm transition-all ${
+        isSelected
+          ? "bg-blue-500/20 border-blue-500/50 dark:bg-blue-500/20 dark:border-blue-500/50"
+          : "bg-white dark:bg-zinc-950/40"
+      } ${
         isHighlighted ? "ring-2 ring-amber-400" : ""
       } ${!scenarioEditable ? "opacity-75 grayscale-[0.5]" : ""}`}
-      style={cardStyle}
+      style={isSelected ? undefined : cardStyle}
       ref={(el) => {
         highlightRefs.current[targetKey] = el;
       }}
     >
       <button
         type="button"
-        className="w-full flex items-center gap-3 px-3 py-2 text-left"
-        onClick={() => toggleRowExpansion(targetKey)}
+        className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors rounded-lg select-none ${
+          isSelected
+            ? "hover:bg-blue-500/30 dark:hover:bg-blue-500/30"
+            : "hover:bg-zinc-50/50 dark:hover:bg-zinc-800/30"
+        }`}
+        onClick={handleCardClick}
       >
         <div className="flex-1 min-w-0">
           {parentCompositeLabel && (
@@ -612,14 +662,28 @@ export function ParameterCard({
           {!scenarioEditable && (
             <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-600 dark:text-zinc-300">
               {overrideTarget.type === "node" && !isVirtual && (
-                <button
-                  type="button"
-                  className="group inline-flex items-center gap-1 font-medium text-grey-600 underline hover:text-blue-300 transition-colors"
-                  onClick={() => setSelectedNodeId(node.id)}
-                >
-                  Voir dans l’inspector
-                  <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="group inline-flex items-center gap-1 font-medium text-grey-600 underline hover:text-blue-300 transition-colors"
+                    onClick={() => setSelectedNodeId(node.id)}
+                  >
+                    Voir dans l'inspector
+                    <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                  </button>
+                  <button
+                    type="button"
+                    className="group inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400 underline hover:text-blue-500 dark:hover:text-blue-300 transition-colors"
+                    onClick={() => {
+                      const { setNodeEditorMode, setNodeEditorNodeId } = require('@/store/uiState').useUIStore.getState();
+                      setNodeEditorNodeId(node.id);
+                      setNodeEditorMode('edit');
+                    }}
+                  >
+                    <Edit3 className="h-3.5 w-3.5" />
+                    Modifier
+                  </button>
+                </>
               )}
               <span>Activez un scénario pour modifier ce paramètre.</span>
             </div>

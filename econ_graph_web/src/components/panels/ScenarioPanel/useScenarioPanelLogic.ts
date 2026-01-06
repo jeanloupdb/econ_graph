@@ -125,6 +125,17 @@ export function useScenarioPanelLogic(
   >(null);
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
   const sidePanelWidth = useUIStore((s) => s.sidePanelWidth);
+
+  // Listen for external requests to open new scenario dialog
+  const requestNewScenarioDialog = useScenarioStore((s) => s.requestNewScenarioDialog);
+  const clearNewScenarioDialogRequest = useScenarioStore((s) => s.clearNewScenarioDialogRequest);
+
+  useEffect(() => {
+    if (requestNewScenarioDialog) {
+      setConfirmNewScenarioOpen(true);
+      clearNewScenarioDialogRequest();
+    }
+  }, [requestNewScenarioDialog, clearNewScenarioDialogRequest]);
   const setSidePanelWidth = useUIStore((s) => s.setSidePanelWidth);
   const scenarioEditable = !!activeScenarioId;
   const scenarioPanelHighlightId = useUIStore(
@@ -136,6 +147,11 @@ export function useScenarioPanelLogic(
   const highlightRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [localHighlightId, setLocalHighlightId] = useState<string | null>(null);
   const setSelectedNodeId = useUIStore((s) => s.setSelectedNodeId);
+  const selectNodeWithoutInspector = useUIStore((s) => s.selectNodeWithoutInspector);
+  const selectedNodeIds = useUIStore((s) => s.selectedNodeIds);
+  const setSelectedNodeIds = useUIStore((s) => s.setSelectedNodeIds);
+  const addSelectedNode = useUIStore((s) => s.addSelectedNode);
+  const removeSelectedNode = useUIStore((s) => s.removeSelectedNode);
 
   useEffect(() => {
     let animationFrame: number | null = null;
@@ -636,6 +652,11 @@ export function useScenarioPanelLogic(
     window.addEventListener("mouseup", onUp);
   };
 
+  const handleRequestCreateScenario = () => {
+    // Trigger inline creation in the scenario header
+    useScenarioStore.getState().triggerInlineScenarioCreation();
+  };
+
   const headerProps: Omit<ScenarioHeaderProps, "onClose"> = {
     isOpen,
     scenarios,
@@ -643,10 +664,32 @@ export function useScenarioPanelLogic(
     onSelectScenario: (scenarioId) => {
       void handleScenarioSelect(scenarioId);
     },
-    onRequestCreateScenario: () => setConfirmNewScenarioOpen(true),
+    onRequestCreateScenario: handleRequestCreateScenario,
     onRequestRenameScenario: handleRequestRenameScenario,
     onRequestDuplicateScenario: handleRequestDuplicateScenario,
     onRequestDeleteScenario: handleRequestDeleteScenario,
+    onCreateScenario: async (name: string) => {
+      if (!currentProjectId || !name.trim()) return;
+
+      const scenarioData: ScenarioCreate = {
+        name: name.trim(),
+        color: "#3B82F6",
+      };
+
+      try {
+        const newScenario = await createScenarioMutation.mutateAsync({
+          projectId: currentProjectId,
+          data: scenarioData,
+        });
+
+        // Automatically select the newly created scenario
+        await handleScenarioSelect(newScenario.id);
+        toast.success("Scénario créé");
+      } catch (error) {
+        console.error("Failed to create scenario:", error);
+        toast.error("Erreur lors de la création du scénario");
+      }
+    },
   };
 
   const parametersProps: ScenarioParametersProps = {
@@ -679,11 +722,15 @@ export function useScenarioPanelLogic(
     handleSaveOverride,
     setOverrideCodes,
     setValidationResults,
-    setSelectedNodeId,
+    setSelectedNodeId: selectNodeWithoutInspector,
+    selectedNodeIds,
+    setSelectedNodeIds,
+    addSelectedNode,
+    removeSelectedNode,
     isSavingOverride: updateOverridesMutation.isPending,
     isValidatingOverride: validateOverride.isPending,
     onValidateOverride: handleValidateOverrideRequest,
-    onRequestCreateScenario: () => setConfirmNewScenarioOpen(true),
+    onRequestCreateScenario: handleRequestCreateScenario,
     scenarios,
     onSelectScenario: (id) => void handleScenarioSelect(id),
   };

@@ -1,19 +1,24 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import type { NodeToneKey } from "@/lib/api/hooks";
+import { getBadgeToneClasses, type TonePalette } from "@/lib/nodeStyles";
 import type { Node } from "@/lib/types";
+import { useUIStore } from "@/store/uiState";
 import {
+    Box,
+    ChevronLeft,
     Edit3,
     ExternalLink,
+    Globe,
     Layers,
-    Loader2,
-    Trash2,
-    X
+    Trash2
 } from "lucide-react";
 
 interface InspectorHeaderProps {
   node?: Node;
+  palette?: TonePalette;
+  tone?: NodeToneKey;
   isCompositeNode: boolean;
   canTransformToComposite: boolean;
   transforming: boolean;
@@ -25,10 +30,13 @@ interface InspectorHeaderProps {
   selectedNodeIds?: string[];
   onDelete: () => void;
   onClose: () => void;
+  className?: string;
 }
 
 export function InspectorHeader({
   node,
+  palette,
+  tone,
   isCompositeNode,
   canTransformToComposite,
   transforming,
@@ -40,51 +48,49 @@ export function InspectorHeader({
   selectedNodeIds,
   onDelete,
   onClose,
+  className,
 }: InspectorHeaderProps) {
+  const developerMode = useUIStore((s) => s.developerMode);
+  const isApiNode = (node as any)?.provider_enabled;
+  
+  // Determine badge classes based on tone
+  const badgeClasses = tone ? getBadgeToneClasses(tone) : "";
+  
+  // Fallback classes if tone is not provided (should match previous logic)
+  const fallbackClasses = isCompositeNode 
+    ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+    : isApiNode
+    ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
+    : "bg-blue-500/10 text-blue-600 dark:text-blue-400";
+
   return (
-    <div className="flex items-center justify-between border-b border-zinc-200 p-4 dark:border-zinc-800 flex-wrap gap-2">
-      <div className="min-w-0 flex items-center gap-3">
-        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/30">
-          {isCompositeNode && (
-            <Layers className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-          )}
-          <h2 className="text-base font-semibold truncate text-zinc-900 dark:text-zinc-100">
+    <div className={`flex items-center justify-between ${className || ''}`}>
+      <div className="flex items-center gap-2 min-w-0">
+        <button
+          onClick={onClose}
+          className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-500 dark:text-zinc-400"
+          title="Fermer"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+
+        <div className="flex items-center gap-2 min-w-0">
+          {/* Node Type Icon */}
+          <div className={`w-6 h-6 flex items-center justify-center rounded-md shrink-0 ${tone ? badgeClasses : fallbackClasses}`}>
+            {isCompositeNode ? (
+              <Layers className="h-3.5 w-3.5" />
+            ) : isApiNode ? (
+              <Globe className="h-3.5 w-3.5" />
+            ) : (
+              <Box className="h-3.5 w-3.5" />
+            )}
+          </div>
+
+          <h2 className="text-sm font-medium truncate text-zinc-900 dark:text-zinc-100">
             {node?.label || "Inspector"}
           </h2>
-          {isCompositeNode && canOpenCompositeEditor && (
-            <>
-              <div className="h-4 w-px bg-zinc-300 dark:bg-zinc-600 flex-shrink-0" />
-              <button
-                onClick={onOpenCompositeEditor}
-                disabled={!canOpenCompositeEditor}
-                className="flex items-center gap-1.5 hover:opacity-80 transition-opacity disabled:opacity-50 flex-shrink-0"
-                title="Ouvrir dans l'éditeur de composite"
-                aria-label="Ouvrir dans l'éditeur de composite"
-              >
-                <ExternalLink className="h-3.5 w-3.5 text-zinc-700 dark:text-zinc-300" />
-                <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Éditer</span>
-              </button>
-            </>
-          )}
-          {!isCompositeNode && node && (
-            <>
-              <div className="h-4 w-px bg-zinc-300 dark:bg-zinc-600 flex-shrink-0" />
-              <button
-                onClick={
-                  (node as any).provider_enabled
-                    ? onEditApiNode
-                    : onEditNode
-                }
-                className="flex items-center gap-1.5 hover:opacity-80 transition-opacity flex-shrink-0"
-                title="Modifier"
-                aria-label="Modifier"
-              >
-                <Edit3 className="h-3.5 w-3.5 text-zinc-700 dark:text-zinc-300" />
-                <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Modifier</span>
-              </button>
-            </>
-          )}
         </div>
+        
         {node?.computation_error && (
           <Badge
             variant="destructive"
@@ -95,58 +101,44 @@ export function InspectorHeader({
           </Badge>
         )}
       </div>
-      <div className="flex items-center gap-2">
-        {node && (
-          <>
-            {canTransformToComposite && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 gap-2 border-dashed"
-                onClick={onTransformToComposite}
-                title={
-                  (selectedNodeIds?.length || 0) > 1
-                    ? "Créer un composite à partir de la sélection"
-                    : "Transformer en composite (avec dépendances)"
-                }
-                disabled={transforming}
-              >
-                {transforming ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Layers className="h-3.5 w-3.5" />
-                )}
-                {(selectedNodeIds?.length || 0) > 1
-                  ? `Transformer (${selectedNodeIds?.length})`
-                  : "Transformer"}
-              </Button>
-            )}
-            <div className="relative group">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onDelete}
-                title="Supprimer"
-                aria-label="Supprimer"
-                className="relative"
-              >
-                <Trash2 className="h-4 w-4 text-zinc-600 dark:text-zinc-400" />
-              </Button>
-              <div className="pointer-events-none absolute right-0 top-full mt-1 px-2 py-1 text-xs rounded bg-zinc-900 text-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
-                Supprimer ce nœud. Les parents/enfants restent.
-              </div>
-            </div>
-          </>
+
+      <div className="flex items-center gap-1">
+        {developerMode && isCompositeNode && canOpenCompositeEditor && (
+          <button
+            onClick={onOpenCompositeEditor}
+            disabled={!canOpenCompositeEditor}
+            className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-500 dark:text-zinc-400 disabled:opacity-50"
+            title="Ouvrir dans l'éditeur de composite"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </button>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-          title="Fermer"
-          aria-label="Fermer"
-        >
-          <X className="h-4 w-4" />
-        </Button>
+
+        {developerMode && !isCompositeNode && node && (
+          <button
+            onClick={
+              isApiNode
+                ? onEditApiNode
+                : onEditNode
+            }
+            className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-500 dark:text-zinc-400"
+            title="Modifier"
+          >
+            <Edit3 className="h-4 w-4" />
+          </button>
+        )}
+
+        {developerMode && node && (
+          <div className="relative group">
+            <button
+              onClick={onDelete}
+              title="Supprimer"
+              className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 text-zinc-500 hover:text-red-600 dark:text-zinc-400 dark:hover:text-red-400 transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

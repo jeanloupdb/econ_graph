@@ -34,52 +34,48 @@ export function ProviderBlock({
   }
 
   return (
-    <div className="rounded-xl border-2 border-zinc-200 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-950 shadow-sm">
+    <div className="rounded border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-950">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-zinc-50 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800">
-        <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
-            <Globe className="h-4 w-4" />
-          </div>
-          <div>
-            <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Source API</div>
-          </div>
+      <div className="flex items-center justify-between px-2 py-1.5 bg-zinc-50 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="flex items-center gap-1.5">
+          <Globe className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+          <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">Source API</div>
         </div>
         {onEdit && (
           <Button
             variant="ghost"
             size="sm"
             onClick={onEdit}
-            className="h-8 px-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+            className="h-6 px-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
           >
-            <Edit3 className="h-3.5 w-3.5 mr-1.5" />
-            Modifier
+            <Edit3 className="h-3 w-3 mr-1" />
+            <span className="text-[11px]">Modifier</span>
           </Button>
         )}
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-4">
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-xs font-medium text-zinc-500 uppercase tracking-wider">
-              <span>URL Endpoint</span>
+      <div className="p-2 space-y-2">
+        <div className="space-y-1.5">
+          <div className="space-y-1">
+            <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">
+              URL Endpoint
             </div>
-            <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-              <Globe className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-              <div className="font-mono text-xs text-zinc-700 dark:text-zinc-300 break-all line-clamp-1">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+              <Globe className="h-3 w-3 text-zinc-400 shrink-0" />
+              <div className="font-mono text-[11px] text-zinc-700 dark:text-zinc-300 break-all line-clamp-1">
                 {providerUrl || "—"}
               </div>
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between text-xs font-medium text-zinc-500 uppercase tracking-wider">
-              <span>Chemin JSON</span>
+          <div className="space-y-1">
+            <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">
+              Chemin JSON
             </div>
-            <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-              <Database className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-              <div className="font-mono text-xs text-zinc-700 dark:text-zinc-300">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+              <Database className="h-3 w-3 text-zinc-400 shrink-0" />
+              <div className="font-mono text-[11px] text-zinc-700 dark:text-zinc-300">
                 {providerJsonPath || "—"}
               </div>
             </div>
@@ -87,9 +83,9 @@ export function ProviderBlock({
         </div>
 
         {/* Status & Actions */}
-        <div className="pt-3 border-t border-zinc-100 dark:border-zinc-800/50 flex flex-col gap-3">
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
+        <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/50 flex flex-col gap-2">
+          <div className="flex items-center justify-between text-[11px]">
+            <div className="flex items-center gap-1.5">
               <span className="text-zinc-500">Dernier fetch:</span>
               {providerLastFetchedAt ? (
                 <span className="font-medium text-zinc-700 dark:text-zinc-300">
@@ -100,30 +96,30 @@ export function ProviderBlock({
               )}
             </div>
             {providerLastError && (
-              <div className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
-                <AlertCircle className="h-3.5 w-3.5" />
+              <div className="flex items-center gap-1 text-red-600 dark:text-red-400">
+                <AlertCircle className="h-3 w-3" />
                 <span className="font-medium">Erreur</span>
               </div>
             )}
           </div>
 
           {providerLastError && (
-            <div className="text-xs bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 p-2 rounded border border-red-100 dark:border-red-900/20">
+            <div className="text-[11px] bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 p-1.5 rounded border border-red-100 dark:border-red-900/20">
               {providerLastError}
             </div>
           )}
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <Button
               size="sm"
               variant="outline"
               onClick={onManualCompute}
               disabled={!canCompute || computePending}
-              className="flex-1 h-8 text-xs border-zinc-200 dark:border-zinc-700"
+              className="flex-1 h-6 text-[11px] border-zinc-200 dark:border-zinc-700"
             >
               {computePending ? (
                 <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />
+                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
                   Rafraîchissement…
                 </>
               ) : (

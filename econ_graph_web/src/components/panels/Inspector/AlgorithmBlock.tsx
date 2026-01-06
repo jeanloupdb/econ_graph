@@ -1,9 +1,11 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { CodeEditor } from "@/components/ui/code-editor";
 import type { NodeToneKey } from "@/lib/api/hooks";
-import { ChevronDown, Code2, Edit3 } from "lucide-react";
+import Editor from '@monaco-editor/react';
+import { Copy } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 
 interface AlgorithmBlockProps {
   code?: string | null;
@@ -14,58 +16,75 @@ interface AlgorithmBlockProps {
     isComposite?: boolean;
   }>;
   onEdit?: () => void;
+  nodeLabel?: string;
+  onSave?: (code: string) => Promise<void>;
+  nodeId?: string | null;
 }
 
-export function AlgorithmBlock({ code, variables, onEdit }: AlgorithmBlockProps) {
-  const normalized = code ? String(code).trim() : "";
+export function AlgorithmBlock({ code }: AlgorithmBlockProps) {
+  const [localCode] = useState(code ? String(code).trim() : "");
+
+  const normalized = localCode || "";
   if (!normalized) {
     return null;
   }
 
   return (
-    <details className="rounded-xl border-2 border-zinc-200 dark:border-zinc-800 overflow-hidden bg-white dark:bg-zinc-950 shadow-sm group" open>
-      <summary className="flex items-center justify-between px-4 py-3 bg-zinc-50 dark:bg-zinc-900/50 border-b border-zinc-200 dark:border-zinc-800 cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
-        <div className="flex items-center gap-2.5">
-          <ChevronDown className="h-4 w-4 text-zinc-400 transition-transform group-open:rotate-180" />
-          <div className="h-8 w-8 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-600 dark:text-zinc-400">
-            <Code2 className="h-4 w-4" />
-          </div>
-          <div>
-            <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Logique de calcul</div>
+    <div className="pr-4">
+      <div className="border border-zinc-200 dark:border-zinc-700 rounded-lg overflow-hidden bg-white dark:bg-zinc-950">
+        {/* Header avec bouton copier */}
+        <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900">
+          <span className="text-xs font-mono text-zinc-500 dark:text-zinc-400">Python</span>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (normalized.trim()) {
+                  navigator.clipboard.writeText(normalized);
+                  toast.success('Code copié');
+                }
+              }}
+              disabled={!normalized.trim()}
+              className="h-6 px-2 text-xs gap-1.5"
+            >
+              <Copy className="h-3 w-3" />
+              Copier
+            </Button>
           </div>
         </div>
-        {onEdit && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onEdit();
+        {/* Monaco Editor */}
+        <div className="h-[300px]">
+          <Editor
+            height="100%"
+            defaultLanguage="python"
+            language="python"
+            value={normalized}
+            theme="vs-dark"
+            options={{
+              readOnly: true,
+              minimap: { enabled: false },
+              fontSize: 13,
+              lineNumbers: 'on',
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
+              tabSize: 4,
+              insertSpaces: true,
+              wordWrap: 'off',
+              lineNumbersMinChars: 3,
+              folding: false,
+              renderLineHighlight: 'line',
+              contextmenu: false,
+              scrollbar: {
+                vertical: 'visible',
+                horizontal: 'visible',
+                useShadows: false,
+              },
+              padding: { top: 12, bottom: 12 },
             }}
-            className="h-8 px-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
-          >
-            <Edit3 className="h-3.5 w-3.5 mr-1.5" />
-            Modifier
-          </Button>
-        )}
-      </summary>
-      
-      <div className="relative group">
-        <CodeEditor
-          value={normalized}
-          onChange={() => {}}
-          language="python"
-          height="220px"
-          readOnly
-          showVariablePalette={false}
-          enableCompletion={false}
-          variables={variables}
-          className="border-0"
-        />
-        {/* Overlay to indicate read-only but allow scroll */}
-        <div className="absolute inset-0 pointer-events-none bg-zinc-50/0" />
+          />
+        </div>
       </div>
-    </details>
+    </div>
   );
 }

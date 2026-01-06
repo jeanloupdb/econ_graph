@@ -6,17 +6,16 @@ import { useGraphData } from '@/graph/context/GraphDataContext';
 import { useNodeTones, useTheme } from '@/lib/api/hooks';
 import { deriveEdgesFromCompute } from '@/lib/layout/graph';
 import { getNodeDisplayIdentifier } from '@/lib/nodes';
-import { resolveTonePalette } from "@/lib/nodeStyles";
 import type { Node } from '@/lib/types';
 import { cn } from "@/lib/utils";
 import { useProjectStore } from '@/store/projectState';
 import { useScenarioStore } from '@/store/scenarioState';
 import { useUIStore } from '@/store/uiState';
 import { formatNumber } from "@/utils/format";
-import { Calculator, Layers, Pencil, Sparkles } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import React, { useCallback, useMemo } from 'react';
-import { Handle, NodeProps, NodeToolbar, Position, useReactFlow } from 'reactflow';
+import { Handle, NodeProps, Position, useReactFlow } from 'reactflow';
 
 export function CustomNode({ data, id, selected }: NodeProps<Node>) {
   // Minimal: no explicit selection linkage here
@@ -80,6 +79,11 @@ export function CustomNode({ data, id, selected }: NodeProps<Node>) {
   const highlightedNodeId = useUIStore((s) => s.highlightedNodeId);
   const isHighlighted = highlightedNodeId === id;
 
+  // Check if this node is being edited
+  const nodeEditorMode = useUIStore((s) => s.nodeEditorMode);
+  const nodeEditorNodeId = useUIStore((s) => s.nodeEditorNodeId);
+  const isBeingEdited = nodeEditorMode && nodeEditorNodeId === id;
+
   // Selection ring matches tone
   const ringColor = isCompositeNode
     ? '#f59e0b'
@@ -87,9 +91,12 @@ export function CustomNode({ data, id, selected }: NodeProps<Node>) {
   const containerSelected = selected ? `shadow-md` : 'shadow-sm';
   const highlightAnimationClass = isHighlighted ? 'animate-pulse' : '';
   const boxShadows: string[] = [];
-  if (selected) {
-    boxShadows.push(`0 0 0 2px ${ringColor}`);
+
+  // Enhanced selection with double ring (same for all selections)
+  if (selected || isBeingEdited) {
+    boxShadows.push(`0 0 0 4px ${ringColor}`, `0 0 0 8px ${ringColor}40`);
   }
+
   if (isHighlighted) {
     boxShadows.push('0 0 0 8px rgba(251, 191, 36, 0.35)');
   }
@@ -186,43 +193,7 @@ export function CustomNode({ data, id, selected }: NodeProps<Node>) {
 
   return (
     <>
-      <NodeToolbar
-        isVisible={selected && !aiAssistantOpen}
-        position={Position.Right}
-        align="start"
-        offset={10}
-        className="flex flex-col gap-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-lg p-1"
-      >
-        <button
-          className="flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors w-full justify-start"
-          onClick={() => {
-            if (isCompositeNode && data.composite_id) {
-              router.push(`/composites/${data.composite_id}`);
-            } else {
-              setEditNodeModalOpen(true);
-            }
-          }}
-          title="Modifier"
-        >
-          <Pencil className="w-3.5 h-3.5" />
-          <span>Modifier</span>
-        </button>
-        
-        <button
-          className="group/ai flex items-center gap-2 px-2 py-1.5 text-xs font-medium rounded transition-all hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 dark:hover:from-blue-900/20 dark:hover:to-purple-900/20 w-full justify-start"
-          onClick={() => {
-            const ancestors = getAncestors();
-            setSelectedNodeIds([id, ...ancestors]);
-            setMode('ai-select');
-            setAiAssistantOpen(true);
-          }}
-        >
-          <Sparkles className="w-3.5 h-3.5 text-blue-500 group-hover/ai:text-purple-500 transition-colors" />
-          <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent group-hover/ai:from-blue-500 group-hover/ai:to-purple-500">
-            Assistant
-          </span>
-        </button>
-      </NodeToolbar>
+
 
       <div
         className={cn(
@@ -250,29 +221,21 @@ export function CustomNode({ data, id, selected }: NodeProps<Node>) {
               {isCompositeNode && (
                 <Layers className="h-4 w-4 text-amber-600 dark:text-amber-300" />
               )}
-              <h3 className="font-medium leading-tight text-base text-zinc-900 dark:text-zinc-100 truncate max-w-[220px]">
+              <h3 className="font-medium leading-tight text-lg text-zinc-900 dark:text-zinc-100 truncate max-w-[220px]">
                 {data.label}
               </h3>
-              {isComputed && (
-                <Calculator
-                  className={`h-3.5 w-3.5 ${
-                    hasError ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
-                  }`}
-                />
-              )}
+
             </div>
 
             {/* ID = Value below */}
-            <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono flex items-center gap-2 flex-wrap">
+            <div className="text-sm text-zinc-500 dark:text-zinc-400 font-mono flex items-center gap-2 flex-wrap">
               <span>
-                {displaySlug}
                 {!comparisonEnabled && (
                   <>
-                    {' = '}
-                    <span className="text-zinc-900 dark:text-zinc-100 font-bold text-base">
+                    <span className="text-zinc-900 dark:text-zinc-100 font-bold text-xl">
                       {displayValue == null ? '—' : formatNumber(displayValue)}
                     </span>
-                    <span className="text-[10px] ml-0.5">{data.unit}</span>
+                    <span className="text-xs ml-0.5">{data.unit}</span>
                   </>
                 )}
               </span>
@@ -393,40 +356,7 @@ export function CustomNode({ data, id, selected }: NodeProps<Node>) {
             </div>
           )}
 
-          {/* Dependencies (Inputs) */}
-          {!comparisonEnabled && isComputed && !isLeaf && inputs.length > 0 && (
-            <div className="pt-1 border-t border-zinc-200/50 dark:border-zinc-700/50">
-              <div className="flex flex-wrap gap-1.5">
-                {inputs.slice(0, 3).map((src, idx) => {
-                  const sourceNode = nodesById.get(src);
-                  const toneKey = getToneForNode(src);
-                  const palette = resolveTonePalette(toneKey, (theme as any)?.node_tone);
-                  const isCompositeSource = Boolean(sourceNode?.composite_id);
-                  return (
-                    <span
-                      key={`${src}-${idx}`}
-                      className={`text-[10px] font-mono px-2 py-0.5 rounded border inline-flex items-center gap-1 ${
-                        isCompositeSource
-                          ? 'shadow-[inset_0_0_0_1px_rgba(245,158,11,0.35)]'
-                          : ''
-                      }`}
-                      style={{
-                        backgroundColor: palette.bg,
-                        borderColor: palette.border,
-                        color: palette.text,
-                      }}
-                    >
-                      {isCompositeSource && <Layers className="h-3 w-3 text-amber-600 dark:text-amber-300" />}
-                      {resolveInputLabel(src)}
-                    </span>
-                  );
-                })}
-                {inputs.length > 3 && (
-                  <Badge variant="secondary" className="text-[10px]">+{inputs.length - 3}</Badge>
-                )}
-              </div>
-            </div>
-          )}
+
 
           {/* Error Badge only */}
           {hasError && (

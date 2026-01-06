@@ -1,7 +1,7 @@
 "use client";
 
 import { NewApiNodeModal } from "@/components/forms/NewApiNodeModal";
-import { NewNodeModal } from "@/components/forms/NewNodeModal";
+// import { NewNodeModal } from "@/components/forms/NewNodeModal"; // TODO: Removed, need to adapt CompositeEditor
 import { GraphAddNodeMenu } from "@/components/graph/GraphAddNodeMenu";
 import { GraphAiBar } from "@/components/graph/GraphAiBar";
 import { GraphCanvas } from "@/components/graph/GraphCanvas";
@@ -614,10 +614,11 @@ function CompositeEditorLayout({
         <Inspector />
       </div>
 
-      <NewNodeModal
+      {/* TODO: NewNodeModal has been removed, need to adapt CompositeEditor */}
+      {/* <NewNodeModal
         open={showNodeModal}
         onClose={() => setShowNodeModal(false)}
-      />
+      /> */}
       <NewApiNodeModal
         open={showApiModal}
         onClose={() => setShowApiModal(false)}

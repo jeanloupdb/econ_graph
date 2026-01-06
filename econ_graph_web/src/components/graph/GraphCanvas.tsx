@@ -15,7 +15,6 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import ReactFlow, {
     Background,
     BackgroundVariant,
-    Controls,
     Edge,
     MiniMap,
     Node as ReactFlowNode,
@@ -49,6 +48,7 @@ function GraphCanvasInner({ readOnly }: { readOnly?: boolean }) {
   const mode = useUIStore((state) => state.mode);
   const selectedNodeId = useUIStore((state) => state.selectedNodeId);
   const setSelectedNodeId = useUIStore((state) => state.setSelectedNodeId);
+  const selectNodeWithoutInspector = useUIStore((state) => state.selectNodeWithoutInspector);
   const selectedEdgeId = useUIStore((state) => state.selectedEdgeId);
   const selectedEdgeIds = useUIStore((state) => state.selectedEdgeIds);
   const setSelectedEdgeId = useUIStore((state) => state.setSelectedEdgeId);
@@ -60,6 +60,11 @@ function GraphCanvasInner({ readOnly }: { readOnly?: boolean }) {
   const connectionSource = useUIStore((state) => state.connectionSource);
   const setConnectionSource = useUIStore((state) => state.setConnectionSource);
   const isComputing = useUIStore((state) => state.isComputing);
+  const aiAssistantOpen = useUIStore((state) => state.aiAssistantOpen);
+
+  // Node editor state - when open, this node should stay selected
+  const nodeEditorMode = useUIStore((state) => state.nodeEditorMode);
+  const nodeEditorNodeId = useUIStore((state) => state.nodeEditorNodeId);
 
   const nodePositions = useGraphStore((state) => state.nodePositions);
   const setNodePosition = useGraphStore((state) => state.setNodePosition);
@@ -143,26 +148,7 @@ function GraphCanvasInner({ readOnly }: { readOnly?: boolean }) {
       )
     );
 
-    // Build ancestors set for the currently selected node (all parents recursively)
-    const ancestorSet = new Set<string>();
-    if (selectedNodeId) {
-      const inMap = new Map<string, string[]>(); // target -> [sources]
-      nodesData.forEach((n) => inMap.set(n.id, []));
-      derivedEdges.forEach((e) => {
-        if (!inMap.has(e.target)) inMap.set(e.target, []);
-        inMap.get(e.target)!.push(e.source);
-      });
-      const stack = [...(inMap.get(selectedNodeId) || [])];
-      while (stack.length > 0) {
-        const cur = stack.pop()!;
-        if (ancestorSet.has(cur)) continue;
-        ancestorSet.add(cur);
-        const parents = inMap.get(cur) || [];
-        parents.forEach((p) => {
-          if (!ancestorSet.has(p)) stack.push(p);
-        });
-      }
-    }
+    // No automatic ancestor selection - simple direct selection only
 
     // Create nodes
     const nodes: ReactFlowNode[] = nodesData.map((node, index) => {
@@ -176,20 +162,21 @@ function GraphCanvasInner({ readOnly }: { readOnly?: boolean }) {
       };
 
       // Determine selection status
-      // A node is selected if it is in selectedNodeIds OR if it is an ancestor of the primary selectedNodeId
-      const isExplicitlySelected = selectedNodeIds?.includes(node.id);
-      const isAncestor = ancestorSet.has(node.id);
-      const isSelected = isExplicitlySelected || isAncestor;
+      // When node editor is open, force the edited node to be selected
+      const isBeingEdited = nodeEditorMode && nodeEditorNodeId === node.id;
 
-      const isRelevant = !!selectedNodeId && (selectedNodeId === node.id || ancestorSet.has(node.id));
-      const dimOthers = !!selectedNodeId;
+      // A node is selected if it is in selectedNodeIds OR if being edited
+      const isExplicitlySelected = isBeingEdited || selectedNodeIds?.includes(node.id);
+
+      // Simple selection - no dimming of other nodes
+      const dimOthers = false;
 
       return {
         id: node.id,
         type: 'custom',
         position,
-        selected: isExplicitlySelected,
-        style: dimOthers ? (isRelevant ? { opacity: 1 } : { opacity: 0.5 }) : undefined,
+        selected: isExplicitlySelected || isBeingEdited,
+        style: undefined, // No dimming
         data: {
           ...node,
           isSelected: false,
@@ -219,18 +206,11 @@ function GraphCanvasInner({ readOnly }: { readOnly?: boolean }) {
       };
     });
 
-    // Apply selection styles: selected edges OR edges incoming to selected node and its ancestors
-    const selectedNode = nodesData.find(n => n.id === selectedNodeId);
-    const incomingStroke = (theme as any)?.edge_types?.dependency?.stroke || '#3b82f6';
-    const highlightTargets = new Set<string>();
-    if (selectedNodeId) highlightTargets.add(selectedNodeId);
-    ancestorSet.forEach(id => highlightTargets.add(id));
-
+    // Apply selection styles: only for explicitly selected edges
     const styledEdges = newEdges.map(edge => {
       const isSelectedByEdge = selectedEdgeIds.includes(edge.id);
-      const isIncomingToHighlighted = highlightTargets.size > 0 && highlightTargets.has(edge.target);
-      const highlight = isSelectedByEdge || isIncomingToHighlighted;
-      const stroke = isIncomingToHighlighted ? incomingStroke : ((theme as any)?.edge_types?.dependency?.stroke || '#3b82f6');
+      const highlight = isSelectedByEdge;
+      const stroke = ((theme as any)?.edge_types?.dependency?.stroke || '#3b82f6');
       return {
         ...edge,
         style: highlight
@@ -241,7 +221,7 @@ function GraphCanvasInner({ readOnly }: { readOnly?: boolean }) {
     });
 
     setReactFlowEdges(styledEdges);
-  }, [nodesData, explicitEdges, nodePositions, selectedEdgeIds, selectedNodeId, selectedNodeIds, setReactFlowNodes, setReactFlowEdges, computeHierarchicalPositions, setNodePositions, slugToId, (theme as any)?.edge_types?.dependency?.stroke]);
+  }, [nodesData, explicitEdges, nodePositions, selectedEdgeIds, selectedNodeId, selectedNodeIds, nodeEditorMode, nodeEditorNodeId, setReactFlowNodes, setReactFlowEdges, computeHierarchicalPositions, setNodePositions, slugToId, (theme as any)?.edge_types?.dependency?.stroke]);
 
   // ELK layout on demand
   const layoutInProgress = useGraphStore((s) => s.layoutInProgress);
@@ -286,26 +266,33 @@ function GraphCanvasInner({ readOnly }: { readOnly?: boolean }) {
   }, [layoutInProgress, nodesData, explicitEdges, reactFlowNodes, pushPositionsSnapshot, setNodePositions, setReactFlowNodes, setLayoutInProgress, slugToId]);
 
   const onNodeClick = useCallback(
-    (_event: React.MouseEvent, node: ReactFlowNode) => {
-      if (mode === 'ai-select') {
-        // Toggle selection for AI context
+    (event: React.MouseEvent, node: ReactFlowNode) => {
+      // If a node is being edited, prevent clicking on other nodes
+      if (nodeEditorMode && nodeEditorNodeId && node.id !== nodeEditorNodeId) {
+        // Ignore click - user cannot select another node while editing
+        return;
+      }
+
+      // In ai-select mode with AI assistant open, allow multi-selection
+      if (mode === 'ai-select' && aiAssistantOpen) {
         const currentIds = selectedNodeIds || [];
         if (currentIds.includes(node.id)) {
+          // Deselect if already selected
           setSelectedNodeIds(currentIds.filter(id => id !== node.id));
         } else {
+          // Add to selection
           setSelectedNodeIds([...currentIds, node.id]);
         }
         return;
       }
 
-      // Select only the clicked node
-      setSelectedNodeId(node.id);
+      // In normal select mode, same behavior as menu selection
+      // Simple click: select only this node
       setSelectedNodeIds([node.id]);
-      
-      // Open inspector
-      setInspectorOpen(true);
+      // Don't open inspector
+      setSelectedNodeId(null);
     },
-    [setSelectedNodeId, setSelectedNodeIds, mode, selectedNodeIds, setInspectorOpen]
+    [setSelectedNodeIds, setSelectedNodeId, mode, nodeEditorMode, nodeEditorNodeId, selectedNodeIds, aiAssistantOpen]
   );
 
   // Helper to get all ancestors of a node
@@ -427,15 +414,25 @@ function GraphCanvasInner({ readOnly }: { readOnly?: boolean }) {
 
   const onEdgeClick = useCallback(
     (_event: React.MouseEvent, edge: Edge) => {
+      // If a node is being edited, prevent clicking on edges
+      if (nodeEditorMode && nodeEditorNodeId) {
+        return;
+      }
+
       if (mode === 'select') {
         setSelectedEdgeId(edge.id);
       }
     },
-    [mode, setSelectedEdgeId]
+    [mode, setSelectedEdgeId, nodeEditorMode, nodeEditorNodeId]
   );
 
   const onPaneClick = useCallback(() => {
-    if (mode === 'select') {
+    // If a node is being edited, prevent deselection via pane click
+    if (nodeEditorMode && nodeEditorNodeId) {
+      return;
+    }
+
+    if (mode === 'select' || mode === 'ai-select') {
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
       // Clear multi-selection to allow next drags to be independent
@@ -443,7 +440,7 @@ function GraphCanvasInner({ readOnly }: { readOnly?: boolean }) {
     }
     setConnectionSource(null);
     setScenarioPanelOpen(false);
-  }, [mode, setSelectedNodeId, setSelectedEdgeId, setSelectedNodeIds, setConnectionSource, setScenarioPanelOpen]);
+  }, [mode, setSelectedNodeId, setSelectedEdgeId, setSelectedNodeIds, setConnectionSource, setScenarioPanelOpen, nodeEditorMode, nodeEditorNodeId]);
 
   const insertCompositeNode = useInsertCompositeNode();
 
@@ -504,17 +501,23 @@ function GraphCanvasInner({ readOnly }: { readOnly?: boolean }) {
 
   const onSelectionChange = useCallback(
     ({ nodes, edges }: { nodes: ReactFlowNode[]; edges: Edge[] }) => {
+      // CRITICAL: If node editor is open, block ALL selection changes
+      if (nodeEditorMode && nodeEditorNodeId) {
+        // Completely ignore any selection changes while editing
+        return;
+      }
+
       if (mode === 'select' || mode === 'lasso') {
         const nodeIds = nodes.map((n) => n.id).sort();
         const edgeIds = edges.map((e) => e.id).sort();
-        
+
         const last = lastSelectionRef.current;
-        const nodesChanged = 
-          nodeIds.length !== last.nodes.length || 
+        const nodesChanged =
+          nodeIds.length !== last.nodes.length ||
           !nodeIds.every((id, i) => id === last.nodes[i]);
-          
-        const edgesChanged = 
-          edgeIds.length !== last.edges.length || 
+
+        const edgesChanged =
+          edgeIds.length !== last.edges.length ||
           !edgeIds.every((id, i) => id === last.edges[i]);
 
         if (!nodesChanged && !edgesChanged) return;
@@ -544,36 +547,46 @@ function GraphCanvasInner({ readOnly }: { readOnly?: boolean }) {
         if (nodesChanged) {
           // If selection is empty, clear everything
           if (nodeIds.length === 0) {
-            setSelectedNodeIds([]);
+            const currentStoreIds = selectedNodeIds || [];
+            if (currentStoreIds.length > 0) {
+              setSelectedNodeIds([]);
+            }
             // Only clear if currently set (avoid redundant updates)
             if (selectedNodeIdRef.current) setSelectedNodeId(null);
             return;
           }
 
-          // Update selectedNodeIds
+          // Update selectedNodeIds (this works for both normal and ai-select modes)
           setSelectedNodeIds(nodeIds);
 
           // Handle primary selection (selectedNodeId)
           const currentPrimary = selectedNodeIdRef.current;
+          
+          // We do NOT automatically set selectedNodeId (which opens inspector) for single selections here.
+          // Explicit clicks are handled in onNodeClick.
+          // This allows "visual selection" without "inspection".
+          
+          /* 
           if (nodeIds.length === 1) {
             // If it's a new single selection (e.g. Lasso), set it as primary
             if (nodeIds[0] !== currentPrimary) {
               setSelectedNodeId(nodeIds[0]);
             }
           } else {
+          */
             // Multi-selection: if the primary node is no longer in the selection, clear it
             if (currentPrimary && !nodeIds.includes(currentPrimary)) {
               setSelectedNodeId(null);
             }
             // If no primary node but we have selection, maybe pick the first one? 
-            if (!currentPrimary && nodeIds.length > 0) {
-               setSelectedNodeId(nodeIds[0]);
-            }
-          }
+            // if (!currentPrimary && nodeIds.length > 0) {
+            //    setSelectedNodeId(nodeIds[0]);
+            // }
+          /* } */
         }
       }
     },
-    [mode, setSelectedNodeIds, setSelectedEdgeIds, setSelectedNodeId]
+    [mode, setSelectedNodeIds, setSelectedEdgeIds, setSelectedNodeId, nodeEditorMode, nodeEditorNodeId]
   );
 
   if (isLoading) {
@@ -612,7 +625,8 @@ function GraphCanvasInner({ readOnly }: { readOnly?: boolean }) {
         selectNodesOnDrag={false}
         nodesDraggable={!readOnly && interactiveMode}
         nodesConnectable={false}
-        elementsSelectable={!readOnly && (mode === 'select' || mode === 'lasso')}
+        elementsSelectable={!readOnly && (mode === 'select' || mode === 'lasso' || mode === 'ai-select')}
+        multiSelectionKeyCode={mode === 'ai-select' ? null : 'Control'}
         onDrop={onDrop}
         onDragOver={onDragOver}
         className={cn(
@@ -627,7 +641,7 @@ function GraphCanvasInner({ readOnly }: { readOnly?: boolean }) {
           color="#808080" 
           style={{ opacity: 0.15 }}
         />
-        <Controls />
+
         <MiniMap
           nodeColor={(node) => getNodeStyle(node).backgroundColor}
           maskColor={maskColor}

@@ -26,6 +26,7 @@ import {
   Network,
   PlusCircle,
   Search,
+  Sparkles,
   Trash2,
   X
 } from 'lucide-react';
@@ -347,28 +348,41 @@ export default function DashboardPage() {
 
         {/* Empty State */}
         {filteredProjects.length === 0 && !isAgentRunning && (
-          <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-zinc-200 dark:border-zinc-800 py-16">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-900 mb-4">
-              {searchQuery ? (
-                <Search className="h-6 w-6 text-zinc-400" />
-              ) : (
-                <Network className="h-6 w-6 text-zinc-400" />
-              )}
-            </div>
-            <h3 className="text-sm font-medium text-zinc-900 dark:text-white mb-1">
-              {searchQuery ? 'Aucun résultat' : 'Aucun projet'}
-            </h3>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
-              {searchQuery
-                ? `Aucun projet ne correspond à "${searchQuery}"`
-                : 'Créez votre premier projet pour commencer'
-              }
-            </p>
-            {!searchQuery && (
-              <Button size="sm" onClick={() => setCreateOpen(true)}>
-                <PlusCircle className="h-4 w-4 mr-1.5" />
-                Créer un projet
-              </Button>
+          <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-zinc-200 dark:border-zinc-800 py-16 px-6">
+            {searchQuery ? (
+              <>
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-900 mb-4">
+                  <Search className="h-6 w-6 text-zinc-400" />
+                </div>
+                <h3 className="text-sm font-medium text-zinc-900 dark:text-white mb-1">
+                  Aucun résultat
+                </h3>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                  Aucun projet ne correspond à &quot;{searchQuery}&quot;
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 mb-4">
+                  <Sparkles className="h-8 w-8 text-white" />
+                </div>
+                <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-2">
+                  Aucun projet
+                </h3>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center max-w-md mb-6">
+                  Créez votre premier projet avec l&apos;IA ou manuellement
+                </p>
+                <div className="flex items-center gap-3">
+                  <Button onClick={() => document.querySelector<HTMLInputElement>('.ai-input-field')?.focus()}>
+                    <Sparkles className="h-4 w-4 mr-1.5" />
+                    Créer avec l&apos;IA
+                  </Button>
+                  <Button variant="outline" onClick={() => setCreateOpen(true)}>
+                    <PlusCircle className="h-4 w-4 mr-1.5" />
+                    Projet vierge
+                  </Button>
+                </div>
+              </>
             )}
           </div>
         )}

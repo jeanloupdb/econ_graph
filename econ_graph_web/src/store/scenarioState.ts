@@ -22,6 +22,16 @@ interface ScenarioState {
   scenarioBId: string | null;
   comparisonValues: Record<string, CompareNodeResult>;
 
+  // Trigger to open new scenario dialog
+  requestNewScenarioDialog: boolean;
+  triggerNewScenarioDialog: () => void;
+  clearNewScenarioDialogRequest: () => void;
+
+  // Trigger inline scenario creation
+  requestInlineScenarioCreation: boolean;
+  triggerInlineScenarioCreation: () => void;
+  clearInlineScenarioCreationRequest: () => void;
+
   // Set the active scenario
   setActiveScenario: (scenarioId: string | null) => void;
 
@@ -78,6 +88,14 @@ export const useScenarioStore = create<ScenarioState>((set) => ({
   scenarioAId: null,
   scenarioBId: null,
   comparisonValues: {},
+  requestNewScenarioDialog: false,
+  requestInlineScenarioCreation: false,
+
+  triggerNewScenarioDialog: () => set({ requestNewScenarioDialog: true }),
+  clearNewScenarioDialogRequest: () => set({ requestNewScenarioDialog: false }),
+
+  triggerInlineScenarioCreation: () => set({ requestInlineScenarioCreation: true }),
+  clearInlineScenarioCreationRequest: () => set({ requestInlineScenarioCreation: false }),
 
   setActiveScenario: (scenarioId: string | null) => {
     saveActiveScenario(scenarioId);

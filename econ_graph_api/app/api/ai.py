@@ -23,6 +23,22 @@ class NodeInputContext(BaseModel):
     unit: str | None = None
     description: str | None = None
 
+class GraphNodeContext(BaseModel):
+    """Extended context for all nodes in the graph"""
+    id: str
+    slug: str | None = None
+    label: str
+    type: str | None = None  # 'computed', 'parameter', 'composite'
+    unit: str | None = None
+    value: float | None = None
+    description: str | None = None
+    hasError: bool = False
+
+class GraphContext(BaseModel):
+    """Full graph context for AI understanding"""
+    totalNodes: int
+    availableNodes: list[GraphNodeContext] = []
+
 class AiGenerationContext(BaseModel):
     label: str | None = None
     unit: str | None = None
@@ -32,6 +48,8 @@ class AiGenerationContext(BaseModel):
     nodeId: str | None = None
     # Optional: existing code to modify
     currentCode: str | None = None
+    # Optional: full graph context for better understanding
+    graphContext: GraphContext | None = None
 
 class AiGenerationRequest(BaseModel):
     prompt: str
@@ -39,6 +57,264 @@ class AiGenerationRequest(BaseModel):
 
 class AiGenerationResponse(BaseModel):
     text: str
+
+class AiCreateNodeRequest(BaseModel):
+    prompt: str
+    project_id: str
+    context: AiGenerationContext
+
+class AiCreateNodeResponse(BaseModel):
+    node_id: str
+    label: str
+    slug: str
+    code: str
+    message: str
+
+@router.post("/create-node", response_model=AiCreateNodeResponse)
+async def create_node_with_ai(request: AiCreateNodeRequest, current_user: User = Depends(get_current_user)):
+    """
+    Crée un nœud complet via l'IA : génère le code, extrait le label, calcule le slug,
+    crée le nœud dans la base de données, et le compute.
+    """
+    if not settings.GOOGLE_GENERATIVE_AI_API_KEY:
+        raise HTTPException(status_code=500, detail="AI API key not configured")
+
+    try:
+        from app.schemas import NodeCreate
+        import re
+
+        logger.info("Starting AI node creation", prompt=request.prompt[:100])
+
+        # 2. Générer le code avec l'IA
+        genai.configure(api_key=settings.GOOGLE_GENERATIVE_AI_API_KEY)
+        model = genai.GenerativeModel('gemini-2.0-flash')
+
+        logger.info("AI model configured")
+
+        # Build enhanced system prompt
+        graph_context_info = ""
+        if request.context.graphContext:
+            gc = request.context.graphContext
+            graph_context_info = f"""
+
+        FULL GRAPH CONTEXT (for better understanding):
+        - Total nodes in graph: {gc.totalNodes}
+        - Available nodes you can reference:
+        """
+            for node in gc.availableNodes[:20]:
+                node_info = f"  * {node.slug or node.id}: {node.label}"
+                if node.unit:
+                    node_info += f" ({node.unit})"
+                if node.value is not None:
+                    node_info += f" = {node.value}"
+                if node.description:
+                    node_info += f" - {node.description}"
+                if node.hasError:
+                    node_info += " [HAS ERROR]"
+                graph_context_info += "\n" + node_info
+
+            if gc.totalNodes > 20:
+                graph_context_info += f"\n  ... and {gc.totalNodes - 20} more nodes"
+
+        system_prompt = """
+        You are an expert Python coding assistant for creating nodes in "Econ Graph".
+        Your goal is to generate a COMPLETE node definition including label, code, and unit.
+
+        CONTEXT:
+        - You are creating a NEW node from scratch based on the user's prompt.
+        - The function signature MUST be: def compute(var1, var2, ...):
+        - The function arguments MUST ONLY include the variables that are ACTUALLY USED.
+        - The function MUST return a number (float or int).
+        - Available variables (inputs) are provided in the context.
+        {graph_context}
+
+        INPUT CONTEXT:
+        {context}
+
+        INSTRUCTIONS:
+        1. EXTRACT a clear, concise LABEL from the user prompt (e.g., "Chiffre d'affaires", "Profit margin")
+        2. DETERMINE the appropriate UNIT (e.g., "€", "%", "units", or leave empty)
+        3. GENERATE the Python code for the compute function
+        4. Return ONLY valid JSON with this structure:
+        {{
+            "label": "Revenue",
+            "unit": "€",
+            "code": "def compute(price, quantity):\\n    return price * quantity",
+            "description": "Total revenue from sales"
+        }}
+
+        RULES:
+        - Use the EXACT variable IDs/slugs from the context
+        - Start code with a comment describing the calculation
+        - NO markdown code blocks
+        - Return ONLY the JSON object
+        """.format(
+            context=request.context.model_dump_json(indent=2),
+            graph_context=graph_context_info
+        )
+
+        logger.info("Calling AI model")
+
+        response = model.generate_content(
+            contents=[
+                {"role": "user", "parts": [system_prompt + "\n\nUser Prompt: " + request.prompt]}
+            ],
+            generation_config=genai.types.GenerationConfig(
+                temperature=0.2,
+                response_mime_type="application/json"
+            )
+        )
+
+        logger.info("AI response received")
+
+        # Parse AI response
+        ai_data = json.loads(response.text)
+        label = ai_data.get("label", "Nouveau nœud")
+        unit = ai_data.get("unit", "")
+        code = ai_data.get("code", "def compute():\n    return 0")
+        description = ai_data.get("description", "")
+
+        logger.info("AI data parsed", label=label, unit=unit)
+
+        # Clean up code
+        if code.startswith("```python"):
+            code = code[9:]
+        elif code.startswith("```"):
+            code = code[3:]
+        if code.endswith("```"):
+            code = code[:-3]
+        code = code.strip()
+
+        # 3. Generate slug from label
+        import unicodedata
+        def kebabify(s: str) -> str:
+            # Normalize unicode characters (remove accents)
+            normalized = unicodedata.normalize('NFD', s)
+            # Remove diacritical marks
+            ascii_str = normalized.encode('ascii', 'ignore').decode('ascii')
+            # Convert to lowercase, replace spaces and hyphens with underscores
+            slug = ascii_str.lower().replace(' ', '_').replace('-', '_').replace("'", '').replace('"', '')
+            # Remove any non-alphanumeric characters except underscores
+            slug = ''.join(c for c in slug if c.isalnum() or c == '_')
+            # Strip leading/trailing underscores and limit length
+            return slug.strip('_')[:60]
+
+        slug = kebabify(label)
+
+        logger.info("Slug generated", slug=slug)
+
+        # 4. Create the node via API
+        from app.core.db import SessionLocal
+        from app.repositories import node_repo
+        from app.repositories.edge_repo import EdgeRepository
+        from app.schemas.edge import EdgeCreate
+        from app.models.project import Project
+        from app.models.node import Node
+
+        logger.info("Imports successful")
+
+        db = SessionLocal()
+        try:
+            logger.info("DB session created")
+
+            # Verify project ownership
+            project = db.query(Project).filter(Project.id == request.project_id).first()
+            if not project or project.user_id != current_user.id:
+                raise HTTPException(status_code=404, detail="Project not found")
+
+            logger.info("Project verified", project_id=request.project_id)
+
+            node_data = NodeCreate(
+                slug=slug,
+                label=label,
+                unit=unit,
+                status="unknown",
+                confidence=0.5,
+                notes=description or None,
+                value_computed=None,
+                computation_definition=code,
+                project_id=request.project_id
+            )
+
+            logger.info("NodeCreate data prepared", slug=slug)
+
+            # Create node using repository
+            new_node = node_repo.create(db, node_data, project_id=request.project_id)
+
+            logger.info("Node created in DB", node_id=new_node.id)
+
+            # 4b. Extract dependencies from code and create edges
+            # Parse function signature to get parameter names
+            import ast
+            try:
+                tree = ast.parse(code)
+                func_def = None
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.FunctionDef) and node.name == 'compute':
+                        func_def = node
+                        break
+
+                if func_def and func_def.args.args:
+                    param_names = [arg.arg for arg in func_def.args.args]
+                    logger.info("Extracted parameters from code", params=param_names)
+
+                    # Match parameters to nodes in context
+                    if request.context.graphContext and request.context.graphContext.availableNodes:
+                        nodes_by_slug = {n.slug: n.id for n in request.context.graphContext.availableNodes if n.slug}
+
+                        for param in param_names:
+                            # Try to find matching node by slug
+                            if param in nodes_by_slug:
+                                source_node_id = nodes_by_slug[param]
+                                edge_id = f"{source_node_id}-{new_node.id}"
+
+                                # Create edge
+                                edge_data = EdgeCreate(
+                                    id=edge_id,
+                                    source=source_node_id,
+                                    target=new_node.id,
+                                    label=param,
+                                    edge_type="dependency",
+                                    project_id=request.project_id
+                                )
+                                EdgeRepository.create(db, edge_data, project_id=request.project_id)
+                                logger.info("Edge created", source=source_node_id, target=new_node.id, param=param)
+                            else:
+                                logger.warning("No matching node found for parameter", param=param)
+
+            except Exception as e:
+                logger.warning("Failed to create edges from dependencies", error=str(e))
+
+            # 5. Compute the node
+            from app.services.computation import compute_node
+            try:
+                logger.info("Starting node computation", node_id=new_node.id)
+                compute_node(db, new_node.id)
+                db.commit()
+                logger.info("Node computed successfully")
+            except Exception as e:
+                logger.warning(f"Node created but computation failed: {str(e)}")
+                # Continue anyway, node is created
+                db.commit()
+
+            logger.info("Returning response", node_id=new_node.id)
+
+            return AiCreateNodeResponse(
+                node_id=new_node.id,
+                label=label,
+                slug=slug,
+                code=code,
+                message=f"Nœud '{label}' créé avec succès"
+            )
+
+        finally:
+            db.close()
+            logger.info("DB session closed")
+
+    except Exception as e:
+        logger.error("AI Create Node failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=f"AI Create Node failed: {str(e)}")
+
 
 @router.post("/generate", response_model=AiGenerationResponse)
 async def generate_code(request: AiGenerationRequest):
@@ -49,10 +325,35 @@ async def generate_code(request: AiGenerationRequest):
         genai.configure(api_key=settings.GOOGLE_GENERATIVE_AI_API_KEY)
         model = genai.GenerativeModel('gemini-2.0-flash')
 
+        # Build enhanced system prompt with graph context
+        graph_context_info = ""
+        if request.context.graphContext:
+            gc = request.context.graphContext
+            graph_context_info = f"""
+
+        FULL GRAPH CONTEXT (for better understanding):
+        - Total nodes in graph: {gc.totalNodes}
+        - Available nodes you can reference:
+        """
+            for node in gc.availableNodes[:20]:  # Limit to first 20 to avoid token overflow
+                node_info = f"  * {node.slug or node.id}: {node.label}"
+                if node.unit:
+                    node_info += f" ({node.unit})"
+                if node.value is not None:
+                    node_info += f" = {node.value}"
+                if node.description:
+                    node_info += f" - {node.description}"
+                if node.hasError:
+                    node_info += " [HAS ERROR]"
+                graph_context_info += "\n" + node_info
+
+            if gc.totalNodes > 20:
+                graph_context_info += f"\n  ... and {gc.totalNodes - 20} more nodes"
+
         system_prompt = """
         You are an expert Python coding assistant for the "Econ Graph" application.
         Your goal is to write short, efficient Python code snippets for node computation.
-        
+
         CONTEXT:
         - The user is editing a "compute" function for a node in a graph.
         - The function signature MUST be: def compute(var1, var2, ...):
@@ -62,22 +363,28 @@ async def generate_code(request: AiGenerationRequest):
         - Use the variable units to perform necessary conversions if implied by the user prompt.
         - NO imports are allowed (except standard math module if needed, but prefer built-ins).
         - Keep it concise.
-        
+        {graph_context}
+
         INPUT CONTEXT:
         {context}
-        
+
         INSTRUCTIONS:
         - If 'currentCode' is provided in the context, it means the user wants to MODIFY the existing code.
           - Apply the changes requested in the prompt to the 'currentCode'.
           - Fix errors if the prompt asks for it.
           - Keep the rest of the logic if it's not related to the change.
         - If 'currentCode' is empty or not provided, generate new code from scratch.
+        - Use the FULL GRAPH CONTEXT above to understand the available variables and their relationships.
+        - Reference nodes by their SLUG (e.g., 'revenue', 'cost', 'tax_rate') in the function arguments.
         - Return ONLY the Python code.
         - Do not wrap in markdown code blocks (unless requested).
         - Start with a comment describing what the code does (e.g., "# Modèle : Moyenne pondérée").
         - Ensure the code is valid Python.
-        - Use the exact variable IDs provided in the context.
-        """.format(context=request.context.model_dump_json(indent=2))
+        - Use the exact variable IDs/slugs provided in the context.
+        """.format(
+            context=request.context.model_dump_json(indent=2),
+            graph_context=graph_context_info
+        )
 
         response = model.generate_content(
             contents=[

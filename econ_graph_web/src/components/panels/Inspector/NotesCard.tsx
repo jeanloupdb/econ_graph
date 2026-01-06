@@ -14,8 +14,7 @@ export function NotesCard({ nodeId }: NotesCardProps) {
   const isEmpty = !text || text.trim().length === 0;
 
   return (
-    <div className="rounded-md border border-zinc-200 dark:border-zinc-800 p-3">
-      <div className="text-sm font-semibold mb-2">Notes</div>
+    <div className="py-2 pl-3 pr-4">
       {!isEmpty ? (
         <div className="text-sm leading-relaxed whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
           {text}

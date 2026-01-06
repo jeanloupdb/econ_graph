@@ -61,11 +61,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
     try {
       let raw: any[] = await apiClient.get<any[]>('/projects');
-      if (!Array.isArray(raw) || raw.length === 0) {
-        const def = { id: 'default', name: 'Default Graph' };
-        try { await apiClient.post('/projects', def); } catch {}
-        raw = await apiClient.get<any[]>('/projects');
-      }
       const projs: Project[] = (raw || []).map((p) => ({
         id: p.id,
         name: p.name,

@@ -3,10 +3,12 @@
 import { processExcelFile } from '@/lib/excel';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowUp, Loader2, Maximize2, Minimize2, Paperclip, X } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { ArrowUp, Loader2, Minimize2, Paperclip, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
+
+const BORDER_LIGHT_DURATION = 2000;
 
 interface AiInputProps {
   value: string;
@@ -20,6 +22,7 @@ interface AiInputProps {
   onFileSelect?: (file: File | null) => void;
   renderFileExternal?: boolean;
   onProcessingChange?: (isProcessing: boolean) => void;
+  borderLightEffect?: boolean;
 }
 
 export function AiInput({
@@ -33,11 +36,12 @@ export function AiInput({
   selectedFile,
   onFileSelect,
   renderFileExternal = false,
+  borderLightEffect = false,
 }: AiInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [internalFile, setInternalFile] = useState<File | null>(null);
-  
+
   const file = selectedFile !== undefined ? selectedFile : internalFile;
   const setFile = (f: File | null) => {
     if (onFileSelect) {
@@ -49,6 +53,34 @@ export function AiInput({
   const [isFocused, setIsFocused] = useState(false);
   const [isZenMode, setIsZenMode] = useState(false);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
+  const [isBorderLightActive, setIsBorderLightActive] = useState(false);
+  const borderLightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const roundedClass = className?.split(/\s+/).find((cls) => cls.startsWith('rounded')) || 'rounded-xl';
+
+  const startBorderLightAnimation = useCallback(() => {
+    if (!borderLightEffect) return;
+
+    setIsBorderLightActive(true);
+    if (borderLightTimeoutRef.current) {
+      clearTimeout(borderLightTimeoutRef.current);
+    }
+
+    borderLightTimeoutRef.current = setTimeout(() => {
+      setIsBorderLightActive(false);
+      borderLightTimeoutRef.current = null;
+    }, BORDER_LIGHT_DURATION);
+  }, [borderLightEffect, BORDER_LIGHT_DURATION]);
+
+  useEffect(() => {
+    if (!borderLightEffect || !isFocused) return;
+    startBorderLightAnimation();
+  }, [borderLightEffect, isFocused, startBorderLightAnimation]);
+
+  useEffect(() => () => {
+    if (borderLightTimeoutRef.current) {
+      clearTimeout(borderLightTimeoutRef.current);
+    }
+  }, []);
 
   // Handle Enter to submit
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -238,7 +270,7 @@ export function AiInput({
               placeholder={placeholder}
               disabled={isGenerating}
               className={cn(
-                "flex-1 w-full bg-transparent border-none focus:ring-0 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 outline-none resize-none scrollbar-hide leading-relaxed h-9 py-2 overflow-hidden",
+                "ai-input-field flex-1 w-full bg-transparent border-none focus:ring-0 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 outline-none resize-none scrollbar-hide leading-relaxed h-9 py-2 overflow-hidden",
                 isGenerating && "opacity-50 cursor-not-allowed"
               )}
               autoComplete="off"
@@ -248,13 +280,7 @@ export function AiInput({
           </div>
 
           <div className="shrink-0 flex items-center gap-1">
-            <button
-              onClick={toggleZenMode}
-              className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              title="Mode zen"
-            >
-              <Maximize2 className="h-3.5 w-3.5" />
-            </button>
+
             <button
               onClick={() => {
                 if (value.trim() && !isGenerating && !isProcessingFile) {
@@ -282,6 +308,23 @@ export function AiInput({
     </>
   );
 
+  const baseInputClasses = cn(
+    "relative flex items-center px-3 py-1.5 border transition-all duration-200 overflow-hidden w-full",
+    roundedClass,
+    isFocused
+      ? "border-zinc-300 dark:border-zinc-700"
+      : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700",
+    !className?.includes('bg-') && "bg-white dark:bg-zinc-950",
+    className,
+    borderLightEffect && isBorderLightActive && "border-transparent"
+  );
+
+  const defaultModeInput = (
+    <div className={baseInputClasses}>
+      {renderInputContent(false)}
+    </div>
+  );
+
   return (
     <>
       {allowFileUpload && (
@@ -296,17 +339,17 @@ export function AiInput({
 
       {/* Default Mode - ChatGPT Style */}
       <div className={cn("relative group w-full transition-all duration-300", isZenMode && "opacity-0 pointer-events-none")}>
-        <div className={cn(
-          "relative flex items-center px-3 py-1.5 border transition-all duration-200 overflow-hidden",
-          "rounded-xl",
-          isFocused
-            ? "border-zinc-400 dark:border-zinc-500 shadow-lg ring-2 ring-blue-500/20 dark:ring-blue-400/20"
-            : "border-zinc-200 dark:border-zinc-800 shadow-sm hover:border-zinc-300 dark:hover:border-zinc-700",
-          !className?.includes('bg-') && "bg-white dark:bg-zinc-950",
-          className
-        )}>
-          {renderInputContent(false)}
-        </div>
+        {borderLightEffect ? (
+          <div className={cn(
+            "ai-border-light-shell",
+            roundedClass,
+            isBorderLightActive && "ai-border-light-shell-active"
+          )}>
+            {defaultModeInput}
+          </div>
+        ) : (
+          defaultModeInput
+        )}
       </div>
 
       {/* Zen Mode Portal */}

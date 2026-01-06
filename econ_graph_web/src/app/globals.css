@@ -81,6 +81,15 @@
   }
 }
 
+@keyframes ai-border-light-move {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
+
 @keyframes pulse-glow {
   0%, 100% {
     box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
@@ -148,6 +157,40 @@
 
 .animate-bounce-subtle {
   animation: bounce-subtle 2s ease-in-out infinite;
+}
+
+.ai-border-light-shell {
+  position: relative;
+  width: 100%;
+  padding: 1px;
+}
+
+.ai-border-light-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(#0000, #0000) padding-box,
+    linear-gradient(120deg, #60a5fa, #a855f7, #f472b6, #34d399, #60a5fa) border-box;
+  background-size: 100% 100%, 200% 200%;
+  background-clip: padding-box, border-box;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ai-border-light-shell-active::before {
+  opacity: 1;
+  animation: ai-border-light-move 2s linear forwards;
+}
+
+.ai-border-light-shell > * {
+  position: relative;
+  z-index: 1;
+  border-radius: inherit;
 }
 
 @layer base {
@@ -234,5 +277,27 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+  }
+  /* Firefox */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
   }
 }

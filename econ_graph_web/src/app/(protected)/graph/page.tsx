@@ -1,7 +1,7 @@
 'use client';
 
+import { MenuSidebar } from '@/components/chrome/MenuSidebar';
 import { Topbar } from '@/components/chrome/Topbar';
-import { CanvasHelper } from '@/components/graph/CanvasHelper';
 import { GraphAiBar } from '@/components/graph/GraphAiBar';
 import { GraphCanvas } from '@/components/graph/GraphCanvas';
 import { Inspector } from '@/components/panels/Inspector';
@@ -31,6 +31,7 @@ function GraphPageContent() {
   const scenarioPanelOpen = useUIStore((state) => state.scenarioPanelOpen);
   const setScenarioPanelOpen = useUIStore((state) => state.setScenarioPanelOpen);
   const resetDetailPanels = useUIStore((state) => state.resetDetailPanels);
+  const developerMode = useUIStore((state) => state.developerMode);
   
   const loadProjects = useProjectStore((s) => s.load);
   const projects = useProjectStore((s) => s.projects);
@@ -83,12 +84,12 @@ function GraphPageContent() {
       <ProjectAutoComputer />
       <div className="flex h-screen flex-col">
         <Topbar />
+        <MenuSidebar />
 
         <div className="flex flex-1 overflow-hidden">
           <div className="flex-1 relative overflow-hidden">
             <GraphCanvas />
-            <CanvasHelper />
-            <GraphAiBar />
+            {developerMode && <GraphAiBar />}
             <LibraryPanelWrapper />
           </div>
 

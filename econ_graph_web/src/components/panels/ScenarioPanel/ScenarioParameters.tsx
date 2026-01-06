@@ -11,7 +11,7 @@ import type {
   ScenarioNodeOverride,
 } from "@/lib/types";
 import { Layers, Plus } from "lucide-react";
-import type React from "react";
+import React from "react";
 import { ParameterCard } from "./ParameterCard";
 import type { CompositeSection, OverrideTarget } from "./types";
 import { makeVirtualNodeFromParam } from "./utils";
@@ -57,6 +57,10 @@ export interface ScenarioParametersProps {
     React.SetStateAction<Record<string, { ok: boolean; message: string }>>
   >;
   setSelectedNodeId: (id: string) => void;
+  selectedNodeIds: string[];
+  setSelectedNodeIds: (ids: string[]) => void;
+  addSelectedNode: (id: string) => void;
+  removeSelectedNode: (id: string) => void;
   isSavingOverride: boolean;
   isValidatingOverride: boolean;
   onValidateOverride: (params: {
@@ -108,6 +112,10 @@ export function ScenarioParameters({
   setOverrideCodes,
   setValidationResults,
   setSelectedNodeId,
+  selectedNodeIds,
+  setSelectedNodeIds,
+  addSelectedNode,
+  removeSelectedNode,
   isSavingOverride,
   isValidatingOverride,
   onValidateOverride,
@@ -155,6 +163,10 @@ export function ScenarioParameters({
         setOverrideCodes={setOverrideCodes}
         setValidationResults={setValidationResults}
         setSelectedNodeId={setSelectedNodeId}
+        selectedNodeIds={selectedNodeIds}
+        setSelectedNodeIds={setSelectedNodeIds}
+        addSelectedNode={addSelectedNode}
+        removeSelectedNode={removeSelectedNode}
         isSavingOverride={isSavingOverride}
         isValidatingOverride={isValidatingOverride}
         onValidateOverride={onValidateOverride}

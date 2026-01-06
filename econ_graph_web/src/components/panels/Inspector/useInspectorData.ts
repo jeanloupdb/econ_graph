@@ -47,6 +47,8 @@ export function useInspectorData() {
     (s) => s.setScenarioPanelHighlight
   );
   const setLibraryPanelOpen = useUIStore((s) => s.setLibraryPanelOpen);
+  const setNodeEditorMode = useUIStore((s) => s.setNodeEditorMode);
+  const setNodeEditorNodeId = useUIStore((s) => s.setNodeEditorNodeId);
   const queryClient = useQueryClient();
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -124,7 +126,6 @@ export function useInspectorData() {
   const showEditModal = useUIStore((s) => s.editNodeModalOpen);
   const setShowEditModal = useUIStore((s) => s.setEditNodeModalOpen);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-  const [showEditApiModal, setShowEditApiModal] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
   const [computePending, setComputePending] = useState(false);
   const [transforming, setTransforming] = useState(false);
@@ -521,12 +522,21 @@ export function useInspectorData() {
   }, [compositeEditorUrl, resetDetailPanels, router, activeScenarioId, resetToBaseline]);
 
   const handleOpenEditNode = useCallback(() => {
-    setShowEditModal(true);
-  }, []);
+    if (selectedNodeId) {
+      setNodeEditorNodeId(selectedNodeId);
+      setNodeEditorMode('edit');
+      // Close inspector to allow NodeEditor to show
+      useUIStore.getState().setInspectorOpen(false);
+    }
+  }, [selectedNodeId, setNodeEditorNodeId, setNodeEditorMode]);
 
   const handleOpenEditApiNode = useCallback(() => {
-    setShowEditApiModal(true);
-  }, []);
+    if (!selectedNodeId) return;
+    setNodeEditorNodeId(selectedNodeId);
+    setNodeEditorMode('edit-api');
+    // Close inspector to allow NodeEditor to show
+    useUIStore.getState().setInspectorOpen(false);
+  }, [selectedNodeId, setNodeEditorNodeId, setNodeEditorMode]);
 
   const handleRequestDelete = useCallback(() => {
     setConfirmDeleteOpen(true);
@@ -647,6 +657,7 @@ export function useInspectorData() {
       activeScenarioName: activeScenario?.name || null,
       activeScenarioColor: activeScenario?.color || null,
       onSmartFix: handleOpenSmartFix,
+      isRoot: depsIds.length === 0,
     } satisfies React.ComponentProps<typeof ValueCard>;
   }, [
     typedNode,
@@ -667,6 +678,7 @@ export function useInspectorData() {
     displayIdentifier,
     openScenarioPanel,
     handleOpenSmartFix,
+    depsIds.length,
   ]);
 
   const algorithmProps = algorithmCode
@@ -674,6 +686,16 @@ export function useInspectorData() {
         code: algorithmCode,
         variables: algorithmVariables,
         onEdit: !isCompositeNode ? handleOpenEditNode : undefined,
+        nodeLabel: typedNode?.label,
+        nodeId: selectedNodeId,
+        onSave: !isCompositeNode && selectedNodeId ? async (code: string) => {
+          await graphActions.updateNode(selectedNodeId, {
+            computation_definition: code,
+          });
+          if (computeFn) {
+            await computeFn(selectedNodeId);
+          }
+        } : undefined,
       } satisfies React.ComponentProps<typeof AlgorithmBlock>)
     : null;
 
@@ -738,6 +760,7 @@ export function useInspectorData() {
 
   const headerProps = {
     node: typedNode,
+    palette: typedNode ? getPaletteForNode(typedNode.id) : undefined,
     isCompositeNode,
     canTransformToComposite,
     transforming,
@@ -785,8 +808,6 @@ export function useInspectorData() {
     isCompositeNode,
     showEditModal,
     setShowEditModal,
-    showEditApiModal,
-    setShowEditApiModal,
     confirmDeleteOpen,
     setConfirmDeleteOpen,
     handleDelete,
@@ -796,6 +817,8 @@ export function useInspectorData() {
     smartFixOpen,
     setSmartFixOpen,
     handleApplySmartFix,
+    node: typedNode,
+    onEditNode: handleOpenEditNode,
     errorInputNodes,
     onNavigate: navigateToNode,
   };

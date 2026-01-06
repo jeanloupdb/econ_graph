@@ -23,6 +23,7 @@ interface CodeEditorProps {
   suggestions?: string[];
   isLoading?: boolean;
   className?: string;
+  padding?: { top?: number; bottom?: number };
 }
 
 export function CodeEditor({
@@ -40,7 +41,9 @@ export function CodeEditor({
   suggestions = [],
   isLoading = false,
   className,
-}: CodeEditorProps) {
+  transparent = false,
+  padding,
+}: CodeEditorProps & { transparent?: boolean; padding?: { top?: number; bottom?: number } }) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const isEmpty = !value || value.trim().length === 0;
@@ -157,6 +160,17 @@ export function CodeEditor({
       if (!container) return;
       const target = e.target as HTMLElement | null;
       if (!target || !container.contains(target)) return;
+
+      // Ne rien faire si l'événement a déjà été stoppé (par un autre éditeur)
+      if (e.defaultPrevented) return;
+
+      // Ne rien faire si l'événement provient du NodeEditor Monaco
+      if (target.closest('[data-node-editor-monaco]')) return;
+
+      // Ne rien faire si l'événement provient d'un autre éditeur Monaco
+      const isInMonacoEditor = target.closest('.monaco-editor');
+      if (isInMonacoEditor && !container.contains(isInMonacoEditor)) return;
+
       const isSpace = e.key === ' ' || e.code === 'Space';
       if (isSpace && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
@@ -397,7 +411,7 @@ export function CodeEditor({
       onMouseDown={handleContainerMouseDown}
       onKeyDown={handleContainerKeyDown}
       style={{ height }}
-      className={`border border-zinc-300 dark:border-zinc-700 rounded-md overflow-hidden relative flex flex-col ${className || ''}`}
+      className={`border border-zinc-300 dark:border-zinc-700 rounded-md overflow-hidden relative flex flex-col ${transparent ? 'transparent-monaco' : ''} ${className || ''}`}
     >
       {/* Loading Overlay */}
       {isLoading && (
@@ -487,6 +501,7 @@ export function CodeEditor({
             suggestOnTriggerCharacters: false,
             wordBasedSuggestions: 'off',
             scrollbar: { horizontal: 'auto' },
+            padding: padding || { top: 0, bottom: 0 },
           }}
           loading={
             <div className="flex items-center justify-center h-full bg-zinc-900 text-zinc-400">
@@ -496,7 +511,7 @@ export function CodeEditor({
         />
       </div>
       {showVariablePalette && paletteItems.length > 0 && (
-        <div ref={paletteRef} className="border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
+        <div ref={paletteRef} className="border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 max-h-[120px] overflow-y-auto">
           <div className="flex flex-wrap gap-3 p-2 text-[11px]">
             <div className="flex-1 min-w-[120px]">
               <div className="text-[10px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
@@ -541,6 +556,13 @@ export function CodeEditor({
         .eg-var-computed { background: rgba(59, 130, 246, 0.15); }
         .eg-var-manual { background: rgba(245, 158, 11, 0.15); }
         .vs-dark .eg-var { border-bottom-color: rgba(255,255,255,0.4); }
+        ${transparent ? `
+        .transparent-monaco .monaco-editor,
+        .transparent-monaco .monaco-editor-background,
+        .transparent-monaco .monaco-editor .margin {
+            background-color: transparent !important;
+        }
+        ` : ''}
       `}</style>
     </div>
   );

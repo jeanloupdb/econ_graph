@@ -2,21 +2,9 @@
  * Hook pour se connecter au stream SSE du pipeline multi-agents
  */
 
-import { apiClient } from '@/lib/api/client';
+import { API_BASE_URL, apiClient } from '@/lib/api/client';
 import { useAgentStore, type AgentLog, type AgentStatus } from '@/store/agentState';
 import { useEffect, useRef } from 'react';
-
-// Pour SSE, on doit toujours utiliser l'URL accessible depuis le navigateur (localhost:8000)
-// car EventSource s'exécute côté client uniquement
-const getClientApiUrl = () => {
-  if (typeof window === 'undefined') {
-    return 'http://localhost:8000';
-  }
-  // En production ou dev, toujours pointer vers le port 8000 sur le même hostname
-  return `${window.location.protocol}//${window.location.hostname}:8000`;
-};
-
-const API_BASE_URL = getClientApiUrl();
 
 interface UseAgentStreamOptions {
   onComplete?: (projectId?: string, error?: string) => void;
@@ -123,7 +111,8 @@ export function useAgentStream(taskId: string | null, options?: UseAgentStreamOp
  */
 export async function startAgentProjectCreation(prompt: string, file?: File): Promise<string> {
   const formData = new FormData();
-  formData.append('prompt', prompt);
+  const enhancedPrompt = `${prompt}\n\nIMPORTANT: Pour chaque nœud créé, tu DOIS inclure une description qui donne une définition claire et concise de la notion économique ou mathématique représentée par ce nœud.`;
+  formData.append('prompt', enhancedPrompt);
   if (file) {
     formData.append('file', file);
   }

@@ -60,18 +60,30 @@ export function useAiGraphAction() {
   const router = useRouter();
 
   const execute = async (
-    prompt: string, 
-    context?: string, 
-    currentNodes?: any[], 
+    prompt: string,
+    context?: string,
+    currentNodes?: any[],
     currentScenarios?: Scenario[],
     graphActions?: any,
     mode: 'project' | 'composite' = 'project',
     focusNodeIds: string[] = [],
     availableComposites: AiCompositeDefinition[] = [],
+    currentEdges?: any[], // Add edges parameter
     onSuccess?: () => void
   ) => {
     setIsPending(true);
     try {
+      // Build a map of node dependencies from edges
+      const nodeInputsMap = new Map<string, string[]>();
+      if (currentEdges) {
+        currentEdges.forEach((edge: any) => {
+          if (!nodeInputsMap.has(edge.target)) {
+            nodeInputsMap.set(edge.target, []);
+          }
+          nodeInputsMap.get(edge.target)!.push(edge.source);
+        });
+      }
+
       // Map current nodes to AI context format
       const aiContextNodes = currentNodes?.map((n: any) => ({
         id: n.id,
@@ -82,7 +94,8 @@ export function useAiGraphAction() {
         description: n.notes,
         value: n.computation_definition?.match(/return\s+([\d.]+)/)?.[1] ? parseFloat(n.computation_definition.match(/return\s+([\d.]+)/)![1]) : undefined,
         code: n.computation_definition,
-        composite_id: n.composite_id
+        composite_id: n.composite_id,
+        inputs: nodeInputsMap.get(n.id) || [] // Populate inputs from edges
       })) || [];
 
       // Map scenarios to AI context format

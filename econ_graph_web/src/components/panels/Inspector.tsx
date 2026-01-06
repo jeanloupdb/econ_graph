@@ -1,7 +1,7 @@
 "use client";
 
-import { NewApiNodeModal } from "@/components/forms/NewApiNodeModal";
-import { NewNodeModal } from "@/components/forms/NewNodeModal";
+import { SidebarContainer } from "@/components/chrome/sidebar/SidebarContainer";
+import { CollapsibleSection } from "@/components/chrome/sidebar/SidebarSection";
 import { AlgorithmPanel } from "@/components/panels/AlgorithmPanel";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,12 +11,16 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { useUIStore } from "@/store/uiState";
+import {
+    ChevronLeft,
+    Edit3,
+    Loader2
+} from "lucide-react";
 import { AlgorithmBlock } from "./Inspector/AlgorithmBlock";
 import { CompositeInputs } from "./Inspector/CompositeInputs";
 import { DependenciesList } from "./Inspector/DependenciesList";
 import { EdgeInspector } from "./Inspector/EdgeInspector";
-import { InspectorBreadcrumbs } from "./Inspector/InspectorBreadcrumbs";
 import { InspectorHeader } from "./Inspector/InspectorHeader";
 import { NotesCard } from "./Inspector/NotesCard";
 import { ProviderBlock } from "./Inspector/ProviderBlock";
@@ -26,7 +30,18 @@ import { useInspectorData } from "./Inspector/useInspectorData";
 import { ValueCard } from "./Inspector/ValueCard";
 
 export function Inspector() {
+  const setInspectorOpen = useUIStore((s) => s.setInspectorOpen);
   const data = useInspectorData();
+
+  const getContainerStyles = () => {
+    // Unified baseline style for all modes
+    return "bg-white/60 dark:bg-black/40 border-white/20 backdrop-blur-xl shadow-lg";
+  };
+
+  const getHeaderStyles = () => {
+    // Unified baseline style for all modes
+    return "text-zinc-900 dark:text-zinc-100 border-white/10 dark:border-white/5";
+  };
 
   if (!data.inspectorOpen) {
     return null;
@@ -55,50 +70,48 @@ export function Inspector() {
     rootDependenciesProps,
     compositeInputsProps,
     notesNodeId,
-    typedNode,
+    node: typedNode,
     isCompositeNode,
     showEditModal,
     setShowEditModal,
-    showEditApiModal,
-    setShowEditApiModal,
     confirmDeleteOpen,
     setConfirmDeleteOpen,
     handleDelete,
     deletePending,
     selectedNodeId,
     scrollRef,
-  } = data;
+    onEditNode,
+  } = useInspectorData();
+
+  const setNodeEditorMode = useUIStore((s) => s.setNodeEditorMode);
+  const setNodeEditorNodeId = useUIStore((s) => s.setNodeEditorNodeId);
+
+  const handleOpenEditNode = (id: string) => {
+    setNodeEditorNodeId(id);
+    setNodeEditorMode('edit');
+  };
 
   return (
-    <div
-      className="flex h-full flex-col border-l border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950 relative"
-      style={containerStyle}
+    <SidebarContainer
+      className={`w-96 z-40 ${getContainerStyles()}`}
+      scrollRef={scrollRef as React.RefObject<HTMLDivElement>}
+      header={
+        <InspectorHeader
+          {...headerProps}
+          className={`w-full ${getHeaderStyles()}`}
+        />
+      }
     >
-      <div
-        className="absolute left-0 top-0 h-full w-2 z-20 cursor-col-resize bg-zinc-200/70 dark:bg-zinc-600/50 hover:bg-zinc-300/80 dark:hover:bg-zinc-500/70 transition-colors"
-        onMouseDown={startResize}
-        aria-label="Redimensionner la barre latérale"
-        role="separator"
-      >
-        <div className="absolute inset-y-1/2 -translate-y-1/2 left-0 right-0 flex items-center justify-center">
-          <div className="w-px h-8 bg-zinc-500 dark:bg-zinc-200 rounded-full opacity-80" />
-        </div>
-      </div>
-
-      <InspectorHeader {...headerProps} />
-      <InspectorBreadcrumbs {...breadcrumbProps} />
-
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 custom-scroll">
         {panelStack.length > 0 && (
           <div className="sticky top-0 z-10 -mt-1 mb-2">
-            <div className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+            <div className="flex items-center justify-between gap-2 rounded px-2 py-1 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
               <button
-                className="flex items-center gap-1 px-2 py-1 rounded bg-white dark:bg-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-600 border border-zinc-200 dark:border-zinc-600 text-sm text-zinc-900 dark:text-zinc-50"
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white dark:bg-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-600 border border-zinc-200 dark:border-zinc-600 text-xs text-zinc-900 dark:text-zinc-50"
                 onClick={popPanel}
               >
-                <ChevronLeft className="h-4 w-4" /> Retour
+                <ChevronLeft className="h-3 w-3" /> Retour
               </button>
-              <div className="truncate text-sm text-zinc-900 dark:text-zinc-50">
+              <div className="truncate text-xs text-zinc-900 dark:text-zinc-50">
                 {panelStack.map((panel, index) => (
                   <span key={panel.key} className="opacity-90">
                     {panel.title}
@@ -111,16 +124,16 @@ export function Inspector() {
         )}
 
         {isLoading && (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
+          <div className="flex items-center justify-center py-4">
+            <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
           </div>
         )}
 
         {isError && (
-          <div className="p-3 rounded-md border border-red-200 bg-red-50 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300 flex items-start justify-between gap-3">
+          <div className="p-2 rounded border border-red-200 bg-red-50 text-xs text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300 flex items-start justify-between gap-2">
             <div>
               <div className="font-medium mb-0.5">Erreur lors du chargement</div>
-              <div>
+              <div className="text-[11px]">
                 Impossible de charger le nœud {selectedNodeId}. {(error as any)?.message || ""}
               </div>
             </div>
@@ -129,6 +142,7 @@ export function Inspector() {
               variant="outline"
               onClick={() => refreshNodes?.()}
               aria-label="Réessayer"
+              className="h-6 text-xs"
             >
               Réessayer
             </Button>
@@ -138,24 +152,55 @@ export function Inspector() {
         {!isLoading && stackPlaceholder && <StackPanelRenderer />}
 
         {!isLoading && !isError && typedNode && (
-          <div className="space-y-6">
-            {valueCardProps && <ValueCard {...valueCardProps} />}
+          <div className="flex flex-col">
+            {valueCardProps && (
+              <CollapsibleSection title="Valeur" defaultOpen={true} noPadding={true}>
+                 <ValueCard {...valueCardProps} />
+              </CollapsibleSection>
+            )}
 
-            {algorithmProps && <AlgorithmBlock {...algorithmProps} />}
+            {algorithmProps && (
+               <CollapsibleSection
+                 title="Algorithme"
+                 defaultOpen={false}
+               >
+                 <AlgorithmBlock {...algorithmProps} />
+               </CollapsibleSection>
+            )}
 
-            {providerProps && <ProviderBlock {...providerProps} />}
+            {providerProps && (
+               <CollapsibleSection title="Provider" defaultOpen={false} noPadding={true}>
+                  <ProviderBlock {...providerProps} />
+               </CollapsibleSection>
+            )}
 
             {directDependenciesProps && (
-              <DependenciesList {...directDependenciesProps} />
+               <CollapsibleSection title="Dépendances" defaultOpen={false} noPadding={true}>
+                  <DependenciesList {...directDependenciesProps} />
+               </CollapsibleSection>
             )}
 
-            {compositeInputsProps && <CompositeInputs {...compositeInputsProps} />}
+            {compositeInputsProps && (
+               <CollapsibleSection title="Entrées Composite" defaultOpen={false} noPadding={true}>
+                  <CompositeInputs {...compositeInputsProps} />
+               </CollapsibleSection>
+            )}
 
             {rootDependenciesProps && (
-              <DependenciesList {...rootDependenciesProps} />
+               <CollapsibleSection title="Dépendances Racines" defaultOpen={false} noPadding={true}>
+                  <DependenciesList {...rootDependenciesProps} />
+               </CollapsibleSection>
             )}
 
-            {notesNodeId && <NotesCard nodeId={notesNodeId} />}
+            {notesNodeId && (
+               <CollapsibleSection
+                 title="Notes"
+                 defaultOpen={true}
+                 noPadding={true}
+               >
+                  <NotesCard nodeId={notesNodeId} />
+               </CollapsibleSection>
+            )}
 
             {panelStack.length > 0 &&
               panelStack[panelStack.length - 1].type === "algorithm" && (
@@ -169,45 +214,22 @@ export function Inspector() {
         )}
 
         {!isLoading && !typedNode && (
-          <p className="text-sm text-zinc-500">Nœud introuvable</p>
-        )}
-      </div>
-
-      {showEditModal &&
-        typedNode &&
-        !isCompositeNode &&
-        !(typedNode as any).provider_enabled && (
-          <NewNodeModal
-            open={showEditModal}
-            onClose={() => setShowEditModal(false)}
-            nodeId={typedNode.id}
-          />
-        )}
-      {showEditApiModal &&
-        typedNode &&
-        !isCompositeNode &&
-        (typedNode as any).provider_enabled && (
-          <NewApiNodeModal
-            open={showEditApiModal}
-            onClose={() => setShowEditApiModal(false)}
-            /* edit mode */ {...({} as any)}
-            nodeId={typedNode.id}
-          />
+          <p className="text-xs text-zinc-500 p-4">Nœud introuvable</p>
         )}
 
       <Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Supprimer le nœud</DialogTitle>
+            <DialogTitle className="text-base">Supprimer le nœud</DialogTitle>
           </DialogHeader>
-          <div className="text-sm text-zinc-600 dark:text-zinc-300 space-y-2">
+          <div className="text-xs text-zinc-600 dark:text-zinc-300 space-y-1.5">
             <p>
               Êtes-vous sûr de vouloir supprimer ce nœud
               {typedNode ? ` « ${typedNode.label} »` : ""} ? Cette action est
               irréversible.
             </p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Cette suppression n’impacte pas ses nœuds parents ou enfants (les
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+              Cette suppression n'impacte pas ses nœuds parents ou enfants (les
               liens resteront, mais le nœud supprimé disparaîtra).
             </p>
           </div>
@@ -215,6 +237,7 @@ export function Inspector() {
             <Button
               variant="outline"
               onClick={() => setConfirmDeleteOpen(false)}
+              className="h-7 text-xs"
             >
               Annuler
             </Button>
@@ -222,9 +245,10 @@ export function Inspector() {
               variant="destructive"
               onClick={handleDelete}
               disabled={deletePending}
+              className="h-7 text-xs"
             >
               {deletePending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 "Supprimer"
               )}
@@ -234,7 +258,6 @@ export function Inspector() {
       </Dialog>
 
       <style>{`
-        .custom-scroll { scrollbar-gutter: stable both-edges; }
         .custom-scroll::-webkit-scrollbar { height: 8px; width: 10px; }
         .custom-scroll::-webkit-scrollbar-thumb { background: rgba(100,100,100,.35); border-radius: 8px; }
         .custom-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -252,6 +275,6 @@ export function Inspector() {
           onNavigate={data.onNavigate}
         />
       )}
-    </div>
+    </SidebarContainer>
   );
 }

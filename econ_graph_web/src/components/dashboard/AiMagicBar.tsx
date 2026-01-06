@@ -2,21 +2,18 @@
 
 import { AiInput } from "@/components/ui/ai-input";
 import { cn } from "@/lib/utils";
+import { useUIStore } from "@/store/uiState";
 import { FileCode, FileSpreadsheet, FileText, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const DEFAULT_QUICK_STARTERS = [
   {
-    label: "Business Plan SaaS",
-    prompt: "Crée un modèle SaaS B2B complet avec Acquisition (CAC), Rétention (Churn), Revenus (MRR) et marge brute.",
-  },
-  {
     label: "ROI Campagne Pub",
     prompt: "Calcule le ROI d'une campagne marketing avec Budget, CPC, Taux de conversion et Panier moyen.",
   },
   {
-    label: "Rentabilité Locative",
-    prompt: "Modèle d'investissement immobilier avec Prix d'achat, Loyer, Charges, Taxe foncière et Cash Flow net.",
+    label: "E-commerce Supply Chain",
+    prompt: "Modélise mon revenu en e-commerce en prenant en compte toute la supply chain",
   },
 ];
 
@@ -61,6 +58,9 @@ export function AiMagicBar({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  const developerMode = useUIStore((s) => s.developerMode);
+  if (!developerMode) return null;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-[60] pointer-events-none">
@@ -130,20 +130,33 @@ export function AiMagicBar({
           )}
 
           {/* Input */}
-          <div className="relative w-full">
-            <AiInput
-              value={prompt}
-              onChange={setPrompt}
-              onGenerate={() => handleGenerate(file || undefined)}
-              isGenerating={isPending}
-              placeholder={placeholder}
-              className="shadow-2xl border-zinc-200/50 dark:border-zinc-700/50 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl"
-              allowFileUpload={true}
-              selectedFile={file}
-              onFileSelect={setFile}
-              renderFileExternal={true}
-              onProcessingChange={setIsFileProcessing}
-            />
+          <div className="relative w-full group">
+            {/* Gradient Border - Only visible on focus */}
+            <div className={cn(
+              "absolute -inset-[1px] rounded-xl bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 transition-opacity duration-500",
+              isFocused ? "opacity-50" : "opacity-0"
+            )} />
+
+            <div className={cn(
+              "relative rounded-xl transition-all duration-300",
+              isFocused 
+                ? "bg-white dark:bg-zinc-900 shadow-2xl" 
+                : "bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl shadow-2xl border border-zinc-200/50 dark:border-zinc-700/50"
+            )}>
+              <AiInput
+                value={prompt}
+                onChange={setPrompt}
+                onGenerate={() => handleGenerate(file || undefined)}
+                isGenerating={isPending}
+                placeholder={placeholder}
+                className="shadow-none border-none bg-transparent"
+                allowFileUpload={true}
+                selectedFile={file}
+                onFileSelect={setFile}
+                renderFileExternal={true}
+                onProcessingChange={setIsFileProcessing}
+              />
+            </div>
           </div>
         </div>
       </div>

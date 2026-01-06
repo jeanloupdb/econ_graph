@@ -222,6 +222,7 @@ CONVERSION STRUCTURE → API:
     "slug": entity["id"],
     "label": entity["label"],
     "unit": entity["unit"],
+    "notes": entity.get("description"), // Mapper description vers notes
     "status": "imposed",  // TOUJOURS "imposed" pour les paramètres
     "computation_definition": "def compute(): return " + str(entity["default_value"]),  // CODE FIRST: Fonction constante
     "value_computed": null  // Laisser le système calculer
@@ -235,10 +236,10 @@ CONVERSION STRUCTURE → API:
     "slug": entity["id"],
     "label": entity["label"],
     "unit": entity["unit"],
+    "notes": entity.get("description"), // Mapper description vers notes
     "status": "implied",  // TOUJOURS "implied" pour les calculs
     "computation_definition": "def compute(arg1, arg2, ...): return expression",
     // ☝️ Les arguments sont les slugs de entity["inputs"] dans le même ordre
-    // ☝️ L'expression est entity["formula"]
     // ☝️ L'expression est entity["formula"]
     "value_computed": null
   }}
@@ -391,6 +392,7 @@ async def executeur(state: PipelineState) -> PipelineState:
                     status=status,
                     computation_definition=computation_definition,
                     value_computed=None,  # Sera calculé par le validateur
+                    notes=payload.get("notes"),
                     pos_x=0,
                     pos_y=0,
                     confidence=1.0

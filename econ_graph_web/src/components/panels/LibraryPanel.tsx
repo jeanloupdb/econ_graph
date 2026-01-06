@@ -1,8 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useComposites } from "@/lib/api/hooks";
+import { useScenarioStore } from "@/store/scenarioState";
 import { useUIStore } from "@/store/uiState";
-import { Layers, Loader2, Plus, Search, X } from "lucide-react";
+import { ChevronLeft, Layers, Loader2, Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CompositePreview } from "../composites/CompositePreview";
@@ -12,6 +13,38 @@ export function LibraryPanel() {
   const setLibraryPanelOpen = useUIStore((s) => s.setLibraryPanelOpen);
   const [search, setSearch] = useState("");
   const router = useRouter();
+
+  // Mode determination for styling
+  const activeScenarioId = useScenarioStore((s) => s.activeScenarioId);
+  const comparisonEnabled = useScenarioStore((s) => s.comparisonEnabled);
+  
+  const mode = comparisonEnabled
+    ? "comparison"
+    : activeScenarioId
+    ? "scenario"
+    : "baseline";
+
+  const getContainerStyles = () => {
+    switch (mode) {
+      case "scenario":
+        return "bg-slate-950 border-slate-800/50 backdrop-blur-xl";
+      case "comparison":
+        return "bg-[#170600] border-[#331000]/50 backdrop-blur-xl";
+      default: // baseline
+        return "bg-white/60 dark:bg-black/40 border-white/20 backdrop-blur-xl shadow-lg";
+    }
+  };
+
+  const getHeaderStyles = () => {
+    switch (mode) {
+      case "scenario":
+        return "text-slate-200 border-white/5";
+      case "comparison":
+        return "text-orange-100 border-white/5";
+      default:
+        return "text-zinc-900 dark:text-zinc-100 border-white/10 dark:border-white/5";
+    }
+  };
 
   const filtered = composites.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase())
@@ -23,11 +56,24 @@ export function LibraryPanel() {
   };
 
   return (
-    <div className="flex h-full w-80 flex-col border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-        <div className="flex items-center gap-2 font-semibold text-zinc-900 dark:text-zinc-100">
-          <Layers className="h-4 w-4" />
-          Library
+    <div className={`fixed top-[4.5rem] left-2 bottom-2 w-80 flex flex-col rounded-2xl border z-40 transition-all duration-300 ${getContainerStyles()}`}>
+      <div className={`flex items-center justify-between px-4 py-3 border-b shrink-0 ${getHeaderStyles()}`}>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setLibraryPanelOpen(false)}
+            className={`p-1 -ml-2 rounded-lg transition-colors ${
+                mode === 'baseline' 
+                    ? 'hover:bg-white/20 dark:hover:bg-white/10 text-zinc-500 dark:text-zinc-400' 
+                    : 'hover:bg-white/10 text-white/60 hover:text-white'
+            }`}
+            title="Retour au menu"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div className="flex items-center gap-2 font-semibold">
+            <Layers className="h-4 w-4" />
+            Library
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <Button
@@ -38,14 +84,6 @@ export function LibraryPanel() {
             title="Créer un nouveau composite"
           >
             <Plus className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setLibraryPanelOpen(false)}
-          >
-            <X className="h-4 w-4" />
           </Button>
         </div>
       </div>
