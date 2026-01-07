@@ -70,6 +70,10 @@ COPY alembic.ini /app/
 COPY app/ /app/app/
 COPY infra/ /app/infra/
 
+# Copy startup script
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app
@@ -77,10 +81,6 @@ RUN useradd -m -u 1000 appuser && \
 USER appuser
 
 EXPOSE 8000
-
-# Copy startup script
-COPY start.sh /app/start.sh
-RUN chmod +x /app/start.sh
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
