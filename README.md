@@ -1,6 +1,29 @@
-# Econ Graph
+# Smart Graph
 
 Economic graph visualization platform with FastAPI backend and Next.js frontend.
+
+---
+
+## 🎨 REDESIGN DOCUMENTATION
+
+**You're looking for the redesign documentation?**
+
+➡️ **[START HERE - Redesign Guide](./START_HERE.md)** ← Complete redesign documentation
+
+### 📚 Available Guides:
+
+1. **[START_HERE.md](./START_HERE.md)** - Quick start (30 min) + complete 4-week plan
+2. **[REDESIGN_INDEX.md](./REDESIGN_INDEX.md)** - Navigation guide for all docs
+3. **[DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md)** - Philosophy, colors, typography, animations
+4. **[VISUAL_IDENTITY_GUIDE.md](./VISUAL_IDENTITY_GUIDE.md)** - Before/After examples with code
+5. **[DESIGN_CHEATSHEET.md](./DESIGN_CHEATSHEET.md)** - Quick reference (1 page)
+6. **[SHADCN_LAYOUTS_SYSTEM.md](./SHADCN_LAYOUTS_SYSTEM.md)** - Layout patterns with Shadcn
+7. **[REDESIGN_ROADMAP.md](./REDESIGN_ROADMAP.md)** - Complete 4-week roadmap
+8. **[DEV_CHEATSHEET.md](./DEV_CHEATSHEET.md)** - Daily dev commands & patterns
+
+**Total:** ~5500 lines of documentation ready to use!
+
+---
 
 ## Project Structure
 

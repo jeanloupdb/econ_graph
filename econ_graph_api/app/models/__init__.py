@@ -5,5 +5,6 @@ from .user import User
 from .project import Project
 from .project_collaborator import ProjectCollaborator
 from .edge import Edge
+from .ai_usage import AIUsage
 
-__all__ = ["Node", "Status", "Scenario", "ScenarioNodeOverride", "Composite", "User", "Project", "ProjectCollaborator", "Edge"]
+__all__ = ["Node", "Status", "Scenario", "ScenarioNodeOverride", "Composite", "User", "Project", "ProjectCollaborator", "Edge", "AIUsage"]

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.nodes import router as nodes_router
+from app.api.edges import router as edges_router
 from app.api.projects import router as projects_router
 from app.api.composites import router as composites_router
 from app.api.compute import router as compute_router
@@ -22,7 +23,7 @@ configure_logging()
 logger = get_logger(__name__)
 
 app = FastAPI(
-    title="Econ Graph API",
+    title="Smart Graph API",
     version="0.4.0",
     description="Economic Graph API with coherence checking engine",
 )
@@ -45,6 +46,7 @@ from app.api.viewer import router as viewer_router
 # Include routers
 app.include_router(auth_router)
 app.include_router(nodes_router)
+app.include_router(edges_router)
 # Rules router disabled: focusing API on graph CRUD only
 app.include_router(compute_router)
 app.include_router(projects_router)

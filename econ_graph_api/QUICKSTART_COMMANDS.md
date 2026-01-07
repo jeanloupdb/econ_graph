@@ -1,4 +1,4 @@
-# Quick Start Commands - Econ Graph API
+# Quick Start Commands - Smart Graph API
 
 Guide rapide des commandes essentielles pour démarrer et développer efficacement.
 
@@ -31,6 +31,7 @@ curl http://localhost:8000/docs
 ## ⚡ Workflow de Développement Quotidien
 
 ### Démarrer la journée
+
 ```bash
 # Démarrer tous les services
 make up
@@ -40,6 +41,7 @@ make logs
 ```
 
 ### Faire des modifications de code
+
 ```bash
 # Modifier app/api/nodes.py ou autre fichier...
 
@@ -51,6 +53,7 @@ make down && make up
 ```
 
 ### Tester les changements
+
 ```bash
 # Exécuter tous les tests
 make test
@@ -66,6 +69,7 @@ make metrics
 ```
 
 ### Finir la journée
+
 ```bash
 # Arrêter tous les conteneurs
 make down
@@ -114,17 +118,20 @@ curl http://localhost:8000/rules/check
 ## 🗄️ Gestion de la Base de Données
 
 ### Créer une nouvelle migration
+
 ```bash
 make rev
 # Entrer le message de migration quand demandé
 ```
 
 ### Appliquer les migrations
+
 ```bash
 make migrate
 ```
 
 ### Accéder à la base PostgreSQL
+
 ```bash
 docker compose exec db psql -U econ_user -d econ
 ```
@@ -145,6 +152,7 @@ SELECT * FROM nodes;
 ## 🔧 Dépannage Rapide
 
 ### Le build est lent
+
 ```bash
 # Nettoyer le cache et reconstruire
 make prune-cache
@@ -153,6 +161,7 @@ make build
 ```
 
 ### Erreur de dépendances Python
+
 ```bash
 # Rebuild sans cache
 make build-no-cache
@@ -160,6 +169,7 @@ make up
 ```
 
 ### Erreur de base de données
+
 ```bash
 # Réinitialiser complètement la DB
 make down
@@ -168,6 +178,7 @@ make up
 ```
 
 ### Voir les logs d'erreur
+
 ```bash
 # Logs de l'API
 make logs
@@ -178,6 +189,7 @@ docker compose logs migrate
 ```
 
 ### Nettoyer complètement Docker
+
 ```bash
 # Attention: supprime TOUT (images, conteneurs, volumes)
 make prune
@@ -188,16 +200,19 @@ make prune
 ## 📊 Monitoring et Diagnostic
 
 ### Vérifier l'état des conteneurs
+
 ```bash
 make ps
 ```
 
 ### Voir l'utilisation des ressources
+
 ```bash
 make stats
 ```
 
 ### Tester tous les endpoints
+
 ```bash
 # Health check
 curl http://localhost:8000/health
@@ -216,6 +231,7 @@ curl http://localhost:8000/metrics | head -30
 ```
 
 ### Ouvrir un shell dans le conteneur
+
 ```bash
 make shell
 
@@ -231,27 +247,32 @@ exit
 ## 🧪 Tests et Qualité du Code
 
 ### Exécuter tous les tests
+
 ```bash
 make test
 ```
 
 ### Tests avec couverture détaillée
+
 ```bash
 docker compose run --rm api pytest -v --cov=app --cov-report=html
 # Ouvrir htmlcov/index.html dans un navigateur
 ```
 
 ### Formatter le code
+
 ```bash
 make fmt
 ```
 
 ### Linter le code
+
 ```bash
 make lint
 ```
 
 ### Tout vérifier (format + lint + tests)
+
 ```bash
 make check
 ```
@@ -322,11 +343,13 @@ python
 ## 📈 Benchmarking des Performances
 
 ### Mesurer les temps de build
+
 ```bash
 make benchmark-build
 ```
 
 ### Profiler l'application
+
 ```bash
 # Installer py-spy dans le conteneur
 docker compose run --rm api pip install py-spy
@@ -340,11 +363,13 @@ docker compose run --rm api py-spy record -o profile.svg -- python -m uvicorn ap
 ## 🔐 Sécurité
 
 ### Scanner l'image pour des vulnérabilités
+
 ```bash
 docker scan econ-api:latest
 ```
 
 ### Vérifier les dépendances Python
+
 ```bash
 docker compose run --rm api pip install safety
 docker compose run --rm api safety check
@@ -375,6 +400,7 @@ alias econ-rebuild="cd /path/to/econ_graph_api && make rebuild && make down && m
 ---
 
 **Besoin d'aide ?**
+
 - Exécutez `make help` pour voir toutes les commandes disponibles
 - Consultez [DOCKER_BUILD_OPTIMIZATION.md](DOCKER_BUILD_OPTIMIZATION.md) pour le dépannage
 - Vérifiez les logs avec `make logs`

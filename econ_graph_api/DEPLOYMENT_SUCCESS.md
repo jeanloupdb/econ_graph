@@ -2,7 +2,7 @@
 
 ## ✅ Statut du Projet
 
-Le projet **Econ Graph API** a été complètement réorganisé avec succès selon l'architecture modulaire avec SQLAlchemy 2.0, Alembic et Docker.
+Le projet **Smart Graph API** a été complètement réorganisé avec succès selon l'architecture modulaire avec SQLAlchemy 2.0, Alembic et Docker.
 
 ## 🏗️ Architecture Implémentée
 
@@ -56,17 +56,20 @@ econ-graph-fastapi/
 ## 🚀 Services Docker
 
 ### 1. **db** (PostgreSQL 16)
+
 - Base de données relationnelle
 - Port: `5433:5432` (pour éviter conflit avec PostgreSQL local)
 - Volume persistant: `db_data`
 - Healthcheck intégré
 
 ### 2. **migrate** (Service one-shot)
+
 - Exécute les migrations Alembic au démarrage
 - S'assure que la DB est à jour avant de lancer l'API
 - Se termine automatiquement après succès
 
 ### 3. **api** (FastAPI + Uvicorn)
+
 - API REST avec documentation Swagger
 - Port: `8000`
 - Hot-reload activé (--reload)
@@ -77,12 +80,14 @@ econ-graph-fastapi/
 Tous les tests suivants ont été exécutés avec succès :
 
 ### 1. Health Check
+
 ```bash
 $ curl http://localhost:8000/health
 {"status":"ok"}
 ```
 
 ### 2. Création d'un Node
+
 ```bash
 $ curl -X POST http://localhost:8000/nodes \
   -H "Content-Type: application/json" \
@@ -100,12 +105,14 @@ $ curl -X POST http://localhost:8000/nodes \
 ```
 
 ### 3. Lecture de tous les Nodes
+
 ```bash
 $ curl http://localhost:8000/nodes
 [{"label":"GDP Growth Rate","value_computed":2.5,...}]
 ```
 
 ### 4. Mise à jour d'un Node
+
 ```bash
 $ curl -X PATCH http://localhost:8000/nodes/gdp_growth \
   -H "Content-Type: application/json" \
@@ -115,6 +122,7 @@ $ curl -X PATCH http://localhost:8000/nodes/gdp_growth \
 ```
 
 ### 5. Validation des Contraintes
+
 ```bash
 $ curl -X POST http://localhost:8000/nodes \
   -d '{"id":"inflation","value_computed":15.0,"plausible_range":[0,10],...}'
@@ -124,6 +132,7 @@ $ curl -X POST http://localhost:8000/nodes \
 ```
 
 ### 6. Swagger UI
+
 ```
 http://localhost:8000/docs
 # ✅ Interface interactive accessible
@@ -142,18 +151,20 @@ http://localhost:8000/docs
 ## 🗂️ Modèle de Données
 
 ### Node
-| Colonne         | Type         | Contraintes                    |
-|----------------|--------------|--------------------------------|
-| id             | String(64)   | Primary Key                    |
-| label          | String(200)  | NOT NULL                       |
-| unit           | String       | NULL                           |
-| value_computed | Double       | NULL                           |
-| plausible_min  | Double       | NULL                           |
-| plausible_max  | Double       | NULL, <= plausible_max        |
-| status         | Enum         | unknown, observed, imposed, implied, invalid |
-| confidence     | Double       | [0.0, 1.0]                     |
+
+| Colonne        | Type        | Contraintes                                  |
+| -------------- | ----------- | -------------------------------------------- |
+| id             | String(64)  | Primary Key                                  |
+| label          | String(200) | NOT NULL                                     |
+| unit           | String      | NULL                                         |
+| value_computed | Double      | NULL                                         |
+| plausible_min  | Double      | NULL                                         |
+| plausible_max  | Double      | NULL, <= plausible_max                       |
+| status         | Enum        | unknown, observed, imposed, implied, invalid |
+| confidence     | Double      | [0.0, 1.0]                                   |
 
 ### Contraintes CHECK
+
 1. `confidence >= 0.0 AND confidence <= 1.0`
 2. `plausible_min <= plausible_max` (si les deux sont définis)
 

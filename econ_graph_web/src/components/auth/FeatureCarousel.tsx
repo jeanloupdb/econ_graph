@@ -35,15 +35,15 @@ export function FeatureCarousel() {
                 className="space-y-1"
             >
                 <h3 className={`text-2xl font-black tracking-tight ${
-                    scene === 0 ? "text-purple-600 dark:text-purple-400" :
-                    scene === 1 ? "text-emerald-600 dark:text-emerald-400" :
-                    "text-blue-600 dark:text-blue-400"
+                    scene === 0 ? "text-purple-400" :
+                    scene === 1 ? "text-emerald-400" :
+                    "text-blue-400"
                 }`}>
                     {scene === 0 && "Structurez vos Idées"}
                     {scene === 1 && "Simulez l'Impact"}
                     {scene === 2 && "Collaborez en Sécurité"}
                 </h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-widest">
+                <p className="text-xs text-zinc-400 font-bold uppercase tracking-widest">
                     {scene === 0 && "Composites Intelligents"}
                     {scene === 1 && "Scénarios Temps Réel"}
                     {scene === 2 && "Synchronisation Instantanée"}
@@ -64,16 +64,16 @@ export function FeatureCarousel() {
       {/* Navigation / Progress Indicators */}
       <div className="absolute bottom-8 flex gap-3 z-20">
         {[0, 1, 2].map((i) => (
-            <div key={i} className="relative h-1.5 w-16 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
+            <div key={i} className="relative h-1.5 w-16 bg-zinc-800 rounded-full overflow-hidden">
                 {i === scene && (
                     <motion.div 
-                        className="absolute inset-0 bg-zinc-800 dark:bg-white"
+                        className="absolute inset-0 bg-white"
                         initial={{ width: "0%" }}
                         animate={{ width: "100%" }}
                         transition={{ duration: 6, ease: "linear" }}
                     />
                 )}
-                {i < scene && <div className="absolute inset-0 bg-zinc-800 dark:bg-white" />}
+                {i < scene && <div className="absolute inset-0 bg-white" />}
             </div>
         ))}
       </div>
@@ -114,19 +114,19 @@ function SceneComposites() {
                  >
                     {/* Inner Nodes - Spread out */}
                     <div className="flex items-center gap-16 relative z-10">
-                        <div className="w-12 h-12 bg-white dark:bg-zinc-900 rounded-xl border border-purple-300 flex items-center justify-center shadow-lg">
+                        <div className="w-12 h-12 bg-zinc-900 rounded-xl border border-purple-300 flex items-center justify-center shadow-lg">
                             <Brain className="w-6 h-6 text-purple-500" />
                         </div>
-                        <div className="w-16 h-16 bg-white dark:bg-zinc-900 rounded-2xl border-2 border-purple-500 flex items-center justify-center shadow-xl">
+                        <div className="w-16 h-16 bg-zinc-900 rounded-2xl border-2 border-purple-500 flex items-center justify-center shadow-xl">
                             <Layers className="w-8 h-8 text-purple-600" />
                         </div>
-                        <div className="w-12 h-12 bg-white dark:bg-zinc-900 rounded-xl border border-purple-300 flex items-center justify-center shadow-lg">
+                        <div className="w-12 h-12 bg-zinc-900 rounded-xl border border-purple-300 flex items-center justify-center shadow-lg">
                             <Sparkles className="w-6 h-6 text-purple-500" />
                         </div>
                     </div>
                     {/* Connecting Line */}
                     <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-64 h-1 bg-purple-200 dark:bg-purple-900" />
+                        <div className="w-64 h-1 bg-purple-900" />
                         <motion.div 
                             className="absolute w-16 h-1 bg-purple-500 blur-sm"
                             animate={{ x: [-120, 120] }}
@@ -138,7 +138,7 @@ function SceneComposites() {
 
             {/* The Icon (Starts Center, Moves Top-Left) */}
             <motion.div 
-                className="absolute z-20 bg-white dark:bg-zinc-900 p-4 rounded-2xl shadow-2xl border border-purple-200"
+                className="absolute z-20 bg-zinc-900 p-4 rounded-2xl shadow-2xl border border-purple-200"
                 initial={{ x: 0, y: 0, scale: 1.5 }}
                 animate={{ x: -180, y: -90, scale: 1 }}
                 transition={{ duration: 1.5, ease: "easeInOut", delay: 0.2 }}
@@ -160,7 +160,7 @@ function SceneScenarios() {
             transition={{ duration: 0.5 }}
         >
             {/* Graph Container - Wider */}
-            <div className="relative w-[32rem] h-48 border-l-2 border-b-2 border-zinc-200 dark:border-zinc-700">
+            <div className="relative w-[32rem] h-48 border-l-2 border-b-2 border-zinc-700">
                 {/* The Curve - Lower profile to avoid text overlap */}
                 <svg className="absolute inset-0 overflow-visible">
                     <motion.path 
@@ -193,10 +193,10 @@ function SceneScenarios() {
 
                 {/* The Slider (Trigger) - Moved down */}
                 <motion.div 
-                    className="absolute -bottom-10 left-0 right-0 h-1.5 bg-zinc-200 dark:bg-zinc-800 rounded-full"
+                    className="absolute -bottom-10 left-0 right-0 h-1.5 bg-zinc-800 rounded-full"
                 >
                     <motion.div 
-                        className="absolute top-1/2 -translate-y-1/2 w-6 h-6 bg-white border-4 border-emerald-500 rounded-full shadow-lg z-10 cursor-pointer"
+                        className="absolute top-1/2 -translate-y-1/2 w-6 h-6 bg-zinc-900 border-4 border-emerald-500 rounded-full shadow-lg z-10 cursor-pointer"
                         initial={{ left: "10%" }}
                         animate={{ left: "90%" }}
                         transition={{ duration: 2, delay: 1, ease: "easeInOut" }}
@@ -205,13 +205,13 @@ function SceneScenarios() {
 
                 {/* Result Card - Moved to Right Side, distinct from graph */}
                 <motion.div 
-                    className="absolute top-4 right-[-4rem] bg-white dark:bg-zinc-900 border border-emerald-200 dark:border-emerald-800 p-4 rounded-2xl shadow-xl flex flex-col items-center"
+                    className="absolute top-4 right-[-4rem] bg-zinc-900 border border-emerald-800 p-4 rounded-2xl shadow-xl flex flex-col items-center"
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 2.5, type: "spring" }}
                 >
-                    <span className="text-xs font-bold text-zinc-500 uppercase">Revenue</span>
-                    <div className="text-2xl font-black text-emerald-600">+120%</div>
+                    <span className="text-xs font-bold text-zinc-400 uppercase">Revenue</span>
+                    <div className="text-2xl font-black text-emerald-400">+120%</div>
                     <TrendingUp className="w-4 h-4 text-emerald-500 mt-1" />
                 </motion.div>
             </div>
@@ -236,12 +236,12 @@ function SceneCollaboration() {
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ delay: 0.2 }}
             >
-                <div className="w-16 h-16 bg-white dark:bg-zinc-900 rounded-full border-4 border-blue-500 flex items-center justify-center shadow-2xl z-10 relative">
-                    <span className="text-xl font-bold text-blue-600">A</span>
-                    <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-500 rounded-full border-2 border-white" />
+                <div className="w-16 h-16 bg-zinc-900 rounded-full border-4 border-blue-500 flex items-center justify-center shadow-2xl z-10 relative">
+                    <span className="text-xl font-bold text-blue-400">A</span>
+                    <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-500 rounded-full border-2 border-zinc-900" />
                 </div>
                 <div className="mt-4 text-center">
-                    <div className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-1 rounded-full inline-block">Editor</div>
+                    <div className="text-xs font-bold bg-blue-950 text-blue-300 px-2 py-1 rounded-full inline-block">Editor</div>
                 </div>
             </motion.div>
 
@@ -252,23 +252,23 @@ function SceneCollaboration() {
                 animate={{ x: 0, opacity: 1 }}
                 transition={{ delay: 0.4 }}
             >
-                <div className="w-16 h-16 bg-white dark:bg-zinc-900 rounded-full border-4 border-emerald-500 flex items-center justify-center shadow-2xl z-10 relative">
-                    <span className="text-xl font-bold text-emerald-600">B</span>
-                    <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full border-2 border-white" />
+                <div className="w-16 h-16 bg-zinc-900 rounded-full border-4 border-emerald-500 flex items-center justify-center shadow-2xl z-10 relative">
+                    <span className="text-xl font-bold text-emerald-400">B</span>
+                    <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 rounded-full border-2 border-zinc-900" />
                 </div>
                 <div className="mt-4 text-center">
-                    <div className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full inline-block">Viewer</div>
+                    <div className="text-xs font-bold bg-emerald-950 text-emerald-300 px-2 py-1 rounded-full inline-block">Viewer</div>
                 </div>
             </motion.div>
 
             {/* Central Shared Hub */}
             <motion.div 
-                className="absolute z-20 bg-white dark:bg-zinc-900 p-4 rounded-2xl shadow-2xl border-2 border-zinc-200 dark:border-zinc-700 flex flex-col items-center gap-2"
+                className="absolute z-20 bg-zinc-900 p-4 rounded-2xl shadow-2xl border-2 border-zinc-700 flex flex-col items-center gap-2"
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.8, type: "spring" }}
             >
-                <Database className="w-8 h-8 text-zinc-400 dark:text-zinc-500" />
+                <Database className="w-8 h-8 text-zinc-500" />
                 <div className="flex gap-1">
                     <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse delay-75" />
@@ -300,10 +300,10 @@ function SceneCollaboration() {
                 <defs>
                     <linearGradient id="gradient-beam-left" x1="0%" y1="0%" x2="100%" y2="0%">
                         <stop offset="0%" stopColor="#3b82f6" />
-                        <stop offset="100%" stopColor="#e4e4e7" />
+                        <stop offset="100%" stopColor="#52525b" />
                     </linearGradient>
                     <linearGradient id="gradient-beam-right" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="#e4e4e7" />
+                        <stop offset="0%" stopColor="#52525b" />
                         <stop offset="100%" stopColor="#10b981" />
                     </linearGradient>
                 </defs>

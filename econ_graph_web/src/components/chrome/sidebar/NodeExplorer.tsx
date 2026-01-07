@@ -35,11 +35,13 @@ function NodeItem({
   allEdges,
   onEditNode,
   onDeleteNode,
+  canEdit = true,
 }: {
   node: any;
   allEdges: any[];
   onEditNode?: (id: string) => void;
   onDeleteNode?: (id: string) => void;
+  canEdit?: boolean;
 }) {
   const setInspectorOpen = useUIStore((s) => s.setInspectorOpen);
   const setSelectedNodeId = useUIStore((s) => s.setSelectedNodeId);
@@ -99,9 +101,10 @@ function NodeItem({
             addSelectedNode(node.id);
         }
     } else {
+        // Single selection - select node and always open inspector (even in view mode)
         setSelectedNodeIds([node.id]);
-        // Close inspector / clear primary selection
-        setSelectedNodeId(null);
+        setSelectedNodeId(node.id);
+        setInspectorOpen(true);
     }
   };
 
@@ -128,6 +131,12 @@ function NodeItem({
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
+
+    // Don't allow editing if user can't edit
+    if (!canEdit) {
+        handleOpenInspector(e);
+        return;
+    }
 
     const target = e.target as HTMLElement;
     const isValueClick = target.closest('.group\\/value');
@@ -256,7 +265,7 @@ function NodeItem({
                   </button>
                   <button
                       onClick={() => setIsEditing(false)}
-                      className="h-6 w-6 flex items-center justify-center rounded text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                      className="h-6 w-6 flex items-center justify-center rounded text-zinc-700 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                   >
                       ✕
                   </button>
@@ -268,7 +277,7 @@ function NodeItem({
                           mode === 'baseline' && isRoot
                               ? "min-w-[3rem] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-900 border border-transparent hover:border-zinc-300 dark:hover:border-zinc-600 cursor-pointer group/value"
                               : mode === 'baseline'
-                              ? "text-zinc-500 dark:text-zinc-400"
+                              ? "text-zinc-700 dark:text-zinc-400"
                               : "text-white/50"
                       }`}
                       title={mode === 'baseline' && isRoot ? "Double-cliquer pour modifier" : undefined}
@@ -281,12 +290,12 @@ function NodeItem({
             {(developerMode || mode === 'scenario') && (
               <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
                 <DropdownMenuTrigger
-                  className="p-1 hover:bg-white/20 dark:hover:bg-white/10 rounded transition-colors shrink-0"
+                  className="p-1 hover:bg-zinc-400 dark:hover:bg-white/10 rounded transition-colors shrink-0"
                   onClick={(e) => {
                     e.stopPropagation();
                   }}
                 >
-                  <MoreVertical className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400" />
+                  <MoreVertical className="h-3.5 w-3.5 text-zinc-700 dark:text-zinc-400" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
                   <DropdownMenuItem
@@ -294,7 +303,7 @@ function NodeItem({
                       handleOpenInspector(e);
                     }}
                   >
-                    <Info className="h-3.5 w-3.5 mr-2 text-zinc-500" />
+                    <Info className="h-3.5 w-3.5 mr-2 text-zinc-700 dark:text-zinc-500" />
                     Détails du nœud
                   </DropdownMenuItem>
                   {mode === 'scenario' && (
@@ -309,7 +318,7 @@ function NodeItem({
                         Modifier l'algo
                       </DropdownMenuItem>
                   )}
-                  {developerMode && mode === 'baseline' && (
+                  {developerMode && mode === 'baseline' && canEdit && (
                       <>
 
                           <DropdownMenuItem
@@ -320,7 +329,7 @@ function NodeItem({
                               }}
                               className="gap-2"
                           >
-                              <Pencil className="h-3.5 w-3.5 text-zinc-500" />
+                              <Pencil className="h-3.5 w-3.5 text-zinc-700 dark:text-zinc-500" />
                               Modifier
                           </DropdownMenuItem>
                           <DropdownMenuItem
@@ -347,7 +356,7 @@ function NodeItem({
 
       {isEditing && editMode === 'formula' && (
         <div className="absolute top-full left-0 z-50 w-64 mt-1 flex flex-col gap-1.5 animate-in slide-in-from-top-1 duration-200 bg-zinc-50 dark:bg-zinc-900 rounded p-2 border border-zinc-200 dark:border-zinc-800 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="text-[10px] text-zinc-500 dark:text-zinc-400 flex items-center justify-between">
+            <div className="text-[10px] text-zinc-700 dark:text-zinc-400 flex items-center justify-between">
                 <span>Formule Python</span>
                 <code className="bg-zinc-200 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-[9px]">real_value</code>
             </div>
@@ -378,7 +387,7 @@ function NodeItem({
                 </button>
                 <button
                     onClick={() => setIsEditing(false)}
-                    className="px-2 py-1 rounded text-[10px] text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
+                    className="px-2 py-1 rounded text-[10px] text-zinc-800 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
                 >
                     ✕
                 </button>
@@ -394,6 +403,7 @@ export function NodeExplorer({ onEditNode, searchQuery }: { onEditNode?: (id: st
   const selectedNodeIds = useUIStore((s) => s.selectedNodeIds);
   const deleteNode = useDeleteNode();
   const [deleteNodeId, setDeleteNodeId] = useState<string | null>(null);
+  const canEdit = !!onEditNode;
 
   const handleDeleteConfirm = () => {
     if (deleteNodeId) {
@@ -470,7 +480,7 @@ export function NodeExplorer({ onEditNode, searchQuery }: { onEditNode?: (id: st
   const isSearching = !!searchQuery;
 
   if (!nodes || nodes.length === 0) {
-    return <div className="px-4 py-2 text-xs text-zinc-500">Aucun nœud</div>;
+    return <div className="px-4 py-2 text-xs text-zinc-700 dark:text-zinc-500">Aucun nœud</div>;
   }
 
   return (
@@ -482,7 +492,7 @@ export function NodeExplorer({ onEditNode, searchQuery }: { onEditNode?: (id: st
             forceOpen={hasSelectedParam || isSearching}
         >
           <NestedList
-            items={parameters.map(n => <NodeItem key={n.id} node={n} allEdges={edges} onEditNode={onEditNode} onDeleteNode={setDeleteNodeId} />)}
+            items={parameters.map(n => <NodeItem key={n.id} node={n} allEdges={edges} onEditNode={onEditNode} onDeleteNode={canEdit ? setDeleteNodeId : undefined} canEdit={canEdit} />)}
           />
         </CollapsibleSection>
       )}
@@ -494,7 +504,7 @@ export function NodeExplorer({ onEditNode, searchQuery }: { onEditNode?: (id: st
             forceOpen={hasSelectedIntermediate || isSearching}
         >
           <NestedList
-            items={intermediates.map(n => <NodeItem key={n.id} node={n} allEdges={edges} onEditNode={onEditNode} onDeleteNode={setDeleteNodeId} />)}
+            items={intermediates.map(n => <NodeItem key={n.id} node={n} allEdges={edges} onEditNode={onEditNode} onDeleteNode={canEdit ? setDeleteNodeId : undefined} canEdit={canEdit} />)}
           />
         </CollapsibleSection>
       )}
@@ -506,15 +516,15 @@ export function NodeExplorer({ onEditNode, searchQuery }: { onEditNode?: (id: st
             forceOpen={hasSelectedResult || isSearching}
         >
           <NestedList
-            items={results.map(n => <NodeItem key={n.id} node={n} allEdges={edges} onEditNode={onEditNode} onDeleteNode={setDeleteNodeId} />)}
+            items={results.map(n => <NodeItem key={n.id} node={n} allEdges={edges} onEditNode={onEditNode} onDeleteNode={canEdit ? setDeleteNodeId : undefined} canEdit={canEdit} />)}
           />
         </CollapsibleSection>
       )}
 
       <Dialog open={!!deleteNodeId} onOpenChange={(open) => !open && setDeleteNodeId(null)}>
-        <DialogContent>
+        <DialogContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
           <DialogHeader>
-            <DialogTitle className="text-base">Supprimer le nœud</DialogTitle>
+            <DialogTitle className="text-base text-zinc-900 dark:text-zinc-100">Supprimer le nœud</DialogTitle>
           </DialogHeader>
           <div className="text-xs text-zinc-600 dark:text-zinc-300 space-y-1.5">
             <p>
@@ -522,7 +532,7 @@ export function NodeExplorer({ onEditNode, searchQuery }: { onEditNode?: (id: st
               {nodeToDelete ? ` « ${nodeToDelete.label} »` : ""} ? Cette action est
               irréversible.
             </p>
-            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+            <p className="text-[11px] text-zinc-700 dark:text-zinc-400">
               Cette suppression n'impacte pas ses nœuds parents ou enfants (les
               liens resteront, mais le nœud supprimé disparaîtra).
             </p>

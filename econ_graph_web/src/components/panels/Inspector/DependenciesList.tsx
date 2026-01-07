@@ -34,7 +34,7 @@ export function DependenciesList({
   return (
     <div className="flex flex-col pb-2">
       {title && (
-        <div className="py-2 pl-3 text-[10px] uppercase tracking-wider font-semibold text-zinc-500 dark:text-zinc-400">
+        <div className="py-2 pl-3 text-[10px] uppercase tracking-wider font-semibold text-zinc-800 dark:text-zinc-400">
           {title}
         </div>
       )}
@@ -64,12 +64,12 @@ export function DependenciesList({
                 {isComposite ? <Layers className="h-3.5 w-3.5" /> : <Box className="h-3.5 w-3.5" />}
               </div>
               
-              <span className="text-sm text-zinc-300 group-hover:text-zinc-100 truncate flex-1 transition-colors">
+              <span className="text-sm text-zinc-800 dark:text-zinc-300 group-hover:text-zinc-900 dark:group-hover:text-zinc-100 truncate flex-1 transition-colors">
                 {node.label || node.id}
               </span>
 
               {node.value_computed != null && (
-                 <span className="text-xs font-mono text-zinc-500 group-hover:text-zinc-400">
+                 <span className="text-xs font-mono text-zinc-700 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-zinc-400">
                     {formatNumber(node.value_computed)}
                     {node.unit && <span className="ml-1 text-[10px]">{node.unit}</span>}
                  </span>

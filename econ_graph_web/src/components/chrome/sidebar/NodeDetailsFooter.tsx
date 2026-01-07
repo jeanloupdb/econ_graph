@@ -15,6 +15,7 @@ import { SidebarItem } from "./SidebarItem";
 
 export function NodeDetailsFooter() {
   const selectedNodeIds = useUIStore((s) => s.selectedNodeIds);
+  const canEdit = useProjectStore((s) => s.canEdit)();
   const { nodes = [] } = useGraphData();
   const { data: theme } = useTheme();
   const [isExpanded, setIsExpanded] = useState(true);
@@ -152,6 +153,10 @@ export function NodeDetailsFooter() {
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
+    
+    if (!canEdit) {
+        return; // Don't allow editing if user can't edit
+    }
     
     if (!isScenarioActive) {
         return;

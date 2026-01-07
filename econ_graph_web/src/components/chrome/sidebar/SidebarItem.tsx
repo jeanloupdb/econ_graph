@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { useGraphTheme } from "@/lib/context/GraphThemeContext";
 import { ReactNode } from "react";
 
 interface SidebarItemProps {
@@ -28,6 +29,8 @@ export function SidebarItem({
   size = "sm",
   hasError
 }: SidebarItemProps) {
+  const { isLightMode } = useGraphTheme();
+  
   return (
     <div
       className={cn(
@@ -36,10 +39,16 @@ export function SidebarItem({
         size === "sm" ? "py-1.5 px-2 text-sm" : "py-1.5 px-2 text-xs",
         // Selection / Active State
         isSelected
-          ? "bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100"
+          ? isLightMode
+            ? "bg-blue-100 border-blue-300 text-zinc-900"
+            : "bg-zinc-800 border-zinc-700 text-zinc-100"
           : isActive
-          ? "bg-transparent border-transparent text-zinc-900 dark:text-zinc-100 font-medium hover:bg-white/10 dark:hover:bg-white/5"
-          : "bg-transparent border-transparent text-zinc-700 dark:text-zinc-300 hover:bg-white/10 dark:hover:bg-white/5",
+          ? isLightMode
+            ? "bg-transparent border-transparent text-zinc-900 font-medium hover:bg-zinc-200/70"
+            : "bg-transparent border-transparent text-zinc-100 font-medium hover:bg-white/5"
+          : isLightMode
+          ? "bg-transparent border-transparent text-zinc-800 hover:bg-zinc-200/70"
+          : "bg-transparent border-transparent text-zinc-300 hover:bg-white/5",
          // Error state override
          hasError && !isSelected && "text-red-600 dark:text-red-400",
         className

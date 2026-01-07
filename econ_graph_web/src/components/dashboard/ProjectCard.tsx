@@ -1,9 +1,17 @@
-import { useProjectStats } from '@/components/dashboard/ProjectRow';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Box, CheckCircle2, GitBranch, Network, Pencil, Share2, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useProjectStats } from "@/components/dashboard/ProjectRow";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Box,
+  CheckCircle2,
+  GitBranch,
+  Pencil,
+  Share2,
+  Trash2,
+} from "lucide-react";
+import { SmartGraphLogo } from "../ui/SmartGraphLogo";
+import { useEffect, useState } from "react";
 
 export interface ProjectCardProps {
   project: any;
@@ -17,7 +25,17 @@ export interface ProjectCardProps {
   isJustCreated?: boolean;
 }
 
-export function ProjectCard({ project, index, isSelected, onToggleSelect, onOpen, onRename, onDelete, onShare, isJustCreated }: ProjectCardProps) {
+export function ProjectCard({
+  project,
+  index,
+  isSelected,
+  onToggleSelect,
+  onOpen,
+  onRename,
+  onDelete,
+  onShare,
+  isJustCreated,
+}: ProjectCardProps) {
   const { data: stats } = useProjectStats(project.id);
   const [showCheck, setShowCheck] = useState(isJustCreated);
 
@@ -34,17 +52,17 @@ export function ProjectCard({ project, index, isSelected, onToggleSelect, onOpen
       animate={{
         opacity: 1,
         y: 0,
-        scale: 1
+        scale: 1,
       }}
       transition={{
         duration: 0.15,
-        delay: isJustCreated ? 0 : index * 0.03
+        delay: isJustCreated ? 0 : index * 0.03,
       }}
       onClick={onOpen}
-      className={`group relative rounded-lg border bg-white dark:bg-zinc-900/50 p-5 cursor-pointer transition-all hover:shadow-md ${
+      className={`group relative rounded-xl border bg-zinc-900/50 backdrop-blur-sm p-5 cursor-pointer transition-all hover:bg-zinc-900 ${
         isSelected
-          ? 'border-blue-400 dark:border-blue-600 ring-2 ring-blue-100 dark:ring-blue-900'
-          : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
+          ? "border-violet-500/50 ring-1 ring-violet-500/20"
+          : "border-zinc-800 hover:border-zinc-700"
       }`}
     >
       {/* Victory badge */}
@@ -57,71 +75,74 @@ export function ProjectCard({ project, index, isSelected, onToggleSelect, onOpen
             transition={{ type: "spring", stiffness: 200 }}
             className="absolute -top-2 -right-2 z-10"
           >
-            <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-green-500 text-white shadow-lg text-xs font-semibold">
+            <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500 text-white shadow-lg text-xs font-medium">
               <CheckCircle2 className="h-3 w-3" />
-              New
+              Créé
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
       {/* Checkbox */}
-      <div className="absolute top-4 right-4" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="absolute top-4 right-4"
+        onClick={(e) => e.stopPropagation()}
+      >
         <Checkbox
           checked={isSelected}
           onCheckedChange={onToggleSelect}
+          className="border-zinc-700 data-[state=checked]:bg-violet-600 data-[state=checked]:border-violet-600"
         />
       </div>
 
       <div className="flex items-start gap-3 mb-4">
-        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-900 group-hover:bg-blue-100 dark:group-hover:bg-blue-950 transition-colors">
-          <Network className="h-5 w-5 text-zinc-600 dark:text-zinc-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
+        <div className="p-2 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
+          <SmartGraphLogo size={28} />
         </div>
         <div className="flex-1 min-w-0 pr-6">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-sm font-semibold text-zinc-900 dark:text-white truncate">
-              {project.name}
-            </h3>
-          </div>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {new Date(project.updatedAt).toLocaleDateString('fr-FR', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric'
+          <h3 className="text-sm font-medium text-white truncate mb-0.5">
+            {project.name}
+          </h3>
+          <p className="text-xs text-zinc-500">
+            {new Date(project.updatedAt).toLocaleDateString("fr-FR", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
             })}
           </p>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="flex items-center gap-2 text-xs">
-          <Box className="h-3.5 w-3.5 text-zinc-400" />
-          <span className="text-zinc-600 dark:text-zinc-400">{stats?.nodes || 0} nœuds</span>
+      <div className="flex items-center gap-4 mb-4">
+        <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+          <Box className="h-3.5 w-3.5" />
+          <span>{stats?.nodes || 0} nœuds</span>
         </div>
-        <div className="flex items-center gap-2 text-xs">
-          <GitBranch className="h-3.5 w-3.5 text-zinc-400" />
-          <span className="text-zinc-600 dark:text-zinc-400">{stats?.edges || 0} liens</span>
+        <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+          <GitBranch className="h-3.5 w-3.5" />
+          <span>{stats?.edges || 0} liens</span>
         </div>
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-1 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+      <div className="flex items-center gap-1 pt-3 border-t border-zinc-800">
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 flex-1 text-xs"
+          className="h-7 flex-1 text-xs text-zinc-400 hover:text-white hover:bg-zinc-800"
           onClick={(e) => {
             e.stopPropagation();
             onRename();
           }}
         >
-          <Pencil className="h-3 w-3 mr-1" />
+          <Pencil className="h-3 w-3 mr-1.5" />
           Renommer
         </Button>
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7"
+          className="h-7 w-7 text-zinc-500 hover:text-white hover:bg-zinc-800"
           onClick={(e) => {
             e.stopPropagation();
             onShare();
@@ -132,7 +153,7 @@ export function ProjectCard({ project, index, isSelected, onToggleSelect, onOpen
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+          className="h-7 w-7 text-zinc-500 hover:text-red-400 hover:bg-red-500/10"
           onClick={(e) => {
             e.stopPropagation();
             onDelete();

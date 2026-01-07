@@ -24,6 +24,15 @@ interface UIState {
   libraryPanelOpen: boolean;
   toggleLibraryPanel: () => void;
   setLibraryPanelOpen: (open: boolean) => void;
+  leftSidebarOpen: boolean;
+  setLeftSidebarOpen: (open: boolean) => void;
+  leftSidebarCollapsed: boolean;
+  setLeftSidebarCollapsed: (collapsed: boolean) => void;
+  
+  // Floating panel (new sidebar overlay system)
+  floatingPanelOpen: boolean;
+  setFloatingPanelOpen: (open: boolean) => void;
+  toggleFloatingPanel: () => void;
 
   // Node selection
   selectedNodeId: string | null;
@@ -127,6 +136,9 @@ export const useUIStore = create<UIState>((set) => ({
   viewMode: 'baseline',
   inspectorOpen: true,
   scenarioPanelOpen: false,
+  leftSidebarOpen: true,
+  leftSidebarCollapsed: false,
+  floatingPanelOpen: true,
   selectedNodeId: null,
   selectedEdgeId: null,
   selectedEdgeIds: [],
@@ -212,6 +224,10 @@ export const useUIStore = create<UIState>((set) => ({
       // Let's keep it independent for now as it's likely on the left.
     })),
   setLibraryPanelOpen: (open) => set({ libraryPanelOpen: open }),
+  setLeftSidebarOpen: (open) => set({ leftSidebarOpen: open }),
+  setLeftSidebarCollapsed: (collapsed) => set({ leftSidebarCollapsed: collapsed }),
+  setFloatingPanelOpen: (open) => set({ floatingPanelOpen: open }),
+  toggleFloatingPanel: () => set((state) => ({ floatingPanelOpen: !state.floatingPanelOpen })),
 
   setSelectedNodeId: (id) =>
     set((state) => ({

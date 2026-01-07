@@ -1,5 +1,6 @@
 "use client";
 
+import { useGraphTheme } from "@/lib/context/GraphThemeContext";
 import { useScenarioStore } from "@/store/scenarioState";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
@@ -21,6 +22,7 @@ export function CollapsibleSection({
   action,
   noPadding = false,
 }: CollapsibleSectionProps) {
+  const { isLightMode } = useGraphTheme();
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const activeScenarioId = useScenarioStore((s) => s.activeScenarioId);
   const comparisonEnabled = useScenarioStore((s) => s.comparisonEnabled);
@@ -37,18 +39,20 @@ export function CollapsibleSection({
   }
 
   return (
-    <div className="border-b border-white/5 last:border-0">
-      <div className="flex items-center w-full hover:bg-white/5 transition-colors pr-2">
+    <div className={`border-b last:border-0 ${isLightMode ? 'border-zinc-300' : 'border-white/5'}`}>
+      <div className={`flex items-center w-full transition-all duration-200 pr-2 rounded-lg mx-1 ${isLightMode ? 'hover:bg-zinc-200/60' : 'hover:bg-white/5'}`}>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className={`flex flex-1 items-center gap-2 px-4 py-2 text-xs font-semibold uppercase tracking-wider ${
-              mode === 'baseline' ? 'text-zinc-600 dark:text-zinc-300' : 'text-white/70 hover:text-white'
+          className={`flex flex-1 items-center gap-2 px-3 py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
+              isLightMode 
+                ? 'text-zinc-900' 
+                : mode === 'baseline' ? 'text-zinc-300' : 'text-white/80 hover:text-white'
           }`}
         >
           {isOpen ? (
-            <ChevronDown className="h-3 w-3" />
+            <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200" />
           ) : (
-            <ChevronRight className="h-3 w-3" />
+            <ChevronRight className="h-3.5 w-3.5 transition-transform duration-200" />
           )}
           {title}
         </button>
@@ -56,9 +60,9 @@ export function CollapsibleSection({
       </div>
       <div className="relative">
         {isOpen && (
-          <div className="absolute left-[21px] top-0 bottom-2 w-px bg-zinc-200 dark:bg-white/10" />
+          <div className="absolute left-[24px] top-0 bottom-2 w-px bg-gradient-to-b from-purple-500/30 via-blue-500/30 to-transparent" />
         )}
-        {isOpen && <div className={noPadding ? "pb-2 pl-[22px]" : "pl-[22px] pb-2"}>{children}</div>}
+        {isOpen && <div className={noPadding ? "pb-2 pl-[26px] animate-in slide-in-from-top-2 duration-200" : "pl-[26px] pb-2 animate-in slide-in-from-top-2 duration-200"}>{children}</div>}
       </div>
     </div>
   );

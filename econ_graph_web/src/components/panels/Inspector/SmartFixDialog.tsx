@@ -81,11 +81,15 @@ export function SmartFixDialog({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[800px] max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-indigo-500" />
-            Smart Fix
+          <DialogTitle className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-gradient-to-br from-purple-500 to-blue-500 shadow-lg shadow-purple-500/30">
+              <Sparkles className="h-5 w-5 text-white" />
+            </div>
+            <span className="bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent font-bold">
+              Smart Fix
+            </span>
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-zinc-600 dark:text-zinc-400">
             AI-powered auto-correction for your node.
           </DialogDescription>
         </DialogHeader>
@@ -124,8 +128,11 @@ export function SmartFixDialog({
             <>
               {!fixData && !loading && (
                 <div className="flex flex-col items-center justify-center h-40 gap-4">
-                  <p className="text-muted-foreground">Ready to analyze the error.</p>
-                  <Button onClick={handleGenerateFix}>
+                  <p className="text-zinc-600 dark:text-zinc-400">Ready to analyze the error.</p>
+                  <Button 
+                    onClick={handleGenerateFix}
+                    className="bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white shadow-lg shadow-purple-500/50 hover:shadow-xl hover:shadow-purple-500/70 transition-all duration-300 hover:scale-105"
+                  >
                     <Wand2 className="mr-2 h-4 w-4" />
                     Analyze & Fix
                   </Button>
@@ -134,8 +141,11 @@ export function SmartFixDialog({
 
               {loading && (
                 <div className="flex flex-col items-center justify-center h-60 gap-4">
-                  <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
-                  <p className="text-sm text-muted-foreground animate-pulse">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full blur-xl opacity-50 animate-pulse"></div>
+                    <Loader2 className="relative h-10 w-10 animate-spin text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400 animate-pulse font-medium">
                     Analyzing error and generating fix...
                   </p>
                 </div>
@@ -143,11 +153,16 @@ export function SmartFixDialog({
 
               {fixData && (
                 <div className="flex flex-col gap-4 h-full">
-                  <div className="bg-indigo-50 dark:bg-indigo-950/30 p-4 rounded-lg border border-indigo-100 dark:border-indigo-900/50">
-                    <h4 className="text-sm font-semibold text-indigo-900 dark:text-indigo-100 mb-1">
-                      Explanation
-                    </h4>
-                    <p className="text-sm text-indigo-800 dark:text-indigo-200 leading-relaxed">
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 p-4 rounded-xl border border-green-200/50 dark:border-green-800/50 shadow-lg shadow-green-500/10">
+                    <div className="flex items-start gap-2.5 mb-2">
+                      <div className="flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-green-500 to-emerald-500 shadow-md">
+                        <Sparkles className="h-3.5 w-3.5 text-white" />
+                      </div>
+                      <h4 className="text-sm font-bold text-green-900 dark:text-green-100">
+                        AI Explanation
+                      </h4>
+                    </div>
+                    <p className="text-sm text-green-800 dark:text-green-200 leading-relaxed ml-8">
                       {fixData.explanation}
                     </p>
                   </div>
@@ -184,7 +199,7 @@ export function SmartFixDialog({
             <Button 
               onClick={handleApply} 
               disabled={!fixData || loading}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-lg shadow-green-500/50 hover:shadow-xl hover:shadow-green-500/70 transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               Apply Fix
             </Button>

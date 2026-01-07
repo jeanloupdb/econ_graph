@@ -73,7 +73,7 @@ function ComparisonNodeItem({
       onClick={() => setSelectedNodeIds([node.id])}
       rightContent={
         <>
-          <span className={`text-xs font-mono ${isSelected ? "text-zinc-600 dark:text-zinc-300" : "text-zinc-500 dark:text-zinc-400"}`}>
+          <span className={`text-xs font-mono ${isSelected ? "text-zinc-800 dark:text-zinc-300" : "text-zinc-700 dark:text-zinc-400"}`}>
             {diff.diff > 0 ? "+" : ""}{formatNumber(diff.diff)}
           </span>
           <span className={`text-xs font-semibold min-w-[3.5rem] text-right ${diff.pct_diff > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
@@ -82,10 +82,10 @@ function ComparisonNodeItem({
           {developerMode && (
             <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
               <DropdownMenuTrigger
-                className={`p-1 rounded transition-colors shrink-0 ${isSelected ? "hover:bg-blue-500/20" : "hover:bg-white/20 dark:hover:bg-white/10"}`}
+                className={`p-1 rounded transition-colors shrink-0 ${isSelected ? "hover:bg-blue-500/20" : "hover:bg-zinc-400 dark:hover:bg-white/10"}`}
                 onClick={(e) => e.stopPropagation()}
               >
-                <MoreVertical className={`h-3.5 w-3.5 ${isSelected ? "text-zinc-600 dark:text-zinc-300" : "text-zinc-500 dark:text-zinc-400"}`} />
+                <MoreVertical className={`h-3.5 w-3.5 ${isSelected ? "text-zinc-800 dark:text-zinc-300" : "text-zinc-700 dark:text-zinc-400"}`} />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem
@@ -224,11 +224,11 @@ export function ComparisonSidebarContent({
   return (
     <div className="flex flex-col h-full">
         {/* Compact Selector with VS Badge */}
-        <div className="p-4 border-b border-white/10 dark:border-white/5">
+        <div className="p-4 border-b border-zinc-400 dark:border-white/5">
             <div className="flex items-stretch gap-3">
                 {/* Left: VS Badge */}
                 <div className="flex items-center justify-center w-12 shrink-0">
-                    <span className="text-xs font-bold text-zinc-400 dark:text-zinc-500 tracking-widest">VS</span>
+                    <span className="text-xs font-bold text-zinc-700 dark:text-zinc-500 tracking-widest">VS</span>
                 </div>
 
                 {/* Right: Scenario selectors stacked */}
@@ -245,11 +245,11 @@ export function ComparisonSidebarContent({
                                         </span>
                                     </>
                                 ) : (
-                                    <span className="flex-1 text-sm text-zinc-500 dark:text-zinc-400">
+                                    <span className="flex-1 text-sm text-zinc-800 dark:text-zinc-400">
                                         Sélectionner un scénario
                                     </span>
                                 )}
-                                <ChevronDown className="h-4 w-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
+                                <ChevronDown className="h-4 w-4 text-zinc-700 dark:text-zinc-500 shrink-0" />
                             </button>
                         </PopoverTrigger>
                         <PopoverContent className="w-[280px] p-1 bg-white dark:bg-slate-950 border-zinc-200 dark:border-slate-800" align="start">
@@ -289,11 +289,11 @@ export function ComparisonSidebarContent({
                                         </span>
                                     </>
                                 ) : (
-                                    <span className="flex-1 text-sm text-zinc-500 dark:text-zinc-400">
+                                    <span className="flex-1 text-sm text-zinc-800 dark:text-zinc-400">
                                         Sélectionner un scénario
                                     </span>
                                 )}
-                                <ChevronDown className="h-4 w-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
+                                <ChevronDown className="h-4 w-4 text-zinc-700 dark:text-zinc-500 shrink-0" />
                             </button>
                         </PopoverTrigger>
                         <PopoverContent className="w-[280px] p-1 bg-white dark:bg-slate-950 border-zinc-200 dark:border-slate-800" align="start">
@@ -330,12 +330,12 @@ export function ComparisonSidebarContent({
         <div className="flex-1 overflow-y-auto custom-scrollbar">
             {!canCompare ? (
                 <div className="flex flex-col items-center justify-center h-full py-12 px-6 text-center">
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Sélectionnez deux scénarios différents pour comparer</p>
+                    <p className="text-xs text-zinc-800 dark:text-zinc-400">Sélectionnez deux scénarios différents pour comparer</p>
                 </div>
             ) : isComputing ? (
                 <div className="flex flex-col items-center justify-center h-full py-12 px-6">
-                    <Loader2 className="h-5 w-5 animate-spin text-zinc-400 mb-3" />
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Calcul en cours...</p>
+                    <Loader2 className="h-5 w-5 animate-spin text-zinc-700 dark:text-zinc-400 mb-3" />
+                    <p className="text-xs text-zinc-800 dark:text-zinc-400">Calcul en cours...</p>
                 </div>
             ) : totalDiffs > 0 ? (
                 <div className="space-y-0.5 p-2">
@@ -395,8 +395,8 @@ export function ComparisonSidebarContent({
                 </div>
             ) : (
                 <div className="flex flex-col items-center justify-center h-full py-12 px-6 text-center">
-                    <p className="text-xs text-zinc-600 dark:text-zinc-300">Aucune différence détectée</p>
-                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">Les scénarios produisent les mêmes résultats</p>
+                    <p className="text-xs text-zinc-800 dark:text-zinc-300">Aucune différence détectée</p>
+                    <p className="text-[11px] text-zinc-700 dark:text-zinc-400 mt-1">Les scénarios produisent les mêmes résultats</p>
                 </div>
             )}
         </div>

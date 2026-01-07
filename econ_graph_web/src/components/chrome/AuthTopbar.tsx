@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Network, ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { SmartGraphLogo } from "../ui/SmartGraphLogo";
 
 interface AuthTopbarProps {
   backLink?: string;
@@ -19,10 +20,8 @@ export function AuthTopbar({ backLink = "/", backLabel = "Retour à l'accueil" }
           </span>
         </Link>
         <Link href="/" className="flex items-center gap-2 group">
-          <div className="rounded-lg bg-blue-100 p-1.5 dark:bg-blue-950 group-hover:bg-blue-200 dark:group-hover:bg-blue-900 transition">
-            <Network className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-          </div>
-          <span className="text-lg font-bold text-zinc-900 dark:text-white">EconGraph</span>
+          <SmartGraphLogo size={28} />
+          <span className="text-lg font-bold text-zinc-900 dark:text-white">SmartGraph</span>
         </Link>
       </div>
     </div>

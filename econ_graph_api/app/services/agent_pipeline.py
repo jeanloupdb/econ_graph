@@ -1,20 +1,25 @@
 """
-Pipeline multi-agents pour la création automatique de projets économiques.
+Pipeline multi-agents OPTIMISÉ pour la création automatique de projets économiques.
 
-Architecture:
-1. Agent Analyste: Analyse le prompt et extrait une structure JSON
-2. Agent Planificateur: Génère le plan d'exécution (séquence d'API calls)
-3. Exécuteur: Exécute le plan (création nœuds, edges, scénarios)
-4. Validateur: Vérifie l'exécution Python du graphe
-5. Agent Correcteur: Corrige les erreurs (max 3 tentatives)
+Architecture OPTIMISÉE (v2):
+1. Agent Analyste: UN SEUL appel LLM - extrait structure complète
+2. Exécuteur: Crée en BDD (edges et positions calculés en Python)
+3. Validateur: Vérifie l'exécution Python
+4. Correcteur: Corrige SEULEMENT les nœuds en erreur (pas tout le projet)
+
+OPTIMISATIONS:
+- 1 appel LLM au lieu de 2 (fusion analyste + planificateur)
+- Edges déduits automatiquement des inputs (pas besoin de l'IA)
+- Positions calculées par algorithme de layout (pas besoin de l'IA)
+- Correcteur chirurgical (ne touche que les nœuds cassés)
+- Prompt 50% plus court (moins de tokens)
 """
 
 import json
 import uuid
 import asyncio
-from typing import TypedDict, Annotated, Literal, Any
+from typing import TypedDict, Literal
 from datetime import datetime
-import operator
 
 from langgraph.graph import StateGraph, END
 import google.generativeai as genai
@@ -26,8 +31,9 @@ from app.services.computation import compute_all_nodes, validate_algorithm
 from app.services.layout import apply_layout
 
 
-# Configuration Gemini
+# Configuration Gemini - Modèle STABLE
 genai.configure(api_key=settings.GOOGLE_GENERATIVE_AI_API_KEY)
+GEMINI_MODEL = 'gemini-2.0-flash'  # Stable, pas exp
 
 
 class PipelineState(TypedDict):
@@ -38,7 +44,6 @@ class PipelineState(TypedDict):
 
     # Résultats intermédiaires
     analyzed_structure: dict | None
-    execution_plan: dict | None
     project_id: str | None
     created_nodes: dict  # {slug: node_id}
 
@@ -50,14 +55,18 @@ class PipelineState(TypedDict):
     logs: list[dict]
 
     # Statut
-    status: Literal["initializing", "analyzing", "planning", "executing", "validating", "correcting", "success", "error"]
+    status: Literal["initializing", "analyzing", "executing", "validating", "correcting", "success", "error"]
+    
+    # Token usage tracking
+    total_prompt_tokens: int
+    total_completion_tokens: int
 
 
 def emit_log(state: PipelineState, level: str, message: str, step: str = None) -> dict:
     """Émet un log structuré"""
     log_entry = {
         "type": "log",
-        "level": level,  # info, success, warning, error
+        "level": level,
         "message": message,
         "step": step,
         "timestamp": datetime.utcnow().isoformat()
@@ -66,439 +75,465 @@ def emit_log(state: PipelineState, level: str, message: str, step: str = None) -
     return log_entry
 
 
-async def call_gemini(prompt: str, temperature: float = 0.3, json_mode: bool = True) -> str:
-    """Appelle Gemini avec gestion d'erreur"""
+async def call_gemini(prompt: str, temperature: float = 0.2) -> tuple[str, int, int]:
+    """
+    Appelle Gemini avec gestion d'erreur.
+    
+    Returns:
+        Tuple of (response_text, prompt_tokens, completion_tokens)
+    """
     try:
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
-
-        generation_config = {
-            "temperature": temperature,
-            "response_mime_type": "application/json" if json_mode else "text/plain"
-        }
-
+        model = genai.GenerativeModel(GEMINI_MODEL)
         response = model.generate_content(
             prompt,
-            generation_config=generation_config
+            generation_config={
+                "temperature": temperature,
+                "response_mime_type": "application/json"
+            }
         )
-
-        return response.text
+        
+        # Extract usage metadata
+        prompt_tokens = 0
+        completion_tokens = 0
+        try:
+            usage_metadata = getattr(response, 'usage_metadata', None)
+            if usage_metadata:
+                prompt_tokens = getattr(usage_metadata, 'prompt_token_count', 0) or 0
+                completion_tokens = getattr(usage_metadata, 'candidates_token_count', 0) or 0
+        except Exception:
+            pass
+        
+        return response.text, prompt_tokens, completion_tokens
     except Exception as e:
         raise Exception(f"Erreur Gemini API: {str(e)}")
 
 
-# ==================== AGENT 1: ANALYSTE ====================
+# ==================== PROMPT EXPERT (Compréhension profonde) ====================
 
-async def agent_analyste(state: PipelineState) -> PipelineState:
-    """
-    Analyse le prompt brut et extrait une structure JSON formelle.
-    """
-    emit_log(state, "info", "🔍 Analyse du prompt utilisateur...", "analyste")
-    state["status"] = "analyzing"
+ANALYSIS_PROMPT = """Tu es un EXPERT en modélisation économique et financière pour "SmartGraph".
+Tu es aussi un CONSEILLER qui comprend ce que l'utilisateur veut VRAIMENT accomplir.
 
-    prompt = f"""Tu es un expert en modélisation économique et financière pour l'application "Econ Graph".
+## TA MISSION
 
-À partir du texte brut suivant, extrait une structure formelle pour construire un graphe de calcul.
+L'utilisateur décrit un besoin, parfois vague. Tu dois :
+1. **COMPRENDRE L'OBJECTIF RÉEL** : Quel problème l'utilisateur essaie-t-il de résoudre ?
+2. **CONCEVOIR UN MODÈLE UTILE** : Qui l'aidera VRAIMENT à prendre des décisions
+3. **ANTICIPER SES BESOINS** : Inclure les variables auxquelles il n'a pas pensé
 
-TEXTE UTILISATEUR:
-{state['prompt']}
+## EXEMPLES DE MODÈLES CONVERGENTS
 
-RÈGLES D'EXTRACTION CRITIQUES:
+**Demande** : "gérer mon temps"
+**Objectif réel** : Savoir si j'ai assez de temps libre
+**Structure** :
+- PARAMÈTRES (7) : Sommeil, Travail, Transport, Repas, Loisirs, Tâches ménagères, Objectif temps libre
+- INTERMÉDIAIRES (2) : Total obligations, Heures disponibles
+- **NŒUD FINAL (1)** : Écart temps libre vs objectif ← LA RÉPONSE
+- Scénarios : "Semaine 4 jours", "Télétravail"
 
-1. **PARAMÈTRES** (valeurs fixes):
-   - Type: "parameter"
-   - OBLIGATOIRE: Fournir "default_value" (nombre)
-   - Exemples: Budget (10000 EUR), Prix unitaire (50 EUR), Taux de conversion (2.5%)
+**Demande** : "économiser de l'argent"
+**Objectif réel** : Voir ma capacité d'épargne
+**Structure** :
+- PARAMÈTRES (5) : Salaire, Loyer, Factures, Courses, Loisirs
+- INTERMÉDIAIRES (2) : Total dépenses fixes, Total dépenses
+- **NŒUD FINAL (1)** : Capacité d'épargne mensuelle ← LA RÉPONSE
+- Scénarios : "Réduction loisirs 50%", "Augmentation salaire"
 
-2. **VARIABLES CALCULÉES**:
-   - Type: "computed"
-   - OBLIGATOIRE: Fournir "formula" (expression Python simple)
-   - OBLIGATOIRE: Fournir "inputs" (liste des slugs utilisés dans la formule)
-   - Les arguments de la formule doivent EXACTEMENT matcher les slugs des inputs
-   - Exemple: formula="budget / cpc", inputs=["budget", "cpc"]
+**Demande** : "rentabilité de mon activité"
+**Objectif réel** : Connaître mon profit et ma marge
+**Structure** :
+- PARAMÈTRES (4) : Prix unitaire, Volume ventes, Coûts fixes, Coûts variables
+- INTERMÉDIAIRES (2) : Chiffre d'affaires, Coûts totaux
+- **NŒUDS FINAUX (2)** : Profit net, Marge en % ← LES RÉPONSES
+- Scénarios : "Croissance volume 20%", "Hausse prix 10%"
 
-3. **POURCENTAGES** (TRÈS IMPORTANT):
-   - Si le nœud est un %, utiliser unit="%"
-   - La "default_value" est le nombre lisible (ex: 20 pour 20%, pas 0.2)
-   - DANS LES FORMULES: Diviser par 100 (ex: "revenue * (tax_rate / 100)")
+## TEXTE UTILISATEUR
 
-4. **FORMULES PYTHON**:
-   - Format: Expressions simples comme "a + b", "a * b / 100", "a - b"
-   - PAS de `def compute():`, juste l'expression
-   - INTERDIT: return None, return null
-   - Si incertain, retourner un nombre (ex: "100")
+{user_prompt}
 
-6. **SCÉNARIOS**:
-   - Identifier les variations possibles (pessimiste, optimiste, etc.)
-   - Les overrides utilisent les entity_id (slugs)
+## ÉTAPE 1 : ANALYSE (réfléchis avant de répondre)
 
-FORMAT DE SORTIE (JSON strict):
+Avant de créer le modèle, demande-toi :
+- Quel est le VRAI problème que l'utilisateur veut résoudre ?
+- Quelles DÉCISIONS ce modèle va-t-il l'aider à prendre ?
+- Quelles variables MANQUENT dans sa demande mais sont ESSENTIELLES ?
+- Le modèle sera-t-il ACTIONNABLE (peut-il modifier les paramètres facilement) ?
+
+## ÉTAPE 2 : CONCEPTION DU MODÈLE
+
+Crée un modèle COMPLET et UTILE avec :
+
+### PARAMÈTRES (ce que l'utilisateur peut modifier)
+- type: "parameter"
+- default_value: une valeur RÉALISTE et TYPIQUE
+- description: explication claire de ce que représente ce paramètre
+
+### CALCULS (les insights automatiques)
+- type: "computed"  
+- formula: expression Python (a + b, a * b / 100, etc.)
+- inputs: liste des slugs utilisés dans la formule
+- Les arguments de la formule DOIVENT correspondre aux slugs des inputs
+
+### SCÉNARIOS (pour explorer les possibilités)
+- Au moins 2-3 scénarios pertinents
+- Chaque scénario = set d'overrides réalistes
+
+## RÈGLES TECHNIQUES
+
+1. SLUGS: snake_case, uniques (ex: "chiffre_affaires", "marge_nette")
+2. POURCENTAGES: unit="%" et valeur=20 pour 20%. Dans formules: x / 100
+3. FORMULES: Expressions simples. INTERDIT: return None/null
+4. COHÉRENCE: Les inputs d'un nœud doivent exister comme autres nœuds
+5. PAS D'AUTO-RÉFÉRENCE: Un nœud ne peut pas dépendre de lui-même
+6. DESCRIPTIONS: Chaque nœud DOIT avoir une description claire et pédagogique
+
+## FORMAT DE SORTIE (JSON)
+
 {{
-  "project_name": "Nom du projet",
-  "description": "Description courte",
-  "complexity_score": 1-10,
+  "user_intent": "Ce que l'utilisateur veut vraiment accomplir (1-2 phrases)",
+  "project_name": "Nom clair et descriptif",
+  "description": "Description du modèle et de son utilité",
   "entities": [
     {{
-      "id": "budget",  // slug en snake_case
-      "label": "Budget Marketing",
+      "id": "slug_unique",
+      "label": "Label lisible",
       "type": "parameter",
       "unit": "EUR",
-      "default_value": 10000,
-      "description": "Budget mensuel alloué au marketing"
+      "default_value": 1000,
+      "description": "Explication claire de ce paramètre"
     }},
     {{
-      "id": "roi",
-      "label": "ROI",
+      "id": "resultat_calcule",
+      "label": "Résultat calculé",
       "type": "computed",
-      "unit": "%",
-      "formula": "(revenue - budget) / budget * 100",
-      "inputs": ["revenue", "budget"],
-      "description": "Retour sur investissement en pourcentage"
+      "unit": "EUR",
+      "formula": "revenu - depenses",
+      "inputs": ["revenu", "depenses"],
+      "description": "Ce que ce calcul révèle"
     }}
   ],
   "scenarios": [
     {{
-      "name": "Scénario optimiste",
-      "overrides": [{{"entity_id": "tax_rate", "value": 15}}]
+      "name": "Scénario réaliste",
+      "description": "Ce que ce scénario explore",
+      "overrides": [{{"entity_id": "slug", "value": 1200}}]
     }}
   ]
 }}
 
-VÉRIFICATIONS AVANT D'ENVOYER:
-- Chaque nœud "parameter" a une "default_value"
-- Chaque nœud "computed" a une "formula" ET une liste "inputs"
-- Les slugs dans "inputs" matchent exactement les slugs dans "formula"
-- Les pourcentages sont divisés par 100 dans les formules
-- Pas de dépendances circulaires (A dépend de B, B dépend de A)
-- INTERDIT: Un nœud ne peut pas dépendre de lui-même (inputs ne doit pas contenir l'id du nœud)
-"""
+## RÈGLE D'OR : STRUCTURE EN ENTONNOIR
+
+⚠️ **PEU DE NŒUDS FINAUX = BON MODÈLE**
+
+Tu peux créer autant de nœuds intermédiaires que nécessaire, MAIS :
+- **1 à 3 nœuds finaux MAXIMUM** (les métriques clés qui répondent à la question)
+- Le graphe doit **CONVERGER** vers ces nœuds finaux
+- Les nœuds finaux sont ceux qui n'ont PAS d'autres nœuds qui en dépendent
+
+### Structure idéale :
+```
+[Paramètre 1]  [Paramètre 2]  [Paramètre 3]  [Paramètre 4]  ← Beaucoup d'entrées OK
+       \            |              |            /
+        \           |              |           /
+         [Calcul intermédiaire 1]  [Calcul intermédiaire 2]  ← Intermédiaires OK
+                    \                    /
+                     \                  /
+                      [MÉTRIQUE FINALE]  ← 1-3 SORTIES MAX
+```
+
+### Exemple MAUVAIS (trop de nœuds finaux) :
+Demande : "gérer mon temps"
+❌ Nœuds finaux multiples : Pourcentage Sommeil, Pourcentage Travail, Pourcentage Loisirs, Temps Libre, Total Heures...
+→ L'utilisateur ne sait pas où regarder !
+
+### Exemple BON (convergent) :
+Demande : "gérer mon temps"
+✅ Paramètres : Sommeil, Travail, Transport, Repas, Loisirs, Tâches (6 entrées OK)
+✅ Intermédiaires : Total Obligations, Total Heures
+✅ **1 SEUL nœud final** : "Temps Libre Disponible" ou "Écart vs Objectif"
+→ L'utilisateur sait exactement quelle métrique suivre
+
+### Question à te poser :
+"Quelle est LA métrique (ou les 2-3 métriques) qui répond directement à ce que l'utilisateur veut savoir ?"
+→ C'est ça ton/tes nœud(s) final(aux). Tout le reste doit y mener.
+
+## CRITÈRES DE QUALITÉ (vérifie avant de répondre)
+
+✓ **CONVERGENCE** : Y a-t-il 1-3 nœuds finaux maximum ?
+✓ **CLARTÉ** : L'utilisateur saura-t-il immédiatement quelle métrique regarder ?
+✓ **STRUCTURE** : Le graphe forme-t-il un entonnoir (beaucoup d'entrées → peu de sorties) ?
+✓ Les paramètres sont-ils ACTIONNABLES ?
+✓ Les scénarios sont-ils RÉALISTES et UTILES ?"""
+
+
+# ==================== AGENT ANALYSTE (UNIQUE APPEL LLM) ====================
+
+async def agent_analyste(state: PipelineState) -> PipelineState:
+    """
+    UN SEUL appel LLM : extrait la structure complète.
+    Les edges et positions sont calculés en Python ensuite.
+    """
+    emit_log(state, "info", "🔍 Analyse du prompt utilisateur...", "analyste")
+    state["status"] = "analyzing"
+
+    prompt = ANALYSIS_PROMPT.format(user_prompt=state['prompt'])
 
     try:
-        response = await call_gemini(prompt, temperature=0.3, json_mode=True)
-        structure = json.loads(response)
+        response_text, prompt_tokens, completion_tokens = await call_gemini(prompt, temperature=0.2)
+        
+        # Track token usage
+        state["total_prompt_tokens"] = state.get("total_prompt_tokens", 0) + prompt_tokens
+        state["total_completion_tokens"] = state.get("total_completion_tokens", 0) + completion_tokens
+        
+        structure = json.loads(response_text)
+
+        # Validation basique avant d'accepter
+        entities = structure.get('entities', [])
+        if not entities:
+            raise ValueError("Aucune entité extraite par l'IA")
+        
+        # Vérifier que chaque computed a des inputs valides
+        entity_ids = {e['id'] for e in entities}
+        for entity in entities:
+            if entity.get('type') == 'computed':
+                inputs = entity.get('inputs', [])
+                for inp in inputs:
+                    if inp not in entity_ids:
+                        emit_log(state, "warning", f"⚠️ Input '{inp}' non trouvé pour {entity['id']}", "analyste")
+                    if inp == entity['id']:
+                        raise ValueError(f"Auto-référence détectée: {entity['id']}")
 
         state["analyzed_structure"] = structure
-        emit_log(state, "success", f"✓ Structure extraite: {len(structure.get('entities', []))} nœuds identifiés", "analyste")
+        
+        # Log ce qui a été compris
+        user_intent = structure.get('user_intent', '')
+        scenarios_count = len(structure.get('scenarios', []))
+        
+        emit_log(state, "success", f"✓ {len(entities)} nœuds, {scenarios_count} scénarios", "analyste")
+        if user_intent:
+            emit_log(state, "info", f"💡 {user_intent}", "analyste")
 
         return state
 
+    except json.JSONDecodeError as e:
+        emit_log(state, "error", f"✗ JSON invalide: {str(e)}", "analyste")
+        state["errors"].append({"step": "analyste", "error": f"JSON invalide: {str(e)}"})
+        state["status"] = "error"
+        return state
     except Exception as e:
-        emit_log(state, "error", f"✗ Erreur lors de l'analyse: {str(e)}", "analyste")
+        emit_log(state, "error", f"✗ Erreur: {str(e)}", "analyste")
         state["errors"].append({"step": "analyste", "error": str(e)})
         state["status"] = "error"
         return state
 
 
-# ==================== AGENT 2: PLANIFICATEUR ====================
+# ==================== EXÉCUTEUR OPTIMISÉ ====================
 
-async def agent_planificateur(state: PipelineState) -> PipelineState:
+def generate_computation_definition(entity: dict) -> str:
+    """Génère le code Python à partir de la structure analysée (PAS BESOIN DE LLM)"""
+    if entity.get('type') == 'parameter':
+        value = entity.get('default_value', 0)
+        return f"def compute():\n    return {value}"
+    elif entity.get('type') == 'computed':
+        inputs = entity.get('inputs', [])
+        formula = entity.get('formula', '0')
+        args = ', '.join(inputs) if inputs else ''
+        return f"def compute({args}):\n    return {formula}"
+    return "def compute():\n    return 0"
+
+
+def calculate_layout_positions(entities: list[dict]) -> dict[str, tuple[float, float]]:
     """
-    Génère le plan d'exécution séquentiel (API calls).
+    Calcule les positions des nœuds en Python (PAS BESOIN DE LLM).
+    Layout simple: paramètres en haut, calculés en bas, triés par dépendances.
     """
-    emit_log(state, "info", "📋 Génération du plan d'exécution...", "planificateur")
-    state["status"] = "planning"
+    positions = {}
+    
+    # Séparer paramètres et calculés
+    parameters = [e for e in entities if e.get('type') == 'parameter']
+    computed = [e for e in entities if e.get('type') == 'computed']
+    
+    # Paramètres: ligne 0
+    for i, entity in enumerate(parameters):
+        positions[entity['id']] = (i * 300.0, 0.0)
+    
+    # Calculés: triés par niveau de dépendance
+    # Niveau = max(niveau des inputs) + 1
+    levels = {}
+    for entity in computed:
+        entity_id = entity['id']
+        inputs = entity.get('inputs', [])
+        if not inputs:
+            levels[entity_id] = 1
+        else:
+            # Calculer le niveau basé sur les dépendances
+            max_level = 0
+            for inp in inputs:
+                if inp in levels:
+                    max_level = max(max_level, levels[inp])
+                elif any(e['id'] == inp and e.get('type') == 'parameter' for e in entities):
+                    max_level = max(max_level, 0)
+            levels[entity_id] = max_level + 1
+    
+    # Grouper par niveau
+    level_groups: dict[int, list] = {}
+    for entity in computed:
+        level = levels.get(entity['id'], 1)
+        if level not in level_groups:
+            level_groups[level] = []
+        level_groups[level].append(entity)
+    
+    # Positionner par niveau
+    for level, group in sorted(level_groups.items()):
+        for i, entity in enumerate(group):
+            positions[entity['id']] = (i * 300.0, level * 250.0)
+    
+    return positions
 
-    structure = state["analyzed_structure"]
-
-    prompt = f"""Tu es un planificateur d'API pour un système de graphes économiques.
-
-À partir de cette STRUCTURE ANALYSÉE:
-{json.dumps(structure, indent=2, ensure_ascii=False)}
-
-Génère un PLAN D'EXÉCUTION séquentiel qui créera EXACTEMENT ce graphe en base de données.
-
-RÈGLES D'ORDRE:
-1. Créer le projet en premier
-2. Créer TOUS les nœuds PARAMÈTRES ("type": "parameter") en premier
-3. Créer TOUS les nœuds CALCULÉS ("type": "computed") après
-4. Créer les edges après tous les nœuds
-5. Créer les scénarios en dernier
-
-CONVERSION STRUCTURE → API:
-
-**Pour les nœuds de type "parameter":**
-{{
-  "action": "create_node",
-  "payload": {{
-    "slug": entity["id"],
-    "label": entity["label"],
-    "unit": entity["unit"],
-    "notes": entity.get("description"), // Mapper description vers notes
-    "status": "imposed",  // TOUJOURS "imposed" pour les paramètres
-    "computation_definition": "def compute(): return " + str(entity["default_value"]),  // CODE FIRST: Fonction constante
-    "value_computed": null  // Laisser le système calculer
-  }}
-}}
-
-**Pour les nœuds de type "computed":**
-{{
-  "action": "create_node",
-  "payload": {{
-    "slug": entity["id"],
-    "label": entity["label"],
-    "unit": entity["unit"],
-    "notes": entity.get("description"), // Mapper description vers notes
-    "status": "implied",  // TOUJOURS "implied" pour les calculs
-    "computation_definition": "def compute(arg1, arg2, ...): return expression",
-    // ☝️ Les arguments sont les slugs de entity["inputs"] dans le même ordre
-    // ☝️ L'expression est entity["formula"]
-    "value_computed": null
-  }}
-}}
-
-ATTENTION CRITIQUE SUR "computation_definition":
-- Si entity["inputs"] = ["budget", "cpc"] et entity["formula"] = "budget / cpc"
-- Alors "computation_definition" = "def compute(budget, cpc): return budget / cpc"
-- Les noms des arguments DOIVENT être EXACTEMENT les slugs dans "inputs"
-- Alors "computation_definition" = "def compute(budget, cpc): return budget / cpc"
-- Les noms des arguments DOIVENT être EXACTEMENT les slugs dans "inputs"
-- Ne PAS utiliser des noms génériques comme "arg1", "arg2", "args", etc.
-- IMPORTANT: Utiliser des sauts de ligne explicites "\\n" pour le code Python.
-  Exemple: "def compute(a, b):\\n    return a + b"
-
-**EXEMPLE CONCRET:**
-Structure entity:
-{{
-  "id": "roi",
-  "type": "computed",
-  "formula": "(revenue - cost) / cost * 100",
-  "inputs": ["revenue", "cost"]
-}}
-
-Devient:
-{{
-  "action": "create_node",
-  "payload": {{
-    "slug": "roi",
-    "computation_definition": "def compute(revenue, cost): return (revenue - cost) / cost * 100"
-  }}
-}}
-
-**Pour les edges:**
-- Créer UN edge par élément dans entity["inputs"]
-- source = input_slug, target = entity["id"]
-
-**Pour les scénarios:**
-- Utiliser l'entity_id comme node_id
-
-FORMAT DE SORTIE (JSON strict):
-{{
-  "api_calls": [
-    {{
-      "step": 1,
-      "action": "create_project",
-      "payload": {{"id": "proj_{{random}}", "name": "..."}}
-    }},
-    {{
-      "step": 2,
-      "action": "create_node",
-      "payload": {{
-        "slug": "budget",
-        "label": "Budget",
-        "status": "imposed",
-        "value_computed": null,
-        "computation_definition": "def compute(): return 10000",
-        ...
-      }}
-    }},
-    ...
-  ]
-}}
-
-VÉRIFICATIONS CRITIQUES:
-- TOUS les nœuds (même paramètres) ont "computation_definition"
-- Les arguments de compute() matchent EXACTEMENT les slugs dans "inputs"
-- Les edges sont créés APRÈS tous les nœuds
-- JAMAIS de lien où source == target (auto-référence interdite)
-"""
-
-    try:
-        response = await call_gemini(prompt, temperature=0.1, json_mode=True)
-        plan = json.loads(response)
-
-        state["execution_plan"] = plan
-        emit_log(state, "success", f"✓ Plan généré: {len(plan.get('api_calls', []))} étapes", "planificateur")
-
-        return state
-
-    except Exception as e:
-        emit_log(state, "error", f"✗ Erreur lors de la planification: {str(e)}", "planificateur")
-        state["errors"].append({"step": "planificateur", "error": str(e)})
-        state["status"] = "error"
-        return state
-
-
-# ==================== EXÉCUTEUR ====================
 
 async def executeur(state: PipelineState) -> PipelineState:
     """
-    Exécute le plan d'API calls (création réelle en BDD).
+    Crée le projet en BDD à partir de la structure analysée.
+    - Génère le code Python en Python (pas de LLM)
+    - Calcule les positions en Python (pas de LLM)
+    - Déduit les edges des inputs (pas de LLM)
     """
-    emit_log(state, "info", "⚙️ Exécution du plan...", "executeur")
+    emit_log(state, "info", "⚙️ Création du projet...", "executeur")
     state["status"] = "executing"
 
-    plan = state["execution_plan"]
+    structure = state["analyzed_structure"]
+    if not structure:
+        emit_log(state, "error", "✗ Structure manquante", "executeur")
+        state["status"] = "error"
+        return state
+
+    entities = structure.get('entities', [])
+    scenarios = structure.get('scenarios', [])
+    
+    # Calculer les positions en Python
+    positions = calculate_layout_positions(entities)
+    
     db = SessionLocal()
-
     try:
-        project_id = None
+        # 1. Créer le projet
+        project_id = f"proj_{uuid.uuid4().hex[:8]}"
+        
+        # Construire la description enrichie avec l'intent compris
+        user_intent = structure.get('user_intent', '')
+        base_description = structure.get('description', '')
+        full_description = base_description
+        if user_intent:
+            full_description = f"{user_intent}\n\n{base_description}" if base_description else user_intent
+            emit_log(state, "info", f"💡 Objectif compris: {user_intent}", "executeur")
+        
+        project = Project(
+            id=project_id,
+            name=structure.get('project_name', 'Nouveau projet'),
+            user_id=state["user_id"],
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(project)
+        db.flush()
+        state["project_id"] = project_id
+        emit_log(state, "success", f"✓ Projet créé: {project_id}", "executeur")
+
+        # 2. Créer les nœuds (paramètres d'abord, puis calculés)
         created_nodes = {}
+        
+        # Trier: paramètres first
+        sorted_entities = sorted(entities, key=lambda e: 0 if e.get('type') == 'parameter' else 1)
+        
+        for entity in sorted_entities:
+            node_id = str(uuid.uuid4())
+            slug = entity['id']
+            pos_x, pos_y = positions.get(slug, (0.0, 0.0))
+            
+            # Générer le code en Python (PAS DE LLM)
+            computation_definition = generate_computation_definition(entity)
+            
+            node = Node(
+                id=node_id,
+                slug=slug,
+                project_id=project_id,
+                label=entity.get('label', slug),
+                unit=entity.get('unit', ''),
+                status='imposed' if entity.get('type') == 'parameter' else 'implied',
+                computation_definition=computation_definition,
+                value_computed=None,
+                notes=entity.get('description'),
+                pos_x=pos_x,
+                pos_y=pos_y,
+                confidence=1.0
+            )
+            db.add(node)
+            db.flush()
+            created_nodes[slug] = node_id
+            emit_log(state, "success", f"  ✓ Nœud: {entity.get('label', slug)}", "executeur")
 
-        for api_call in plan.get("api_calls", []):
-            step = api_call["step"]
-            action = api_call.get("action", "unknown")
+        # 3. Créer les edges (DÉDUITS des inputs, PAS DE LLM)
+        for entity in entities:
+            if entity.get('type') == 'computed':
+                target_slug = entity['id']
+                for input_slug in entity.get('inputs', []):
+                    if input_slug in created_nodes and target_slug in created_nodes:
+                        if input_slug != target_slug:  # Éviter auto-référence
+                            edge = Edge(
+                                id=str(uuid.uuid4()),
+                                project_id=project_id,
+                                source=created_nodes[input_slug],
+                                target=created_nodes[target_slug],
+                                edge_type="dependency"
+                            )
+                            db.add(edge)
+                            emit_log(state, "info", f"  → {input_slug} → {target_slug}", "executeur")
 
-            emit_log(state, "info", f"  [{step}] {action}...", "executeur")
+        db.flush()
 
-            # === Créer le projet ===
-            if action == "create_project":
-                payload = api_call["payload"]
-                project_id = f"proj_{uuid.uuid4().hex[:8]}"
+        # 4. Créer les scénarios
+        for scenario_def in scenarios:
+            scenario_id = str(uuid.uuid4())
+            scenario = Scenario(
+                id=scenario_id,
+                project_id=project_id,
+                name=scenario_def.get('name', 'Scénario'),
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            db.add(scenario)
+            db.flush()
 
-                project = Project(
-                    id=project_id,
-                    name=payload["name"],
-                    user_id=state["user_id"],
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow()
-                )
-                db.add(project)
-                db.flush()
+            for override in scenario_def.get('overrides', []):
+                entity_slug = override.get('entity_id')
+                if entity_slug and entity_slug in created_nodes:
+                    override_obj = ScenarioNodeOverride(
+                        id=str(uuid.uuid4()),
+                        scenario_id=scenario_id,
+                        node_id=created_nodes[entity_slug],
+                        mode="value",
+                        override_value=override.get('value')
+                    )
+                    db.add(override_obj)
 
-                state["project_id"] = project_id
-                emit_log(state, "success", f"    ✓ Projet créé: {project_id}", "executeur")
+            emit_log(state, "success", f"  ✓ Scénario: {scenario_def.get('name')}", "executeur")
 
-            # === Créer un nœud ===
-            elif action == "create_node":
-                if not project_id:
-                    raise Exception("project_id non défini")
-
-                payload = api_call["payload"]
-                node_id = str(uuid.uuid4())
-
-                # CODE FIRST: On ne force plus value_computed manuellement
-                # On fait confiance à la computation_definition générée par le planificateur
-                status = payload.get("status", "unknown")
-                computation_definition = payload.get("computation_definition", "")
-                # FIX: Unescape literal \n to real newline for valid Python execution
-                if computation_definition:
-                    computation_definition = computation_definition.replace("\\n", "\n")
-                
-                node = Node(
-                    id=node_id,
-                    slug=payload["slug"],
-                    project_id=project_id,
-                    label=payload["label"],
-                    unit=payload.get("unit", ""),
-                    status=status,
-                    computation_definition=computation_definition,
-                    value_computed=None,  # Sera calculé par le validateur
-                    notes=payload.get("notes"),
-                    pos_x=0,
-                    pos_y=0,
-                    confidence=1.0
-                )
-                db.add(node)
-                db.flush()
-
-                created_nodes[payload["slug"]] = node_id
-                emit_log(state, "success", f"    ✓ Nœud créé: {payload['label']}", "executeur")
-
-            # === Créer un edge ===
-            elif action == "create_edge":
-                if not project_id:
-                    raise Exception("project_id non défini")
-
-                payload = api_call["payload"]
-                source_slug = payload["source"]
-                target_slug = payload["target"]
-
-                if source_slug not in created_nodes or target_slug not in created_nodes:
-                    emit_log(state, "warning", f"    ⚠ Edge ignoré: nœuds source/target introuvables", "executeur")
-                    continue
-
-                # FIX: Prevent self-loops (cycles of length 1)
-                if source_slug == target_slug:
-                    emit_log(state, "warning", f"    ⚠ Edge ignoré: auto-référence interdite ({source_slug} → {target_slug})", "executeur")
-                    continue
-
-                edge = Edge(
-                    id=str(uuid.uuid4()),
-                    project_id=project_id,
-                    source=created_nodes[source_slug],
-                    target=created_nodes[target_slug],
-                    edge_type=payload.get("edge_type", "dependency")
-                )
-                db.add(edge)
-                db.flush()
-
-                emit_log(state, "success", f"    ✓ Lien créé: {source_slug} → {target_slug}", "executeur")
-
-            # === Créer un scénario ===
-            elif action == "create_scenario":
-                if not project_id:
-                    raise Exception("project_id non défini")
-
-                payload = api_call["payload"]
-                scenario_id = str(uuid.uuid4())
-
-                scenario = Scenario(
-                    id=scenario_id,
-                    project_id=project_id,
-                    name=payload["name"],
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow()
-                )
-                db.add(scenario)
-                db.flush()
-
-                # Ajouter les overrides
-                for override in payload.get("overrides", []):
-                    # Robustesse: chercher l'ID sous plusieurs clés possibles
-                    entity_slug = override.get("entity_id") or override.get("node_id") or override.get("id")
-                    
-                    if not entity_slug:
-                        emit_log(state, "warning", f"    ⚠ Override ignoré (ID manquant): {override}", "executeur")
-                        continue
-
-                    if entity_slug in created_nodes:
-                        override_obj = ScenarioNodeOverride(
-                            id=str(uuid.uuid4()),
-                            scenario_id=scenario_id,
-                            node_id=created_nodes[entity_slug],
-                            mode="value",
-                            override_value=override["value"]
-                        )
-                        db.add(override_obj)
-                    else:
-                         emit_log(state, "warning", f"    ⚠ Override ignoré (Nœud introuvable): {entity_slug}", "executeur")
-
-                db.flush()
-                emit_log(state, "success", f"    ✓ Scénario créé: {payload['name']}", "executeur")
-
-        # === APPLICATION DU LAYOUT AUTOMATIQUE ===
-        if project_id:
-            try:
-                emit_log(state, "info", "📐 Calcul du layout automatique...", "executeur")
-                all_nodes = db.query(Node).filter(Node.project_id == project_id).all()
-                all_edges = db.query(Edge).filter(Edge.project_id == project_id).all()
-                
-                apply_layout(all_nodes, all_edges)
-                db.flush()
-                emit_log(state, "success", "✓ Layout appliqué", "executeur")
-            except Exception as e:
-                emit_log(state, "warning", f"⚠️ Erreur lors du layout (ignorée): {str(e)}", "executeur")
-                # On continue quand même pour ne pas échouer la création du projet
-
+        # 5. Appliquer le layout final (optionnel, les positions sont déjà calculées)
+        try:
+            all_nodes = db.query(Node).filter(Node.project_id == project_id).all()
+            all_edges = db.query(Edge).filter(Edge.project_id == project_id).all()
+            apply_layout(all_nodes, all_edges)
+            db.flush()
+        except Exception:
+            pass  # Layout optionnel
 
         db.commit()
         state["created_nodes"] = created_nodes
-        emit_log(state, "success", "✓ Exécution terminée avec succès", "executeur")
+        emit_log(state, "success", f"✓ {len(created_nodes)} nœuds créés", "executeur")
 
         return state
 
     except Exception as e:
         db.rollback()
-        emit_log(state, "error", f"✗ Erreur lors de l'exécution: {str(e)}", "executeur")
+        emit_log(state, "error", f"✗ Erreur: {str(e)}", "executeur")
         state["errors"].append({"step": "executeur", "error": str(e)})
         state["status"] = "error"
         return state
@@ -510,14 +545,11 @@ async def executeur(state: PipelineState) -> PipelineState:
 # ==================== VALIDATEUR ====================
 
 async def validateur(state: PipelineState) -> PipelineState:
-    """
-    Valide que tout le graphe s'exécute sans erreur Python.
-    """
-    # Si l'étape précédente a échoué, on ne valide pas
+    """Valide que tous les nœuds s'exécutent correctement."""
     if state["status"] == "error":
         return state
 
-    emit_log(state, "info", "✅ Validation de l'exécution Python...", "validateur")
+    emit_log(state, "info", "✅ Validation...", "validateur")
     state["status"] = "validating"
 
     project_id = state["project_id"]
@@ -527,58 +559,39 @@ async def validateur(state: PipelineState) -> PipelineState:
         return state
 
     db = SessionLocal()
-
     try:
-        # Récupérer tous les nœuds du projet
         nodes = db.query(Node).filter(Node.project_id == project_id).all()
 
-        # 1. Validation statique du code Python
+        # 1. Validation syntaxique
         syntax_errors = []
         for node in nodes:
             if node.computation_definition:
-                # Vérifier les sauts de ligne (vrais sauts de ligne)
-                if "\n" not in node.computation_definition and "return" in node.computation_definition:
-                     # Tentative de correction automatique si tout est sur une ligne
-                     if "def compute" in node.computation_definition and ":" in node.computation_definition:
-                         parts = node.computation_definition.split(":", 1)
-                         # Utiliser un vrai saut de ligne \n
-                         node.computation_definition = f"{parts[0]}:\n    {parts[1].strip()}"
-                         db.add(node)
-                         emit_log(state, "warning", f"  ⚠️ Correction auto saut de ligne pour {node.slug}", "validateur")
-
                 err = validate_algorithm(node.computation_definition)
                 if err:
                     syntax_errors.append({
                         "node_id": node.id,
                         "slug": node.slug,
                         "label": node.label,
-                        "error": f"Syntaxe invalide: {err}"
+                        "code": node.computation_definition,
+                        "error": f"Syntaxe: {err}"
                     })
 
         if syntax_errors:
-            emit_log(state, "error", f"✗ {len(syntax_errors)} erreurs de syntaxe détectées", "validateur")
-            for err in syntax_errors:
-                emit_log(state, "error", f"  - {err['slug']}: {err['error']}", "validateur")
+            emit_log(state, "error", f"✗ {len(syntax_errors)} erreurs de syntaxe", "validateur")
             state["errors"].extend(syntax_errors)
-            # On arrête ici si la syntaxe est invalide, pas la peine d'exécuter
             return state
 
-        db.commit() # Sauvegarder les corrections potentielles
-
-        # 2. Exécution et détection de cycles
+        # 2. Exécution
         computed_values = compute_all_nodes(db, project_id)
 
-        # Vérifier erreur globale (ex: cycle)
         if "_error" in computed_values:
-            global_error = computed_values["_error"]["error"]
-            emit_log(state, "error", f"✗ Erreur critique d'exécution: {global_error}", "validateur")
-            state["errors"].append({"step": "validateur", "error": global_error})
+            emit_log(state, "error", f"✗ {computed_values['_error']['error']}", "validateur")
+            state["errors"].append({"step": "validateur", "error": computed_values["_error"]["error"]})
             return state
 
-        # 3. Vérifier les erreurs individuelles de calcul
-        nodes_with_errors = []
-        # Re-fetch nodes to get updated status
+        # 3. Vérifier les erreurs individuelles
         nodes = db.query(Node).filter(Node.project_id == project_id).all()
+        nodes_with_errors = []
         
         for node in nodes:
             if node.computation_error:
@@ -586,24 +599,21 @@ async def validateur(state: PipelineState) -> PipelineState:
                     "node_id": node.id,
                     "slug": node.slug,
                     "label": node.label,
+                    "code": node.computation_definition,
                     "error": node.computation_error
                 })
 
         if nodes_with_errors:
-            emit_log(state, "error", f"✗ {len(nodes_with_errors)} nœuds en erreur d'exécution", "validateur")
-            for err_node in nodes_with_errors:
-                emit_log(state, "error", f"  - {err_node['label']}: {err_node['error']}", "validateur")
-
+            emit_log(state, "error", f"✗ {len(nodes_with_errors)} nœuds en erreur", "validateur")
             state["errors"].extend(nodes_with_errors)
-            # Ne pas marquer comme error ici, on va tenter la correction
             return state
 
-        emit_log(state, "success", "✓ Tous les nœuds s'exécutent correctement", "validateur")
+        emit_log(state, "success", "✓ Tous les calculs OK", "validateur")
         state["status"] = "success"
         return state
 
     except Exception as e:
-        emit_log(state, "error", f"✗ Erreur lors de la validation: {str(e)}", "validateur")
+        emit_log(state, "error", f"✗ Erreur: {str(e)}", "validateur")
         state["errors"].append({"step": "validateur", "error": str(e)})
         return state
 
@@ -611,84 +621,120 @@ async def validateur(state: PipelineState) -> PipelineState:
         db.close()
 
 
-# ==================== AGENT CORRECTEUR ====================
+# ==================== CORRECTEUR CHIRURGICAL ====================
+
+CORRECTION_PROMPT = """Tu es un expert Python pour "SmartGraph".
+
+ERREUR dans le nœud "{slug}" (label: "{label}"):
+Code actuel:
+```python
+{code}
+```
+Erreur: {error}
+
+Inputs disponibles (slugs): {available_inputs}
+
+Corrige le code. Règles:
+- def compute({args}): return expression
+- Ne retourne JAMAIS None/null
+- Utilise UNIQUEMENT les inputs listés
+
+Retourne UNIQUEMENT le JSON:
+{{"corrected_code": "def compute(...): return ..."}}"""
+
 
 async def agent_correcteur(state: PipelineState) -> PipelineState:
     """
-    Corrige les erreurs détectées (max 3 tentatives).
+    Correcteur CHIRURGICAL: corrige seulement les nœuds en erreur.
+    Ne recrée PAS tout le projet.
     """
     state["retry_count"] += 1
-    emit_log(state, "info", f"🔧 Tentative de correction #{state['retry_count']}...", "correcteur")
+    emit_log(state, "info", f"🔧 Correction #{state['retry_count']}...", "correcteur")
     state["status"] = "correcting"
 
     if state["retry_count"] > 3:
-        emit_log(state, "error", "✗ Nombre maximum de tentatives atteint (3)", "correcteur")
+        emit_log(state, "error", "✗ Max tentatives atteint", "correcteur")
         state["status"] = "error"
         return state
 
-    original_plan = state["execution_plan"]
     errors = state["errors"]
+    if not errors:
+        state["status"] = "success"
+        return state
 
-    prompt = f"""Tu es un expert en debugging de modèles économiques.
-
-Le graphe généré a rencontré des erreurs lors de l'exécution.
-
-PLAN ORIGINAL:
-{json.dumps(original_plan, indent=2, ensure_ascii=False)}
-
-ERREURS DÉTECTÉES:
-{json.dumps(errors, indent=2, ensure_ascii=False)}
-
-ANALYSE ET CORRECTION:
-1. Identifie la cause racine des erreurs
-2. Propose un plan corrigé
-
-ERREURS FRÉQUENTES:
-- Mauvais noms de variables dans les formules (doit correspondre aux slugs)
-- Dépendances manquantes ou mal ordonnées
-- Syntaxe Python incorrecte dans les formules
-
-FORMAT DE SORTIE (JSON strict):
-{{
-  "diagnosis": "Explication de l'erreur",
-  "corrected_plan": {{
-    "api_calls": [...]
-  }}
-}}
-"""
-
+    db = SessionLocal()
     try:
-        response = await call_gemini(prompt, temperature=0.2, json_mode=True)
-        correction = json.loads(response)
+        project_id = state["project_id"]
+        all_nodes = db.query(Node).filter(Node.project_id == project_id).all()
+        all_slugs = [n.slug for n in all_nodes]
 
-        emit_log(state, "info", f"  Diagnostic: {correction.get('diagnosis', 'N/A')}", "correcteur")
+        # Corriger chaque nœud en erreur
+        corrected_count = 0
+        remaining_errors = []
 
-        # Détruire le projet défectueux
-        db = SessionLocal()
-        try:
-            project = db.query(Project).filter(Project.id == state["project_id"]).first()
-            if project:
-                db.delete(project)
-                db.commit()
-                emit_log(state, "info", "  🗑️ Projet défectueux supprimé", "correcteur")
-        finally:
-            db.close()
+        for error in errors:
+            if "node_id" not in error:
+                remaining_errors.append(error)
+                continue
 
-        # Réinitialiser l'état pour retry
-        state["execution_plan"] = correction["corrected_plan"]
-        state["project_id"] = None
-        state["created_nodes"] = {}
-        state["errors"] = []
+            node = db.query(Node).filter(Node.id == error["node_id"]).first()
+            if not node:
+                remaining_errors.append(error)
+                continue
 
-        emit_log(state, "success", "✓ Plan corrigé, relance de l'exécution...", "correcteur")
+            # Récupérer les inputs de ce nœud
+            edges = db.query(Edge).filter(Edge.target == node.id).all()
+            input_node_ids = [e.source for e in edges]
+            input_nodes = db.query(Node).filter(Node.id.in_(input_node_ids)).all() if input_node_ids else []
+            input_slugs = [n.slug for n in input_nodes]
 
+            prompt = CORRECTION_PROMPT.format(
+                slug=node.slug,
+                label=node.label,
+                code=error.get("code", node.computation_definition),
+                error=error.get("error", "Unknown"),
+                available_inputs=input_slugs or ["(aucun - c'est un paramètre)"],
+                args=", ".join(input_slugs) if input_slugs else ""
+            )
+
+            try:
+                response_text, prompt_tokens, completion_tokens = await call_gemini(prompt, temperature=0.1)
+                
+                # Track token usage
+                state["total_prompt_tokens"] = state.get("total_prompt_tokens", 0) + prompt_tokens
+                state["total_completion_tokens"] = state.get("total_completion_tokens", 0) + completion_tokens
+                
+                correction = json.loads(response_text)
+                corrected_code = correction.get("corrected_code", "")
+
+                if corrected_code and "def compute" in corrected_code:
+                    node.computation_definition = corrected_code
+                    node.computation_error = None
+                    db.add(node)
+                    corrected_count += 1
+                    emit_log(state, "success", f"  ✓ {node.slug} corrigé", "correcteur")
+                else:
+                    remaining_errors.append(error)
+            except Exception as e:
+                emit_log(state, "warning", f"  ⚠️ Échec correction {node.slug}: {e}", "correcteur")
+                remaining_errors.append(error)
+
+        db.commit()
+        state["errors"] = remaining_errors
+        
+        if corrected_count > 0:
+            emit_log(state, "info", f"✓ {corrected_count} nœuds corrigés, revalidation...", "correcteur")
+        
         return state
 
     except Exception as e:
-        emit_log(state, "error", f"✗ Erreur lors de la correction: {str(e)}", "correcteur")
+        emit_log(state, "error", f"✗ Erreur correction: {str(e)}", "correcteur")
         state["errors"].append({"step": "correcteur", "error": str(e)})
         state["status"] = "error"
         return state
+
+    finally:
+        db.close()
 
 
 # ==================== DÉCISION DE RETRY ====================
@@ -697,8 +743,11 @@ def should_retry(state: PipelineState) -> Literal["correcteur", "success", "erro
     """Décision: retry, succès ou erreur finale"""
     if state["status"] == "success":
         return "success"
-
-    if state["errors"] and state["retry_count"] < 3:
+    
+    # Seulement les erreurs avec node_id sont corrigeables
+    correctable_errors = [e for e in state["errors"] if "node_id" in e]
+    
+    if correctable_errors and state["retry_count"] < 3:
         return "correcteur"
 
     return "error"
@@ -708,20 +757,18 @@ def should_retry(state: PipelineState) -> Literal["correcteur", "success", "erro
 
 workflow = StateGraph(PipelineState)
 
-# Ajouter les nœuds
+# Ajouter les nœuds (PLUS de planificateur !)
 workflow.add_node("analyste", agent_analyste)
-workflow.add_node("planificateur", agent_planificateur)
 workflow.add_node("executeur", executeur)
 workflow.add_node("validateur", validateur)
 workflow.add_node("correcteur", agent_correcteur)
 
 # Définir les transitions
 workflow.set_entry_point("analyste")
-workflow.add_edge("analyste", "planificateur")
-workflow.add_edge("planificateur", "executeur")
+workflow.add_edge("analyste", "executeur")  # Direct ! Pas de planificateur
 workflow.add_edge("executeur", "validateur")
 
-# Branchement conditionnel après validation
+# Branchement conditionnel
 workflow.add_conditional_edges(
     "validateur",
     should_retry,
@@ -732,10 +779,10 @@ workflow.add_conditional_edges(
     }
 )
 
-# Le correcteur retourne à l'exécuteur
-workflow.add_edge("correcteur", "executeur")
+# Le correcteur retourne au validateur (pas à l'exécuteur !)
+workflow.add_edge("correcteur", "validateur")
 
-# Compiler le graphe
+# Compiler
 agent_graph = workflow.compile()
 
 
@@ -743,16 +790,17 @@ agent_graph = workflow.compile()
 
 async def run_agent_pipeline(prompt: str, user_id: str) -> tuple[str | None, list[dict]]:
     """
-    Point d'entrée principal du pipeline multi-agents.
-
-    Returns:
-        (project_id, logs)
+    Point d'entrée principal du pipeline multi-agents OPTIMISÉ.
+    
+    Optimisations:
+    - 1 appel LLM au lieu de 2
+    - Edges et positions calculés en Python
+    - Correcteur chirurgical (pas de recréation totale)
     """
     initial_state: PipelineState = {
         "prompt": prompt,
         "user_id": user_id,
         "analyzed_structure": None,
-        "execution_plan": None,
         "project_id": None,
         "created_nodes": {},
         "errors": [],
@@ -761,18 +809,13 @@ async def run_agent_pipeline(prompt: str, user_id: str) -> tuple[str | None, lis
         "status": "initializing"
     }
 
-    # Exécuter le graphe
     final_state = None
     async for state in agent_graph.astream(initial_state):
         final_state = state
 
-    # Extraire les valeurs du dernier état
     if final_state:
-        # LangGraph retourne un dict avec les noms de nœuds comme clés
-        # On doit extraire le dernier état
         last_node_key = list(final_state.keys())[-1]
         last_state = final_state[last_node_key]
-
         return last_state.get("project_id"), last_state.get("logs", [])
 
     return None, []

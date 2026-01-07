@@ -1,6 +1,8 @@
 "use client";
 
 import { useScenarios } from "@/lib/api/hooks";
+import { useGraphTheme } from "@/lib/context/GraphThemeContext";
+import { cn } from "@/lib/utils";
 import { useProjectStore } from "@/store/projectState";
 import { useScenarioStore } from "@/store/scenarioState";
 import { Check, X } from "lucide-react";
@@ -14,7 +16,9 @@ export function ScenarioExplorer({
     onSelectScenario: (id: string | null) => void;
     onCreateScenario: (name: string) => Promise<void>;
 }) {
+  const { isLightMode } = useGraphTheme();
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
+  const canEdit = useProjectStore((s) => s.canEdit)();
   const { data: scenarios = [] } = useScenarios(currentProjectId);
   const activeScenarioId = useScenarioStore((s) => s.activeScenarioId);
 
@@ -67,7 +71,12 @@ export function ScenarioExplorer({
   return (
     <div className="p-2 space-y-1">
         {!activeScenarioId && (
-            <div className="mb-3 px-3 py-2 rounded bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs text-center">
+            <div className={cn(
+              "mb-3 px-3 py-2 rounded border text-xs text-center",
+              isLightMode 
+                ? "bg-blue-50 border-blue-200 text-blue-700" 
+                : "bg-blue-500/10 border-blue-500/20 text-blue-400"
+            )}>
                 Aucun scénario sélectionné
                 <br />
                 <span className="opacity-75">Affichage des valeurs de base</span>
@@ -77,17 +86,23 @@ export function ScenarioExplorer({
         {/* Baseline Option */}
         <button
             onClick={() => onSelectScenario(null)}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
-                !activeScenarioId
-                    ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium"
-                    : "text-zinc-600 dark:text-zinc-400 hover:bg-white/10 dark:hover:bg-white/5"
-            }`}
+            className={cn(
+              "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all",
+              !activeScenarioId
+                ? isLightMode 
+                  ? "bg-white text-zinc-900 font-medium shadow-sm" 
+                  : "bg-zinc-800 text-zinc-100 font-medium"
+                : isLightMode 
+                  ? "text-zinc-800 hover:bg-zinc-300/50" 
+                  : "text-zinc-400 hover:bg-white/5"
+            )}
         >
-            <div className={`flex items-center justify-center w-4 h-4 rounded border-2 transition-colors ${
-                !activeScenarioId
-                    ? "bg-blue-500 border-blue-500"
-                    : "border-zinc-300 dark:border-zinc-600"
-            }`}>
+            <div className={cn(
+              "flex items-center justify-center w-4 h-4 rounded border-2 transition-colors",
+              !activeScenarioId
+                ? "bg-blue-500 border-blue-500"
+                : isLightMode ? "border-zinc-400" : "border-zinc-600"
+            )}>
                 {!activeScenarioId && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
             </div>
             <span className="flex-1 text-left">Baseline</span>
@@ -97,7 +112,10 @@ export function ScenarioExplorer({
         {(scenarios.length > 0 || isCreatingNew) && (
             <div className="pt-2 space-y-1">
                 <div className="px-3 pb-1">
-                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
+                    <p className={cn(
+                      "text-xs font-medium uppercase tracking-wide",
+                      isLightMode ? "text-zinc-600" : "text-zinc-400"
+                    )}>
                         Scénarios
                     </p>
                 </div>
@@ -107,12 +125,16 @@ export function ScenarioExplorer({
                         scenario={scenario}
                         isActive={activeScenarioId === scenario.id}
                         onSelect={() => onSelectScenario(scenario.id)}
+                        canEdit={canEdit}
                     />
                 ))}
 
                 {/* Inline Creation Input */}
                 {isCreatingNew && (
-                    <div className="px-3 py-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 flex items-center gap-2">
+                    <div className={cn(
+                      "px-3 py-2 rounded-lg flex items-center gap-2",
+                      isLightMode ? "bg-white shadow-sm" : "bg-zinc-800"
+                    )}>
                         <div className="flex items-center justify-center w-4 h-4 rounded border-2 border-blue-500 bg-blue-500">
                             <div className="w-2 h-2 rounded-full bg-white" />
                         </div>
@@ -131,12 +153,22 @@ export function ScenarioExplorer({
                                 }, 200);
                             }}
                             placeholder="Nom du scénario"
-                            className="flex-1 bg-transparent border-none outline-none focus:ring-0 p-0 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
+                            className={cn(
+                              "flex-1 bg-transparent border-none outline-none focus:ring-0 p-0 text-sm",
+                              isLightMode 
+                                ? "text-zinc-900 placeholder:text-zinc-500" 
+                                : "text-zinc-100 placeholder:text-zinc-500"
+                            )}
                         />
                         <button
                             type="button"
                             onClick={handleCancelCreation}
-                            className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-zinc-500 dark:text-zinc-400"
+                            className={cn(
+                              "p-1 rounded transition-colors",
+                              isLightMode 
+                                ? "hover:bg-zinc-200 text-zinc-600" 
+                                : "hover:bg-zinc-700 text-zinc-400"
+                            )}
                             aria-label="Annuler"
                             title="Annuler (Échap)"
                         >
@@ -148,7 +180,10 @@ export function ScenarioExplorer({
         )}
 
         {scenarios.length === 0 && !isCreatingNew && (
-            <div className="px-4 py-8 text-center text-xs text-zinc-500 dark:text-zinc-400">
+            <div className={cn(
+              "px-4 py-8 text-center text-xs",
+              isLightMode ? "text-zinc-600" : "text-zinc-400"
+            )}>
                 Aucun scénario créé.
             </div>
         )}

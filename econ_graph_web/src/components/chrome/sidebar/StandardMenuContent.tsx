@@ -23,6 +23,7 @@ export function StandardMenuContent({
   const setScenarioPanelOpen = useUIStore((s) => s.setScenarioPanelOpen);
   const resetDetailPanels = useUIStore((s) => s.resetDetailPanels);
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
+  const canEdit = useProjectStore((s) => s.canEdit)();
   const setNodeEditorMode = useUIStore((s) => s.setNodeEditorMode);
   const setNodeEditorNodeId = useUIStore((s) => s.setNodeEditorNodeId);
   
@@ -60,7 +61,7 @@ export function StandardMenuContent({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onClick={(e) => e.stopPropagation()}
-                    className="bg-transparent border-none outline-none text-xs w-full placeholder:text-zinc-500 text-zinc-900 dark:text-zinc-100 h-full"
+                    className="bg-transparent border-none outline-none text-xs w-full placeholder:text-zinc-600 text-zinc-900 dark:text-zinc-100 h-full"
                 />
             ) : (
                 "Explorateur"
@@ -78,13 +79,13 @@ export function StandardMenuContent({
                         setIsSearchOpen(true);
                     }
                 }}
-                className="p-1 hover:bg-white/10 rounded transition-colors text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                className="p-1 hover:bg-zinc-400 dark:hover:bg-white/10 rounded transition-colors text-zinc-700 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
             >
                 {isSearchOpen ? <X className="h-3.5 w-3.5" /> : <Search className="h-3.5 w-3.5" />}
             </button>
         }
       >
-        <NodeExplorer onEditNode={onEditNode} searchQuery={searchQuery} />
+        <NodeExplorer onEditNode={canEdit ? onEditNode : undefined} searchQuery={searchQuery} />
       </CollapsibleSection>
     </>
   );

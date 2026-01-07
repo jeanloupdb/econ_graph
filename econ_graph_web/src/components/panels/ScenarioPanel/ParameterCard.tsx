@@ -323,7 +323,7 @@ export function ParameterCard({
       className={`relative border rounded-lg shadow-sm transition-all ${
         isSelected
           ? "bg-blue-500/20 border-blue-500/50 dark:bg-blue-500/20 dark:border-blue-500/50"
-          : "bg-white dark:bg-zinc-950/40"
+          : "bg-white dark:bg-zinc-950/40 border-zinc-400 dark:border-zinc-800"
       } ${
         isHighlighted ? "ring-2 ring-amber-400" : ""
       } ${!scenarioEditable ? "opacity-75 grayscale-[0.5]" : ""}`}
@@ -396,7 +396,7 @@ export function ParameterCard({
               </span>
             )}
           </div>
-          <div className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 truncate">
+          <div className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400 truncate">
             {node.slug || node.id}
           </div>
         </div>
@@ -425,9 +425,9 @@ export function ParameterCard({
           isExpanded ? "max-h-[700px] px-3 pb-3" : "max-h-0 px-3 pb-0"
         }`}
       >
-        <div className="pt-3 border-t border-zinc-200 dark:border-zinc-800 space-y-3">
+        <div className="pt-3 border-t border-zinc-300 dark:border-zinc-800 space-y-3">
           <div className="flex items-start justify-between gap-2">
-            <div className="text-xs text-zinc-500 dark:text-zinc-400">
+            <div className="text-xs text-zinc-700 dark:text-zinc-400">
               Mode de saisie
             </div>
             <IconSwitch
@@ -486,7 +486,7 @@ export function ParameterCard({
                 </button>
               </div>
 
-              <div className="space-y-1 text-xs text-zinc-600 dark:text-zinc-300">
+              <div className="space-y-1 text-xs text-zinc-700 dark:text-zinc-300">
                 <div className="font-medium">
                   Valeur appliquée :{" "}
                   <span className="font-semibold">
@@ -639,7 +639,7 @@ export function ParameterCard({
                   </AccordionItem>
                 </Accordion>
               </div>
-              <div className="text-xs text-zinc-600 dark:text-zinc-300">
+              <div className="text-xs text-zinc-700 dark:text-zinc-300">
                 <div className="font-medium">
                   Valeur appliquée :{" "}
                   <span className="font-semibold">
@@ -660,7 +660,7 @@ export function ParameterCard({
           )}
 
           {!scenarioEditable && (
-            <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-600 dark:text-zinc-300">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-700 dark:text-zinc-300">
               {overrideTarget.type === "node" && !isVirtual && (
                 <>
                   <button

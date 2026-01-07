@@ -1,5 +1,5 @@
 /**
- * Core types for the Econ Graph application
+ * Core types for the SmartGraph application
  * These are used throughout the application until OpenAPI types are generated
  */
 

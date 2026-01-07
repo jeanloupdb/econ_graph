@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, UploadFile, File, Form
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 import google.generativeai as genai
 import json
 import uuid
@@ -11,10 +12,15 @@ from sse_starlette.sse import EventSourceResponse
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.deps import get_current_user
+from app.core.db import get_db
 from app.models import User
+from app.services.ai_usage import log_ai_usage, extract_usage_from_gemini_response
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 logger = get_logger(__name__)
+
+# Model name constant
+GEMINI_MODEL = "gemini-2.0-flash"
 
 
 class NodeInputContext(BaseModel):
@@ -117,7 +123,7 @@ async def create_node_with_ai(request: AiCreateNodeRequest, current_user: User =
                 graph_context_info += f"\n  ... and {gc.totalNodes - 20} more nodes"
 
         system_prompt = """
-        You are an expert Python coding assistant for creating nodes in "Econ Graph".
+        You are an expert Python coding assistant for creating nodes in "Smart Graph".
         Your goal is to generate a COMPLETE node definition including label, code, and unit.
 
         CONTEXT:
@@ -143,7 +149,15 @@ async def create_node_with_ai(request: AiCreateNodeRequest, current_user: User =
             "description": "Total revenue from sales"
         }}
 
-        RULES:
+        CRITICAL PYTHON RULES:
+        - **FORBIDDEN**: `import` statements. NO imports allowed (not even `import math`).
+        - The `math` module is ALREADY available without import. Use `math.sqrt(x)`, `math.log(x)`, etc. directly.
+        - For square root: use `x ** 0.5` OR `math.sqrt(x)` (NO import needed)
+        - For power: use `x ** n` OR `math.pow(x, n)` (NO import needed)
+        - Available math functions (no import): sqrt, pow, exp, log, log10, sin, cos, tan, floor, ceil, abs, min, max, round
+        - The function MUST return a numeric value (int or float). NEVER return None or null.
+
+        OTHER RULES:
         - Use the EXACT variable IDs/slugs from the context
         - Start code with a comment describing the calculation
         - NO markdown code blocks
@@ -167,6 +181,9 @@ async def create_node_with_ai(request: AiCreateNodeRequest, current_user: User =
 
         logger.info("AI response received")
 
+        # Log AI usage
+        prompt_tokens, completion_tokens = extract_usage_from_gemini_response(response)
+        
         # Parse AI response
         ai_data = json.loads(response.text)
         label = ai_data.get("label", "Nouveau nœud")
@@ -184,6 +201,24 @@ async def create_node_with_ai(request: AiCreateNodeRequest, current_user: User =
         if code.endswith("```"):
             code = code[:-3]
         code = code.strip()
+        
+        # CRITICAL: Remove any import statements (AI sometimes ignores instructions)
+        import re
+        # Remove lines that start with 'import' or 'from ... import'
+        code_lines = code.split('\n')
+        cleaned_lines = []
+        for line in code_lines:
+            stripped = line.strip()
+            if stripped.startswith('import ') or stripped.startswith('from '):
+                logger.warning(f"Removing forbidden import statement: {stripped}")
+                continue
+            cleaned_lines.append(line)
+        code = '\n'.join(cleaned_lines)
+        
+        # Verify no imports remain
+        if re.search(r'^\s*(import |from .+ import )', code, re.MULTILINE):
+            logger.error("Code still contains import statements after cleanup")
+            raise HTTPException(status_code=400, detail="Le code généré contient des imports interdits. Veuillez reformuler votre demande.")
 
         # 3. Generate slug from label
         import unicodedata
@@ -216,6 +251,9 @@ async def create_node_with_ai(request: AiCreateNodeRequest, current_user: User =
         db = SessionLocal()
         try:
             logger.info("DB session created")
+            
+            # Log AI usage
+            log_ai_usage(db, current_user.id, "create_node", GEMINI_MODEL, prompt_tokens, completion_tokens)
 
             # Verify project ownership
             project = db.query(Project).filter(Project.id == request.project_id).first()
@@ -285,13 +323,13 @@ async def create_node_with_ai(request: AiCreateNodeRequest, current_user: User =
             except Exception as e:
                 logger.warning("Failed to create edges from dependencies", error=str(e))
 
-            # 5. Compute the node
-            from app.services.computation import compute_node
+            # 5. Compute ALL nodes in the project (to update dependent nodes)
+            from app.services.computation import compute_all_nodes
             try:
-                logger.info("Starting node computation", node_id=new_node.id)
-                compute_node(db, new_node.id)
+                logger.info("Starting full project computation after node creation", node_id=new_node.id)
+                compute_all_nodes(db, project_id=request.project_id)
                 db.commit()
-                logger.info("Node computed successfully")
+                logger.info("Project computed successfully after node creation")
             except Exception as e:
                 logger.warning(f"Node created but computation failed: {str(e)}")
                 # Continue anyway, node is created
@@ -317,13 +355,17 @@ async def create_node_with_ai(request: AiCreateNodeRequest, current_user: User =
 
 
 @router.post("/generate", response_model=AiGenerationResponse)
-async def generate_code(request: AiGenerationRequest):
+async def generate_code(
+    request: AiGenerationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     if not settings.GOOGLE_GENERATIVE_AI_API_KEY:
         raise HTTPException(status_code=500, detail="AI API key not configured")
 
     try:
         genai.configure(api_key=settings.GOOGLE_GENERATIVE_AI_API_KEY)
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel(GEMINI_MODEL)
 
         # Build enhanced system prompt with graph context
         graph_context_info = ""
@@ -351,7 +393,7 @@ async def generate_code(request: AiGenerationRequest):
                 graph_context_info += f"\n  ... and {gc.totalNodes - 20} more nodes"
 
         system_prompt = """
-        You are an expert Python coding assistant for the "Econ Graph" application.
+        You are an expert Python coding assistant for the "Smart Graph" application.
         Your goal is to write short, efficient Python code snippets for node computation.
 
         CONTEXT:
@@ -361,9 +403,16 @@ async def generate_code(request: AiGenerationRequest):
         - The function MUST return a number (float or int).
         - Available variables (inputs) are provided in the context with their units and descriptions.
         - Use the variable units to perform necessary conversions if implied by the user prompt.
-        - NO imports are allowed (except standard math module if needed, but prefer built-ins).
         - Keep it concise.
         {graph_context}
+
+        CRITICAL PYTHON RULES:
+        - **FORBIDDEN**: `import` statements. NO imports allowed (not even `import math`).
+        - The `math` module is ALREADY available without import. Use `math.sqrt(x)`, `math.log(x)`, etc. directly.
+        - For square root: use `x ** 0.5` OR `math.sqrt(x)` (NO import needed)
+        - For power: use `x ** n` OR `math.pow(x, n)` (NO import needed)
+        - Available math functions (no import): sqrt, pow, exp, log, log10, sin, cos, tan, floor, ceil, abs, min, max, round
+        - The function MUST return a numeric value (int or float). NEVER return None or null.
 
         INPUT CONTEXT:
         {context}
@@ -395,6 +444,10 @@ async def generate_code(request: AiGenerationRequest):
             )
         )
 
+        # Log AI usage
+        prompt_tokens, completion_tokens = extract_usage_from_gemini_response(response)
+        log_ai_usage(db, current_user.id, "generate_code", GEMINI_MODEL, prompt_tokens, completion_tokens)
+
         text = response.text
         # Clean up markdown code blocks if present
         if text.startswith("```python"):
@@ -403,8 +456,21 @@ async def generate_code(request: AiGenerationRequest):
             text = text[3:]
         if text.endswith("```"):
             text = text[:-3]
+        text = text.strip()
+        
+        # CRITICAL: Remove any import statements (AI sometimes ignores instructions)
+        import re
+        code_lines = text.split('\n')
+        cleaned_lines = []
+        for line in code_lines:
+            stripped = line.strip()
+            if stripped.startswith('import ') or stripped.startswith('from '):
+                logger.warning(f"Removing forbidden import statement from generated code: {stripped}")
+                continue
+            cleaned_lines.append(line)
+        text = '\n'.join(cleaned_lines)
             
-        return AiGenerationResponse(text=text.strip())
+        return AiGenerationResponse(text=text)
 
     except Exception as e:
         logger.error("AI Generation failed", error=str(e))
@@ -438,7 +504,7 @@ class AiScenarioOverride(BaseModel):
 
 class AiScenarioDefinition(BaseModel):
     id: str | None = None # Temporary ID (e.g. "s1") or real ID
-    name: str
+    name: str | None = None  # Required for create/update, optional for delete
     action: str = "create" # "create", "update", "delete"
     overrides: list[AiScenarioOverride] = []
 
@@ -477,16 +543,20 @@ class SmartFixResponse(BaseModel):
     confidence_score: float | None = None
 
 @router.post("/smart-fix", response_model=SmartFixResponse)
-async def smart_fix(request: SmartFixRequest):
+async def smart_fix(
+    request: SmartFixRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     if not settings.GOOGLE_GENERATIVE_AI_API_KEY:
         raise HTTPException(status_code=500, detail="AI API key not configured")
 
     try:
         genai.configure(api_key=settings.GOOGLE_GENERATIVE_AI_API_KEY)
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel(GEMINI_MODEL)
 
         system_prompt = """
-        You are an expert Python debugger for the "Econ Graph" application.
+        You are an expert Python debugger for the "Smart Graph" application.
         Your goal is to fix a specific Python error in a node's computation code.
 
         CONTEXT:
@@ -532,6 +602,10 @@ async def smart_fix(request: SmartFixRequest):
             )
         )
 
+        # Log AI usage
+        prompt_tokens, completion_tokens = extract_usage_from_gemini_response(response)
+        log_ai_usage(db, current_user.id, "smart_fix", GEMINI_MODEL, prompt_tokens, completion_tokens)
+
         try:
             data = json.loads(response.text)
             return SmartFixResponse(**data)
@@ -547,13 +621,17 @@ async def smart_fix(request: SmartFixRequest):
 
 
 @router.post("/graph-action", response_model=AiGraphActionResponse)
-async def generate_graph_action(request: AiGraphActionRequest):
+async def generate_graph_action(
+    request: AiGraphActionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     if not settings.GOOGLE_GENERATIVE_AI_API_KEY:
         raise HTTPException(status_code=500, detail="AI API key not configured")
 
     try:
         genai.configure(api_key=settings.GOOGLE_GENERATIVE_AI_API_KEY)
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel(GEMINI_MODEL)
 
         # Determine context-specific instructions
         context_instructions = ""
@@ -618,7 +696,7 @@ async def generate_graph_action(request: AiGraphActionRequest):
             ])
 
         system_prompt = """
-        You are an expert Graph Architect for the "Econ Graph" application.
+        You are an expert Graph Architect for the "Smart Graph" application.
         Your goal is to translate a user request into a structured graph of nodes with logical layout.
 
         {context_instructions}
@@ -806,6 +884,10 @@ async def generate_graph_action(request: AiGraphActionRequest):
             )
         )
 
+        # Log AI usage
+        prompt_tokens, completion_tokens = extract_usage_from_gemini_response(response)
+        log_ai_usage(db, current_user.id, "graph_action", GEMINI_MODEL, prompt_tokens, completion_tokens)
+
         # Parse JSON response
         try:
             data = json.loads(response.text)
@@ -876,18 +958,19 @@ async def run_agent_pipeline_background(task_id: str, prompt: str, user_id: str)
             "timestamp": datetime.utcnow().isoformat()
         })
 
-        # État initial
+        # État initial (optimisé - plus de execution_plan)
         initial_state: PipelineState = {
             "prompt": prompt,
             "user_id": user_id,
             "analyzed_structure": None,
-            "execution_plan": None,
             "project_id": None,
             "created_nodes": {},
             "errors": [],
             "retry_count": 0,
             "logs": [],
-            "status": "initializing"
+            "status": "initializing",
+            "total_prompt_tokens": 0,
+            "total_completion_tokens": 0,
         }
 
         await queue.put({
@@ -920,6 +1003,29 @@ async def run_agent_pipeline_background(task_id: str, prompt: str, user_id: str)
         if state_update:
             node_name = list(state_update.keys())[-1]
             final_state = state_update[node_name]
+
+        # Log AI usage for the entire pipeline
+        if final_state:
+            total_prompt_tokens = final_state.get("total_prompt_tokens", 0)
+            total_completion_tokens = final_state.get("total_completion_tokens", 0)
+            
+            if total_prompt_tokens > 0 or total_completion_tokens > 0:
+                try:
+                    from app.core.db import SessionLocal
+                    usage_db = SessionLocal()
+                    try:
+                        log_ai_usage(
+                            usage_db, 
+                            user_id, 
+                            "create_project", 
+                            GEMINI_MODEL, 
+                            total_prompt_tokens, 
+                            total_completion_tokens
+                        )
+                    finally:
+                        usage_db.close()
+                except Exception as usage_error:
+                    logger.warning(f"Failed to log AI usage: {usage_error}")
 
         # Message de complétion
         if final_state and final_state.get("status") == "success":
@@ -1050,3 +1156,123 @@ async def agent_status_stream(task_id: str):
             pass
 
     return EventSourceResponse(event_generator())
+
+
+# ==================== AI USAGE STATS ====================
+
+class DailyUsage(BaseModel):
+    date: str
+    requests: int
+    prompt_tokens: int
+    completion_tokens: int
+    cost_eur: float
+
+class MonthlyUsage(BaseModel):
+    month: str
+    requests: int
+    prompt_tokens: int
+    completion_tokens: int
+    cost_eur: float
+
+class AIUsageResponse(BaseModel):
+    total_requests: int
+    total_prompt_tokens: int
+    total_completion_tokens: int
+    estimated_cost_eur: float
+    daily_usage: list[DailyUsage]
+    monthly_usage: list[MonthlyUsage]
+
+
+@router.get("/usage", response_model=AIUsageResponse)
+async def get_ai_usage(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get AI usage statistics for the current user.
+    Returns total usage, daily breakdown (last 30 days), and monthly breakdown (last 12 months).
+    """
+    from sqlalchemy import func, extract
+    from datetime import timedelta
+    from app.models.ai_usage import AIUsage
+    from app.services.ai_usage import calculate_cost_eur
+    
+    # Get total usage
+    totals = db.query(
+        func.count(AIUsage.id).label("total_requests"),
+        func.coalesce(func.sum(AIUsage.prompt_tokens), 0).label("total_prompt_tokens"),
+        func.coalesce(func.sum(AIUsage.completion_tokens), 0).label("total_completion_tokens"),
+    ).filter(AIUsage.user_id == current_user.id).first()
+    
+    total_requests = totals.total_requests or 0
+    total_prompt_tokens = totals.total_prompt_tokens or 0
+    total_completion_tokens = totals.total_completion_tokens or 0
+    estimated_cost_eur = calculate_cost_eur(total_prompt_tokens, total_completion_tokens)
+    
+    # Get daily usage (last 30 days)
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    
+    daily_data = db.query(
+        func.date(AIUsage.created_at).label("date"),
+        func.count(AIUsage.id).label("requests"),
+        func.coalesce(func.sum(AIUsage.prompt_tokens), 0).label("prompt_tokens"),
+        func.coalesce(func.sum(AIUsage.completion_tokens), 0).label("completion_tokens"),
+    ).filter(
+        AIUsage.user_id == current_user.id,
+        AIUsage.created_at >= thirty_days_ago
+    ).group_by(
+        func.date(AIUsage.created_at)
+    ).order_by(
+        func.date(AIUsage.created_at).desc()
+    ).all()
+    
+    daily_usage = [
+        DailyUsage(
+            date=str(row.date),
+            requests=row.requests,
+            prompt_tokens=row.prompt_tokens,
+            completion_tokens=row.completion_tokens,
+            cost_eur=calculate_cost_eur(row.prompt_tokens, row.completion_tokens),
+        )
+        for row in daily_data
+    ]
+    
+    # Get monthly usage (last 12 months)
+    twelve_months_ago = datetime.utcnow() - timedelta(days=365)
+    
+    monthly_data = db.query(
+        extract('year', AIUsage.created_at).label("year"),
+        extract('month', AIUsage.created_at).label("month"),
+        func.count(AIUsage.id).label("requests"),
+        func.coalesce(func.sum(AIUsage.prompt_tokens), 0).label("prompt_tokens"),
+        func.coalesce(func.sum(AIUsage.completion_tokens), 0).label("completion_tokens"),
+    ).filter(
+        AIUsage.user_id == current_user.id,
+        AIUsage.created_at >= twelve_months_ago
+    ).group_by(
+        extract('year', AIUsage.created_at),
+        extract('month', AIUsage.created_at)
+    ).order_by(
+        extract('year', AIUsage.created_at).desc(),
+        extract('month', AIUsage.created_at).desc()
+    ).all()
+    
+    monthly_usage = [
+        MonthlyUsage(
+            month=f"{int(row.year)}-{int(row.month):02d}",
+            requests=row.requests,
+            prompt_tokens=row.prompt_tokens,
+            completion_tokens=row.completion_tokens,
+            cost_eur=calculate_cost_eur(row.prompt_tokens, row.completion_tokens),
+        )
+        for row in monthly_data
+    ]
+    
+    return AIUsageResponse(
+        total_requests=total_requests,
+        total_prompt_tokens=total_prompt_tokens,
+        total_completion_tokens=total_completion_tokens,
+        estimated_cost_eur=estimated_cost_eur,
+        daily_usage=daily_usage,
+        monthly_usage=monthly_usage,
+    )

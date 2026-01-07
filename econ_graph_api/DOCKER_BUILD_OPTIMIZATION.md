@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-This document describes the comprehensive Docker build optimization implemented for the Econ Graph API project. The optimizations reduce build times from **3-5 minutes** (cold) to **10-20 seconds** (warm rebuilds), making development iteration significantly faster.
+This document describes the comprehensive Docker build optimization implemented for the Smart Graph API project. The optimizations reduce build times from **3-5 minutes** (cold) to **10-20 seconds** (warm rebuilds), making development iteration significantly faster.
 
 ### Key Improvements
 
@@ -75,6 +75,7 @@ Layer 5:  Application code (app/, alembic/, etc.)    ⚡ Changes frequently
 BuildKit provides persistent cache mounts that survive across builds.
 
 **APT Cache Mount** (speeds up package installation):
+
 ```dockerfile
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -82,12 +83,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 ```
 
 **Pip Cache Mount** (speeds up Python package installation):
+
 ```dockerfile
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt
 ```
 
 **Benefits**:
+
 - APT doesn't re-download packages
 - Pip doesn't re-download wheels
 - Cache persists across `docker build` invocations
@@ -95,6 +98,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 ### 2. Wheel-Based Installation
 
 Instead of compiling packages every build, we:
+
 1. Build wheels once in the builder stage
 2. Copy pre-built wheels to runtime stage
 3. Install from wheels (instant installation)
@@ -110,12 +114,14 @@ RUN pip install --no-index --find-links=/tmp/wheels /tmp/wheels/*.whl
 ### 3. Layer Ordering
 
 **Bad ordering** (invalidates cache frequently):
+
 ```dockerfile
 COPY . /app                    # Changes often → invalidates everything below
 RUN pip install -r requirements.txt   # ❌ Rebuilds on every code change
 ```
 
 **Good ordering** (maximizes cache):
+
 ```dockerfile
 COPY requirements.txt /app     # Changes rarely
 RUN pip install -r requirements.txt   # ✅ Cached unless deps change
@@ -127,6 +133,7 @@ COPY . /app                    # Changes often → only this layer rebuilds
 Prevents unnecessary files from invalidating Docker's build cache.
 
 **Critical exclusions**:
+
 - `.git/` - Git history
 - `__pycache__/`, `*.pyc` - Python cache files
 - `.venv/`, `venv/` - Virtual environments
@@ -140,11 +147,13 @@ Prevents unnecessary files from invalidating Docker's build cache.
 ### 5. Multi-Stage Benefits
 
 **Builder stage**:
+
 - Contains build tools (gcc, make, headers)
 - Compiles native extensions
 - Larger image (~800MB)
 
 **Runtime stage**:
+
 - Only runtime libraries (libpq5)
 - No build tools
 - Smaller image (~200MB)
@@ -180,6 +189,7 @@ make benchmark-build  # Measure build performance
 ### Detailed Command Explanations
 
 #### `make build`
+
 **Full build with BuildKit and caching**
 
 ```bash
@@ -193,6 +203,7 @@ DOCKER_BUILDKIT=1 docker compose build --progress=plain
 **Expected time**: 2-3 minutes (cold), 30-60 seconds (warm)
 
 #### `make build-fast`
+
 **Ultra-fast build (maximum cache usage)**
 
 ```bash
@@ -206,6 +217,7 @@ DOCKER_BUILDKIT=1 docker compose build
 **Expected time**: 10-20 seconds if cache is warm
 
 #### `make rebuild`
+
 **Rebuild only API service**
 
 ```bash
@@ -219,6 +231,7 @@ docker compose build api
 **Expected time**: 5-15 seconds
 
 #### `make warm-cache`
+
 **Pre-build and cache all layers**
 
 ```bash
@@ -233,6 +246,7 @@ docker build --cache-from econ-api:builder -t econ-api:latest .
 **Expected time**: 2-3 minutes (one-time cost)
 
 #### `make build-no-cache`
+
 **Clean build without cache**
 
 ```bash
@@ -252,12 +266,14 @@ docker compose build --no-cache --progress=plain
 ### Baseline (Before Optimization)
 
 **Old Dockerfile characteristics**:
+
 - Single-stage build
 - No cache mounts
 - Suboptimal layer ordering
 - Poor .dockerignore coverage
 
 **Build times**:
+
 - Cold build: ~5 minutes
 - After code change: ~4 minutes (almost full rebuild)
 - After dependency change: ~5 minutes
@@ -265,12 +281,14 @@ docker compose build --no-cache --progress=plain
 ### Optimized (Current Implementation)
 
 **New Dockerfile characteristics**:
+
 - Multi-stage build
 - BuildKit cache mounts (APT + pip)
 - Optimized layer ordering
 - Comprehensive .dockerignore
 
 **Build times**:
+
 - Cold build: ~2-3 minutes
 - After code change: **10-20 seconds** ⚡
 - After dependency change: ~60-90 seconds
@@ -278,20 +296,20 @@ docker compose build --no-cache --progress=plain
 
 ### Performance Comparison
 
-| Scenario                  | Before | After | Improvement |
-|---------------------------|--------|-------|-------------|
-| Cold build                | 5 min  | 2.5 min | **50% faster** |
-| Code change rebuild       | 4 min  | 15 sec  | **94% faster** |
-| Dependency change         | 5 min  | 60 sec  | **80% faster** |
-| No-op rebuild             | 30 sec | 5 sec   | **83% faster** |
+| Scenario            | Before | After   | Improvement    |
+| ------------------- | ------ | ------- | -------------- |
+| Cold build          | 5 min  | 2.5 min | **50% faster** |
+| Code change rebuild | 4 min  | 15 sec  | **94% faster** |
+| Dependency change   | 5 min  | 60 sec  | **80% faster** |
+| No-op rebuild       | 30 sec | 5 sec   | **83% faster** |
 
 ### Image Size Comparison
 
-| Metric              | Before | After | Improvement |
-|---------------------|--------|-------|-------------|
-| Final image size    | ~450MB | ~200MB | **56% smaller** |
+| Metric              | Before | After  | Improvement           |
+| ------------------- | ------ | ------ | --------------------- |
+| Final image size    | ~450MB | ~200MB | **56% smaller**       |
 | Layers              | 8      | 12     | More granular caching |
-| Build tools in prod | Yes ❌ | No ✅  | More secure |
+| Build tools in prod | Yes ❌ | No ✅  | More secure           |
 
 ---
 
@@ -302,7 +320,9 @@ docker compose build --no-cache --progress=plain
 **Symptom**: Builds are slow even when nothing changed.
 
 **Diagnosis**:
+
 1. Check if BuildKit is enabled:
+
    ```bash
    docker buildx version
    export DOCKER_BUILDKIT=1
@@ -314,6 +334,7 @@ docker compose build --no-cache --progress=plain
    ```
 
 **Solutions**:
+
 - Ensure `DOCKER_BUILDKIT=1` is set
 - Run `make warm-cache` to populate cache
 - Check `.dockerignore` isn't excluding critical files
@@ -323,11 +344,13 @@ docker compose build --no-cache --progress=plain
 **Symptom**: `ModuleNotFoundError` when running container.
 
 **Diagnosis**:
+
 ```bash
 docker compose run --rm api pip list
 ```
 
 **Solutions**:
+
 - Verify `requirements.txt` has all dependencies
 - Rebuild without cache: `make build-no-cache`
 - Check wheels were built correctly in builder stage
@@ -337,7 +360,9 @@ docker compose run --rm api pip list
 **Symptom**: Full rebuilds when only code changed.
 
 **Diagnosis**:
+
 1. Check what files are being copied:
+
    ```bash
    docker build --progress=plain . 2>&1 | grep "COPY"
    ```
@@ -348,11 +373,13 @@ docker compose run --rm api pip list
    ```
 
 **Common causes**:
+
 - `.git/` not in .dockerignore
 - `__pycache__/` directories being copied
 - Timestamp changes in copied files
 
 **Solutions**:
+
 - Update `.dockerignore` to exclude cache files
 - Ensure `COPY` commands are ordered correctly
 - Use `COPY requirements.txt` before `COPY . /app`
@@ -362,12 +389,14 @@ docker compose run --rm api pip list
 **Symptom**: Compilation errors during wheel building.
 
 **Diagnosis**:
+
 ```bash
 docker build --target builder -t test-builder .
 docker run --rm test-builder ls /build/wheels
 ```
 
 **Solutions**:
+
 - Check if all build dependencies are installed (build-essential, libpq-dev)
 - Verify requirements.txt syntax
 - Try building a specific package manually:
@@ -380,12 +409,14 @@ docker run --rm test-builder ls /build/wheels
 **Symptom**: No cache mount messages in build output.
 
 **Diagnosis**:
+
 ```bash
 echo $DOCKER_BUILDKIT
 echo $COMPOSE_DOCKER_CLI_BUILD
 ```
 
 **Solutions**:
+
 - Export environment variables:
   ```bash
   export DOCKER_BUILDKIT=1
@@ -403,18 +434,21 @@ echo $COMPOSE_DOCKER_CLI_BUILD
 ### For Development
 
 1. **Use `make rebuild` for code changes**
+
    ```bash
    # Fast iteration workflow
    make rebuild && make up
    ```
 
 2. **Run `make warm-cache` after git pull**
+
    ```bash
    git pull
    make warm-cache  # Ensures cache is populated
    ```
 
 3. **Use volume mounts for hot reload** (optional)
+
    ```yaml
    # docker-compose.override.yml
    services:
@@ -434,12 +468,14 @@ echo $COMPOSE_DOCKER_CLI_BUILD
 ### For CI/CD
 
 1. **Enable BuildKit in GitHub Actions**
+
    ```yaml
    env:
      DOCKER_BUILDKIT: 1
    ```
 
 2. **Use cache-from for layer caching**
+
    ```bash
    docker build --cache-from econ-api:latest -t econ-api:latest .
    ```
@@ -458,6 +494,7 @@ echo $COMPOSE_DOCKER_CLI_BUILD
 ### For Production Deployment
 
 1. **Build once, deploy many times**
+
    ```bash
    # Build with version tag
    docker build -t econ-api:v1.2.3 .
@@ -465,6 +502,7 @@ echo $COMPOSE_DOCKER_CLI_BUILD
    ```
 
 2. **Use multi-architecture builds** (if needed)
+
    ```bash
    docker buildx build --platform linux/amd64,linux/arm64 -t econ-api:latest .
    ```
@@ -487,16 +525,18 @@ echo $COMPOSE_DOCKER_CLI_BUILD
 ### Cache Invalidation Checklist
 
 **Will invalidate cache**:
+
 - ✅ Changing requirements.txt
 - ✅ Modifying Dockerfile
 - ✅ Updating base image tag
 - ✅ Changing files matched by COPY
 
 **Won't invalidate cache** (with proper .dockerignore):
+
 - ❌ Modifying .git/ directory
 - ❌ Adding .md documentation files
 - ❌ Changing .env files
-- ❌ Python __pycache__ changes
+- ❌ Python **pycache** changes
 
 ---
 
@@ -592,9 +632,10 @@ This optimization strategy provides:
 ---
 
 **Questions or Issues?**
+
 - Check the [Troubleshooting](#troubleshooting) section
 - Run `make help` for command reference
 - Review [Best Practices](#best-practices)
 
 **Last Updated**: 2025-11-12
-**Maintainer**: Econ Graph API Team
+**Maintainer**: Smart Graph API Team

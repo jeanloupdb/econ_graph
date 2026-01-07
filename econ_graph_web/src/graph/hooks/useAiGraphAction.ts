@@ -38,9 +38,9 @@ interface AiScenarioOverride {
 
 interface AiScenarioDefinition {
   id?: string;
-  name: string;
+  name?: string; // Required for create/update, optional for delete
   action?: 'create' | 'update' | 'delete';
-  overrides: AiScenarioOverride[];
+  overrides?: AiScenarioOverride[];
 }
 
 interface AiGraphActionResponse {
@@ -437,7 +437,7 @@ export function useAiGraphAction() {
                // Delete Scenario
                if (scenario.id) {
                    await apiClient.delete(`/api/scenarios/${scenario.id}`);
-                   toast.success(`Scénario "${scenario.name}" supprimé.`);
+                   toast.success(`Scénario supprimé.`);
                } else {
                    console.warn("Cannot delete scenario without ID");
                }

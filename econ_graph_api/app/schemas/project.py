@@ -18,6 +18,8 @@ class ProjectOut(BaseModel):
   created_at: datetime
   updated_at: datetime
   public_view_token: Optional[str] = None
+  user_id: Optional[str] = None  # owner_id
+  user_role: Optional[str] = None  # "owner" | "editor" | "viewer"
 
   class Config:
     from_attributes = True

@@ -200,7 +200,7 @@ export function ApiNodeEditor({ mode, nodeId }: ApiNodeEditorProps) {
 
   return (
     <SidebarContainer
-      className="w-[480px]"
+      useFixedPosition={false}
       header={
         <div className="flex items-center justify-between w-full gap-3">
           <div className="flex items-center gap-2">
@@ -231,7 +231,7 @@ export function ApiNodeEditor({ mode, nodeId }: ApiNodeEditorProps) {
               variant="ghost"
               size="sm"
               onClick={handleClose}
-              className="h-7 px-2 text-xs hover:bg-white/10"
+              className="h-7 px-2 text-xs hover:bg-zinc-400 dark:hover:bg-white/10"
             >
               Annuler
             </Button>
@@ -391,7 +391,7 @@ export function ApiNodeEditor({ mode, nodeId }: ApiNodeEditorProps) {
               size="sm"
               onClick={handleTest}
               disabled={testLoading || !url.trim()}
-              className="h-7 text-[11px] gap-1.5 border-zinc-200 dark:border-zinc-700 hover:bg-white/50 dark:hover:bg-white/5"
+              className="h-7 text-[11px] gap-1.5 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-400 dark:hover:bg-white/5"
             >
               {testLoading ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -450,7 +450,7 @@ export function ApiNodeEditor({ mode, nodeId }: ApiNodeEditorProps) {
               open={rawOpen}
               onToggle={(e) => setRawOpen((e.currentTarget as HTMLDetailsElement).open)}
             >
-              <summary className="cursor-pointer select-none px-3 py-2 text-[10px] font-medium text-zinc-600 dark:text-zinc-400 flex items-center gap-2 hover:bg-white/50 dark:hover:bg-white/5 transition-colors">
+              <summary className="cursor-pointer select-none px-3 py-2 text-[10px] font-medium text-zinc-600 dark:text-zinc-400 flex items-center gap-2 hover:bg-zinc-400 dark:hover:bg-white/5 transition-colors">
                 <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
                 Voir la réponse JSON brute
               </summary>

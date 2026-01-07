@@ -321,12 +321,39 @@ def _flatten_composite_root_entry(
 
 @router.get("", response_model=List[ProjectOut])
 def list_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return db.query(Project).outerjoin(ProjectCollaborator).filter(
+    projects = db.query(Project).outerjoin(ProjectCollaborator).filter(
         or_(
             Project.user_id == current_user.id,
             ProjectCollaborator.user_id == current_user.id
         )
     ).order_by(Project.updated_at.desc()).distinct().all()
+    
+    # Enrich with user_role
+    enriched = []
+    for p in projects:
+        # Determine user role
+        if p.user_id == current_user.id:
+            user_role = "owner"
+        else:
+            collab = db.query(ProjectCollaborator).filter(
+                ProjectCollaborator.project_id == p.id,
+                ProjectCollaborator.user_id == current_user.id
+            ).first()
+            user_role = collab.role if collab else None
+        
+        # Convert to dict and add user_role
+        project_dict = {
+            "id": p.id,
+            "name": p.name,
+            "created_at": p.created_at,
+            "updated_at": p.updated_at,
+            "public_view_token": p.public_view_token,
+            "user_id": p.user_id,
+            "user_role": user_role
+        }
+        enriched.append(project_dict)
+    
+    return enriched
 
 
 @router.post("", response_model=ProjectOut, status_code=201)
@@ -342,7 +369,17 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db), curren
     )
     db.add(p)
     db.flush()
-    return p
+    
+    # Return with user_role
+    return {
+        "id": p.id,
+        "name": p.name,
+        "created_at": p.created_at,
+        "updated_at": p.updated_at,
+        "public_view_token": p.public_view_token,
+        "user_id": p.user_id,
+        "user_role": "owner"
+    }
 
 
 def _get_project_with_access(db: Session, project_id: str, user: User, required_role: str = "viewer") -> Project:
@@ -378,7 +415,26 @@ def update_project(project_id: str, payload: ProjectUpdate, db: Session = Depend
         p.name = data['name']
     p.updated_at = datetime.utcnow()
     db.flush()
-    return p
+    
+    # Determine user role
+    if p.user_id == current_user.id:
+        user_role = "owner"
+    else:
+        collab = db.query(ProjectCollaborator).filter(
+            ProjectCollaborator.project_id == p.id,
+            ProjectCollaborator.user_id == current_user.id
+        ).first()
+        user_role = collab.role if collab else None
+    
+    return {
+        "id": p.id,
+        "name": p.name,
+        "created_at": p.created_at,
+        "updated_at": p.updated_at,
+        "public_view_token": p.public_view_token,
+        "user_id": p.user_id,
+        "user_role": user_role
+    }
 
 
 @router.delete("/{project_id}", status_code=204)
@@ -410,7 +466,15 @@ def share_project(project_id: str, db: Session = Depends(get_db), current_user: 
         p.public_view_token = secrets.token_urlsafe(32)
         db.flush()
     
-    return p
+    return {
+        "id": p.id,
+        "name": p.name,
+        "created_at": p.created_at,
+        "updated_at": p.updated_at,
+        "public_view_token": p.public_view_token,
+        "user_id": p.user_id,
+        "user_role": "owner"
+    }
 
 
 @router.delete("/{project_id}/share", response_model=ProjectOut)
@@ -424,7 +488,16 @@ def revoke_project_share(project_id: str, db: Session = Depends(get_db), current
     
     p.public_view_token = None
     db.flush()
-    return p
+    
+    return {
+        "id": p.id,
+        "name": p.name,
+        "created_at": p.created_at,
+        "updated_at": p.updated_at,
+        "public_view_token": p.public_view_token,
+        "user_id": p.user_id,
+        "user_role": "owner"
+    }
 
 
 @router.get("/{project_id}/collaborators", response_model=List[ProjectCollaboratorOut])

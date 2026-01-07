@@ -26,7 +26,6 @@ import {
     LayoutGrid,
     LayoutList,
     Loader2,
-    Network,
     Pencil,
     PlusCircle,
     Search,
@@ -34,6 +33,7 @@ import {
     Trash2,
     X
 } from 'lucide-react';
+import { SmartGraphLogo } from '@/components/ui/SmartGraphLogo';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -600,7 +600,7 @@ export default function CompositesPage() {
               {usageDialog && usageDialog.projects.length > 0 && (
                 <div>
                   <div className="mb-2 flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                    <Network className="h-3.5 w-3.5" />
+                    <SmartGraphLogo size={14} />
                     Projets ({usageDialog.projects.length})
                   </div>
                   <div className="space-y-2">

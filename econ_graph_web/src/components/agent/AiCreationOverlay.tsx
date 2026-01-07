@@ -2,7 +2,15 @@
 
 import { AgentLog, AgentStatus } from "@/store/agentState";
 import { AnimatePresence, motion } from "framer-motion";
-import { Brain, CheckCircle2, Code, Database, Network, Settings, Sparkles, Zap } from "lucide-react";
+import {
+  Brain,
+  CheckCircle2,
+  Code,
+  Database,
+  Settings,
+  Sparkles,
+  Zap,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 interface AiCreationOverlayProps {
@@ -12,171 +20,134 @@ interface AiCreationOverlayProps {
   currentStep?: string;
 }
 
-// Initialization sub-steps that appear progressively
-const INIT_SUBSTEPS = [
-  { id: 'setup', label: 'Configuration du système', icon: Settings },
-  { id: 'connect', label: 'Connexion à l\'IA', icon: Sparkles },
-  { id: 'prepare', label: 'Préparation de l\'environnement', icon: Database },
-];
-
-// Construction steps with unified sober design
+// Construction steps - Pipeline optimisé
 const CONSTRUCTION_STEPS = [
   {
-    id: 'init',
-    label: 'Initialisation',
-    icon: Sparkles,
-    message: 'Démarrage de l\'IA...'
+    id: "init",
+    label: "Initialisation",
+    icon: Settings,
+    color: "zinc",
   },
   {
-    id: 'analyze',
-    label: 'Analyse',
+    id: "analyze",
+    label: "Analyse",
     icon: Brain,
-    message: 'Analyse de votre demande...'
+    color: "violet",
   },
   {
-    id: 'design',
-    label: 'Architecture',
-    icon: Network,
-    message: 'Conception de l\'architecture...'
-  },
-  {
-    id: 'build',
-    label: 'Construction',
+    id: "build",
+    label: "Construction",
     icon: Zap,
-    message: 'Création des nœuds...'
+    color: "blue",
   },
   {
-    id: 'validate',
-    label: 'Finalisation',
+    id: "validate",
+    label: "Validation",
     icon: Code,
-    message: 'Finalisation du modèle...'
+    color: "emerald",
   },
 ];
 
 // Map agent steps to construction progression
 const STEP_TO_INDEX: Record<string, number> = {
-  'analyste': 1,
-  'planificateur': 2,
-  'executeur': 3,
-  'validateur': 4,
-  'correcteur': 4,
+  analyste: 1,
+  executeur: 2,
+  validateur: 3,
+  correcteur: 3,
 };
 
-// Messages to display during the long analysis phase
-const WAITING_MESSAGES = [
-  "Initialisation des services...",
-  "Chargement des modules IA...",
-  "Connexion aux bases de connaissances...",
-  "Allocation des ressources...",
-  "Vérification de la disponibilité...",
-  "Synchronisation des contextes...",
-  "Préparation de l'environnement d'exécution...",
-  "Calibrage des paramètres...",
-  "Mise en cache des dépendances...",
-  "Démarrage des agents..."
-];
+// Dynamic messages for different phases
+const PHASE_MESSAGES: Record<number, string[]> = {
+  0: [
+    "Préparation de l'environnement",
+    "Configuration des agents",
+    "Chargement des modules",
+  ],
+  1: [
+    "Analyse de votre demande",
+    "Compréhension du contexte",
+    "Identification des variables",
+    "Structuration du modèle",
+  ],
+  2: [
+    "Création des nœuds",
+    "Génération des formules",
+    "Construction du graphe",
+    "Définition des relations",
+  ],
+  3: [
+    "Validation des calculs",
+    "Vérification de la cohérence",
+    "Optimisation du modèle",
+    "Finalisation",
+  ],
+};
 
-export function AiCreationOverlay({ isVisible, logs, status, currentStep }: AiCreationOverlayProps) {
+export function AiCreationOverlay({
+  isVisible,
+  logs,
+  status,
+  currentStep,
+}: AiCreationOverlayProps) {
   const [nodeCount, setNodeCount] = useState(0);
-  const [dots, setDots] = useState('');
-  const [initSubStepIndex, setInitSubStepIndex] = useState(0);
-  const [waitingMessageIndex, setWaitingMessageIndex] = useState(0);
-  const isSuccess = status === 'success';
+  const [messageIndex, setMessageIndex] = useState(0);
+  const [userIntent, setUserIntent] = useState<string | null>(null);
+  const isSuccess = status === "success";
 
   // Determine current step index
-  const currentStepIndex = currentStep ? (STEP_TO_INDEX[currentStep] || 0) : 0;
+  const currentStepIndex = currentStep ? STEP_TO_INDEX[currentStep] || 0 : 0;
   const activeStep = CONSTRUCTION_STEPS[currentStepIndex];
-  
-  // We consider "waiting phase" to be both Init (0) and Analysis (1)
-  // But we want to show specific init substeps first
-  const isWaitingPhase = currentStepIndex <= 1 && !isSuccess;
-  const initSubstepsDone = initSubStepIndex >= INIT_SUBSTEPS.length;
 
-  // Cycle through init substeps during initialization
+  // Cycle through messages for current phase
   useEffect(() => {
-    if (currentStepIndex === 0 && !isSuccess) {
-      const interval = setInterval(() => {
-        setInitSubStepIndex(prev => {
-          // If we reached the end, we stop incrementing index to flag "done"
-          // The message logic will switch to random messages
-          if (prev >= INIT_SUBSTEPS.length) return prev;
-          return prev + 1;
-        });
-      }, 2000); // Faster init steps (2s)
-      return () => clearInterval(interval);
-    } else {
-      // If we moved past step 0, ensure we consider init done
-      if (currentStepIndex > 0) setInitSubStepIndex(INIT_SUBSTEPS.length);
-    }
+    if (isSuccess) return;
+
+    const messages = PHASE_MESSAGES[currentStepIndex] || PHASE_MESSAGES[0];
+    const interval = setInterval(() => {
+      setMessageIndex((prev) => (prev + 1) % messages.length);
+    }, 3000);
+
+    return () => clearInterval(interval);
   }, [currentStepIndex, isSuccess]);
 
-  // Cycle through waiting messages randomly
+  // Reset message index when step changes
   useEffect(() => {
-    // Active if we are in waiting phase AND (we are in analysis OR init substeps are done)
-    const shouldRotate = isWaitingPhase && (currentStepIndex === 1 || initSubstepsDone);
-    
-    if (shouldRotate) {
-      // Initial random message
-      if (waitingMessageIndex === 0) {
-          setWaitingMessageIndex(Math.floor(Math.random() * WAITING_MESSAGES.length));
-      }
-
-      const randomInterval = Math.floor(Math.random() * 1000) + 3000; // 3000ms to 4000ms
-
-      const interval = setInterval(() => {
-        setWaitingMessageIndex(prev => {
-            let next;
-            do {
-                next = Math.floor(Math.random() * WAITING_MESSAGES.length);
-            } while (next === prev && WAITING_MESSAGES.length > 1); // Avoid same message twice
-            return next;
-        });
-      }, randomInterval); 
-      return () => clearInterval(interval);
-    }
-  }, [isWaitingPhase, currentStepIndex, initSubstepsDone]);
-
-  // Animated dots for loading effect
-  useEffect(() => {
-    if (!isSuccess) {
-      const interval = setInterval(() => {
-        setDots(prev => prev.length >= 3 ? '' : prev + '.');
-      }, 600);
-      return () => clearInterval(interval);
-    }
-  }, [isSuccess]);
+    setMessageIndex(0);
+  }, [currentStepIndex]);
 
   // Count nodes created from logs
   useEffect(() => {
-    const count = logs.filter(l =>
-      l.message.includes("Création du nœud") ||
-      l.message.includes("Created node")
+    const count = logs.filter(
+      (l) =>
+        l.message.includes("Création du nœud") ||
+        l.message.includes("Created node") ||
+        l.message.includes("Nœud créé") ||
+        l.message.includes("✓ Nœud:")
     ).length;
     setNodeCount(count);
   }, [logs]);
 
+  // Extract user intent from logs
+  useEffect(() => {
+    const intentLog = logs.find((l) => l.message.startsWith("💡"));
+    if (intentLog) {
+      const intent = intentLog.message.replace(/^💡\s*/, "");
+      setUserIntent(intent);
+    }
+  }, [logs]);
+
   // Current message
   const message = useMemo(() => {
-    if (isSuccess) return "Votre modèle est prêt !";
-    
-    // If in init phase and substeps not done, show substep
-    if (currentStepIndex === 0 && !initSubstepsDone) {
-      return INIT_SUBSTEPS[initSubStepIndex]?.label || INIT_SUBSTEPS[INIT_SUBSTEPS.length - 1].label;
-    }
+    if (isSuccess) return "Modèle créé avec succès";
 
-    // If in waiting phase (Analysis OR Init done), show random message
-    if (isWaitingPhase) {
-        return WAITING_MESSAGES[waitingMessageIndex];
-    }
+    const messages = PHASE_MESSAGES[currentStepIndex] || PHASE_MESSAGES[0];
+    return messages[messageIndex] || messages[0];
+  }, [isSuccess, currentStepIndex, messageIndex]);
 
-    if (nodeCount > 0 && currentStepIndex === 3) {
-      return `${nodeCount} variable${nodeCount > 1 ? 's' : ''} créée${nodeCount > 1 ? 's' : ''}`;
-    }
-    return activeStep.message;
-  }, [isSuccess, activeStep, nodeCount, currentStepIndex, initSubstepsDone, initSubStepIndex, isWaitingPhase, waitingMessageIndex]);
-
-  // Calculate progress
-  const progress = isSuccess ? 100 : Math.min(95, ((currentStepIndex + 1) / CONSTRUCTION_STEPS.length) * 100);
+  // Progress calculation
+  const progress = isSuccess
+    ? 100
+    : Math.min(95, ((currentStepIndex + 0.5) / CONSTRUCTION_STEPS.length) * 100);
 
   const Icon = activeStep.icon;
 
@@ -187,67 +158,237 @@ export function AiCreationOverlay({ isVisible, logs, status, currentStep }: AiCr
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm pointer-events-auto"
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-[100] flex items-center justify-center"
         >
-          <motion.div 
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
-            transition={{ duration: 0.4, type: "spring", bounce: 0.3 }}
-            className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-8 w-full max-w-md flex flex-col items-center gap-6"
+          {/* Backdrop with subtle gradient */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="absolute inset-0 bg-zinc-950/90 backdrop-blur-md"
+          />
+
+          {/* Ambient glow */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <motion.div
+              animate={{
+                scale: [1, 1.2, 1],
+                opacity: [0.3, 0.5, 0.3],
+              }}
+              transition={{
+                duration: 4,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+              className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[150px] ${
+                isSuccess ? "bg-emerald-500/20" : "bg-violet-500/20"
+              }`}
+            />
+          </div>
+
+          {/* Main content */}
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 10 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.95, opacity: 0, y: 10 }}
+            transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+            className="relative w-full max-w-md mx-4"
           >
-            {/* Icon Circle with Pulse */}
-            <div className="relative">
-                <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-xl animate-pulse" />
-                <div className="relative w-20 h-20 rounded-full bg-zinc-800 flex items-center justify-center border border-zinc-700">
-                    {isSuccess ? (
-                        <CheckCircle2 className="w-10 h-10 text-emerald-500" />
-                    ) : (
-                        <Icon className="w-8 h-8 text-blue-500" />
-                    )}
+            <div className="bg-zinc-900/80 backdrop-blur-xl rounded-2xl border border-zinc-800/50 shadow-2xl shadow-black/50 overflow-hidden">
+              {/* Progress bar at top - Linear style */}
+              <div className="h-1 bg-zinc-800">
+                <motion.div
+                  className={`h-full ${isSuccess ? "bg-emerald-500" : "bg-gradient-to-r from-violet-500 via-purple-500 to-blue-500"}`}
+                  initial={{ width: "0%" }}
+                  animate={{ width: `${progress}%` }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                />
+              </div>
+
+              <div className="p-8">
+                {/* Icon with animation */}
+                <div className="flex justify-center mb-6">
+                  <div className="relative">
+                    {/* Outer ring - spinning */}
                     {!isSuccess && (
-                        <div className="absolute inset-0 rounded-full border-2 border-blue-500/30 border-t-blue-500 animate-spin" />
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{
+                          duration: 3,
+                          repeat: Infinity,
+                          ease: "linear",
+                        }}
+                        className="absolute inset-0 w-16 h-16"
+                      >
+                        <svg className="w-full h-full" viewBox="0 0 64 64">
+                          <circle
+                            cx="32"
+                            cy="32"
+                            r="30"
+                            fill="none"
+                            stroke="url(#gradient)"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeDasharray="120 60"
+                          />
+                          <defs>
+                            <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                              <stop offset="0%" stopColor="#8b5cf6" />
+                              <stop offset="50%" stopColor="#a855f7" />
+                              <stop offset="100%" stopColor="#3b82f6" />
+                            </linearGradient>
+                          </defs>
+                        </svg>
+                      </motion.div>
                     )}
-                </div>
-            </div>
 
-            {/* Text Content */}
-            <div className="text-center space-y-2">
-                <h3 className="text-xl font-semibold text-white">
-                    {message}
-                </h3>
-                <p className="text-sm text-zinc-400">
-                    {isSuccess ? 'Terminé' : `Étape ${currentStepIndex + 1} sur ${CONSTRUCTION_STEPS.length}`}
-                </p>
-            </div>
+                    {/* Icon container */}
+                    <div
+                      className={`relative w-16 h-16 rounded-full flex items-center justify-center ${
+                        isSuccess
+                          ? "bg-emerald-500/10 border-2 border-emerald-500/30"
+                          : "bg-zinc-800/50 border border-zinc-700/50"
+                      }`}
+                    >
+                      <AnimatePresence mode="wait">
+                        {isSuccess ? (
+                          <motion.div
+                            key="success"
+                            initial={{ scale: 0, rotate: -180 }}
+                            animate={{ scale: 1, rotate: 0 }}
+                            transition={{ type: "spring", duration: 0.5 }}
+                          >
+                            <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+                          </motion.div>
+                        ) : (
+                          <motion.div
+                            key={activeStep.id}
+                            initial={{ scale: 0.8, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.8, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <Icon className="w-7 h-7 text-zinc-300" />
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                </div>
 
-            {/* Progress Bar */}
-            <div className="w-full space-y-2">
-                <div className="flex justify-between text-xs font-medium text-zinc-500">
-                    <span>Progression</span>
-                    <span>{Math.round(progress)}%</span>
-                </div>
-                <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
-                    <motion.div
-                        className="h-full bg-blue-500 rounded-full"
-                        initial={{ width: "0%" }}
-                        animate={{ width: `${progress}%` }}
-                        transition={{ duration: 0.5, ease: "easeInOut" }}
-                    />
-                </div>
-            </div>
+                {/* Message */}
+                <div className="text-center mb-6">
+                  <AnimatePresence mode="wait">
+                    <motion.h3
+                      key={message}
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -5 }}
+                      transition={{ duration: 0.2 }}
+                      className={`text-lg font-medium ${
+                        isSuccess ? "text-emerald-400" : "text-white"
+                      }`}
+                    >
+                      {message}
+                    </motion.h3>
+                  </AnimatePresence>
 
-            {/* Sub-steps or Details */}
-            {!isSuccess && (
-                <div className="w-full bg-zinc-800/50 rounded-lg p-3 text-xs text-zinc-400 text-center border border-zinc-800">
-                    L&apos;IA construit votre modèle...
+                  {/* Node count during build */}
+                  {nodeCount > 0 && currentStepIndex >= 2 && !isSuccess && (
+                    <motion.p
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="text-sm text-zinc-500 mt-2"
+                    >
+                      {nodeCount} variable{nodeCount > 1 ? "s" : ""} créée
+                      {nodeCount > 1 ? "s" : ""}
+                    </motion.p>
+                  )}
                 </div>
-            )}
+
+                {/* Steps indicator */}
+                <div className="flex items-center justify-center gap-3 mb-6">
+                  {CONSTRUCTION_STEPS.map((step, index) => {
+                    const isActive = index === currentStepIndex && !isSuccess;
+                    const isDone = index < currentStepIndex || isSuccess;
+                    const StepIcon = step.icon;
+
+                    return (
+                      <div key={step.id} className="flex items-center gap-3">
+                        <motion.div
+                          animate={isActive ? { scale: [1, 1.1, 1] } : {}}
+                          transition={{
+                            duration: 1.5,
+                            repeat: isActive ? Infinity : 0,
+                          }}
+                          className={`
+                            relative flex items-center justify-center w-8 h-8 rounded-full transition-all duration-300
+                            ${isDone ? "bg-emerald-500/20 text-emerald-400" : ""}
+                            ${isActive ? "bg-violet-500/20 text-violet-400" : ""}
+                            ${!isActive && !isDone ? "bg-zinc-800/50 text-zinc-600" : ""}
+                          `}
+                        >
+                          {isDone ? (
+                            <CheckCircle2 className="w-4 h-4" />
+                          ) : (
+                            <StepIcon className="w-4 h-4" />
+                          )}
+                        </motion.div>
+
+                        {/* Connector line */}
+                        {index < CONSTRUCTION_STEPS.length - 1 && (
+                          <div
+                            className={`w-6 h-0.5 rounded-full transition-colors duration-300 ${
+                              index < currentStepIndex || isSuccess
+                                ? "bg-emerald-500/50"
+                                : "bg-zinc-800"
+                            }`}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* User intent - if available */}
+                {userIntent && !isSuccess && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-zinc-800/30 rounded-lg p-3 border border-zinc-700/30"
+                  >
+                    <div className="flex items-start gap-2">
+                      <Sparkles className="w-4 h-4 text-violet-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">
+                          Objectif détecté
+                        </p>
+                        <p className="text-sm text-zinc-300 leading-relaxed">
+                          {userIntent}
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Success footer */}
+                {isSuccess && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="text-center"
+                  >
+                    <p className="text-sm text-zinc-500">
+                      Redirection en cours...
+                    </p>
+                  </motion.div>
+                )}
+              </div>
+            </div>
           </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
   );
 }
-

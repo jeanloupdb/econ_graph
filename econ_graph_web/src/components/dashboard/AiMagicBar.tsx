@@ -1,165 +1,270 @@
 "use client";
 
-import { AiInput } from "@/components/ui/ai-input";
+/**
+ * Re-export InlineAiBar as AiMagicBar for backward compatibility
+ * This component is used in other pages like composites
+ */
+
+import { processExcelFile } from "@/lib/excel";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/uiState";
-import { FileCode, FileSpreadsheet, FileText, X } from "lucide-react";
-import { useEffect, useState } from "react";
-
-const DEFAULT_QUICK_STARTERS = [
-  {
-    label: "ROI Campagne Pub",
-    prompt: "Calcule le ROI d'une campagne marketing avec Budget, CPC, Taux de conversion et Panier moyen.",
-  },
-  {
-    label: "E-commerce Supply Chain",
-    prompt: "Modélise mon revenu en e-commerce en prenant en compte toute la supply chain",
-  },
-];
-
-const DEFAULT_PLACEHOLDER = "Créez un projet complet en une phrase";
+import { motion } from "framer-motion";
+import {
+  ArrowRight,
+  FileCode,
+  FileSpreadsheet,
+  FileText,
+  Loader2,
+  Paperclip,
+  Sparkles,
+  X,
+} from "lucide-react";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
 
 interface AiMagicBarProps {
   onGenerate: (prompt: string, file?: File) => void;
   isPending: boolean;
-  quickStarters?: { label: string; prompt: string }[];
   placeholder?: string;
 }
 
 export function AiMagicBar({
   onGenerate,
   isPending,
-  quickStarters = DEFAULT_QUICK_STARTERS,
-  placeholder = DEFAULT_PLACEHOLDER
+  placeholder = "Décrivez ce que vous souhaitez créer...",
 }: AiMagicBarProps) {
   const [prompt, setPrompt] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [isFocused, setIsFocused] = useState(false);
-  const [isFileProcessing, setIsFileProcessing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleGenerate = (fileArg?: File) => {
-    if (!prompt.trim()) return;
-    // Use the state file if available (since AiInput might pass it back, or we use ours)
-    // Actually AiInput calls onGenerate with the file it has. 
-    // Since we control it, fileArg should be the same as file state.
+  const developerMode = useUIStore((s) => s.developerMode);
+
+  const handleSubmit = () => {
+    if (!prompt.trim() || isPending) return;
     onGenerate(prompt, file || undefined);
     setPrompt("");
     setFile(null);
   };
 
-  // Keyboard shortcut to focus (Cmd+K or Ctrl+K)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
-        // Focus logic if needed
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const selectedFile = e.target.files[0];
+      const fileType = selectedFile.name.split(".").pop()?.toLowerCase();
 
-  const developerMode = useUIStore((s) => s.developerMode);
+      const allowedTypes = ["pdf", "txt", "md", "csv", "xlsx", "xls"];
+      if (!fileType || !allowedTypes.includes(fileType)) {
+        toast.error(
+          "Type de fichier non supporté. Utilisez PDF, Excel, TXT, MD ou CSV."
+        );
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
+
+      if (["xlsx", "xls"].includes(fileType)) {
+        try {
+          setIsProcessing(true);
+          const processedFile = await processExcelFile(selectedFile);
+          setFile(processedFile);
+          toast.success("Fichier Excel traité avec succès");
+        } catch (error) {
+          console.error(error);
+          toast.error("Erreur lors du traitement du fichier Excel");
+          if (fileInputRef.current) fileInputRef.current.value = "";
+        } finally {
+          setIsProcessing(false);
+        }
+      } else {
+        setFile(selectedFile);
+      }
+    }
+  };
+
+  const removeFile = () => {
+    setFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const getFileIcon = () => {
+    if (!file) return null;
+    const name = file.name.toLowerCase();
+    if (
+      name.endsWith(".xlsx") ||
+      name.endsWith(".xls") ||
+      name.endsWith(".csv")
+    ) {
+      return <FileSpreadsheet className="h-3.5 w-3.5" />;
+    }
+    if (name.endsWith(".pdf")) {
+      return <FileText className="h-3.5 w-3.5" />;
+    }
+    return <FileCode className="h-3.5 w-3.5" />;
+  };
+
+  const getFileChipClass = () => {
+    if (!file) return "";
+    const name = file.name.toLowerCase();
+    if (
+      name.endsWith(".xlsx") ||
+      name.endsWith(".xls") ||
+      name.endsWith(".csv")
+    ) {
+      return "bg-emerald-500/10 border-emerald-500/20 text-emerald-400";
+    }
+    if (name.endsWith(".pdf")) {
+      return "bg-red-500/10 border-red-500/20 text-red-400";
+    }
+    return "bg-blue-500/10 border-blue-500/20 text-blue-400";
+  };
+
   if (!developerMode) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-[60] pointer-events-none">
-      <div className="w-full max-w-4xl mx-auto px-4 pb-2 pointer-events-auto">
-        <div
-          className="relative flex flex-col gap-3"
-          onFocus={() => setIsFocused(true)}
-          onBlur={(e) => {
-            if (!e.currentTarget.contains(e.relatedTarget)) {
-              setIsFocused(false);
-            }
-          }}
-        >
-          {/* Quick Starters - Au-dessus de l'input */}
-          <div className={cn(
-            "flex justify-center flex-wrap gap-2 transition-all duration-300 mb-2",
-            (isFocused || prompt) && !file && !isFileProcessing ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
-          )}>
-            {quickStarters.map((starter) => (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="w-full mb-6"
+    >
+      {/* Hidden file input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        className="hidden"
+        accept=".pdf,.txt,.md,.csv,.xlsx,.xls"
+      />
+
+      <div className="relative">
+        {/* File chip above input */}
+        {file && !isProcessing && (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-2"
+          >
+            <div
+              className={cn(
+                "inline-flex items-center gap-2 px-2.5 py-1 rounded-lg border",
+                getFileChipClass()
+              )}
+            >
+              {getFileIcon()}
+              <span className="text-xs font-medium max-w-[180px] truncate">
+                {file.name}
+              </span>
               <button
-                key={starter.label}
-                onClick={() => setPrompt(starter.prompt)}
-                className="text-xs px-3 py-1.5 rounded-lg bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all shadow-sm"
+                onClick={removeFile}
+                className="p-0.5 hover:bg-white/10 rounded transition-colors"
               >
-                {starter.label}
+                <X className="h-3 w-3" />
               </button>
-            ))}
-          </div>
-
-          {/* Processing State */}
-          {isFileProcessing && (
-            <div className="flex justify-start mb-2 animate-in slide-in-from-bottom-2 fade-in duration-300 px-1">
-              <div className="flex items-center gap-2 pl-2 pr-3 py-1 rounded-lg border shadow-sm backdrop-blur-sm bg-zinc-50/90 dark:bg-zinc-900/90 border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400">
-                <div className="h-3 w-3 rounded-full border-2 border-zinc-400 border-t-transparent animate-spin" />
-                <span className="text-xs font-medium">Traitement du fichier...</span>
-              </div>
             </div>
-          )}
+          </motion.div>
+        )}
 
-          {/* File Chip - Au-dessus de l'input (remplace Quick Starters si fichier) */}
-          {file && !isFileProcessing && (
-            <div className="flex justify-start mb-2 animate-in slide-in-from-bottom-2 fade-in duration-300 px-1">
-               <div className={cn(
-                  "flex items-center gap-2 pl-2 pr-1 py-1 rounded-lg border shadow-sm backdrop-blur-sm",
-                  (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls') || file.name.toLowerCase().endsWith('.csv'))
-                    ? "!bg-emerald-50/90 !dark:bg-emerald-950/90 !border-emerald-200 !dark:border-emerald-800 !text-emerald-700 !dark:text-emerald-300"
-                    : file.name.toLowerCase().endsWith('.pdf')
-                    ? "!bg-red-50/90 !dark:bg-red-950/90 !border-red-200 !dark:border-red-800 !text-red-700 !dark:text-red-300"
-                    : "bg-blue-50/90 dark:bg-blue-950/90 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300"
-                )}>
-                  {(file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls') || file.name.toLowerCase().endsWith('.csv')) ? (
-                    <FileSpreadsheet className="h-4 w-4" />
-                  ) : file.name.toLowerCase().endsWith('.pdf') ? (
-                    <FileText className="h-4 w-4" />
-                  ) : (
-                    <FileCode className="h-4 w-4" />
-                  )}
-                  <span className="text-xs font-medium max-w-[200px] truncate">{file.name}</span>
-                  <button 
-                    onClick={() => setFile(null)}
-                    className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded-md transition-colors"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-               </div>
+        {/* Processing state */}
+        {isProcessing && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mb-2"
+          >
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg border border-zinc-700 bg-zinc-800/80 text-zinc-400">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span className="text-xs font-medium">Traitement...</span>
             </div>
-          )}
+          </motion.div>
+        )}
 
-          {/* Input */}
-          <div className="relative w-full group">
-            {/* Gradient Border - Only visible on focus */}
-            <div className={cn(
-              "absolute -inset-[1px] rounded-xl bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 transition-opacity duration-500",
-              isFocused ? "opacity-50" : "opacity-0"
-            )} />
+        {/* Input container */}
+        <div className="relative group">
+          {/* Gradient border on focus */}
+          <div
+            className={cn(
+              "absolute -inset-[1px] rounded-xl bg-gradient-to-r from-violet-600 to-violet-500 opacity-0 transition-opacity duration-300",
+              isFocused && "opacity-30"
+            )}
+          />
 
-            <div className={cn(
-              "relative rounded-xl transition-all duration-300",
-              isFocused 
-                ? "bg-white dark:bg-zinc-900 shadow-2xl" 
-                : "bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl shadow-2xl border border-zinc-200/50 dark:border-zinc-700/50"
-            )}>
-              <AiInput
-                value={prompt}
-                onChange={setPrompt}
-                onGenerate={() => handleGenerate(file || undefined)}
-                isGenerating={isPending}
-                placeholder={placeholder}
-                className="shadow-none border-none bg-transparent"
-                allowFileUpload={true}
-                selectedFile={file}
-                onFileSelect={setFile}
-                renderFileExternal={true}
-                onProcessingChange={setIsFileProcessing}
+          <div
+            className={cn(
+              "relative flex items-center gap-2 bg-zinc-900/80 backdrop-blur-sm border rounded-xl transition-all",
+              isFocused
+                ? "border-transparent shadow-lg shadow-violet-500/5"
+                : "border-zinc-800 hover:border-zinc-700"
+            )}
+          >
+            {/* AI Icon */}
+            <div className="shrink-0 pl-4 flex items-center gap-2">
+              <Sparkles
+                className={cn(
+                  "w-4 h-4 transition-colors",
+                  isFocused ? "text-violet-400" : "text-zinc-500"
+                )}
               />
             </div>
+
+            {/* Attach button */}
+            <button
+              onClick={() => !isProcessing && fileInputRef.current?.click()}
+              disabled={isProcessing}
+              className={cn(
+                "shrink-0 p-2 transition-colors rounded-lg hover:bg-zinc-800",
+                file ? "text-violet-400" : "text-zinc-500 hover:text-zinc-300",
+                isProcessing && "opacity-50 cursor-wait"
+              )}
+              title="Joindre un fichier"
+            >
+              {isProcessing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Paperclip className="h-4 w-4" />
+              )}
+            </button>
+
+            <input
+              type="text"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              placeholder={placeholder}
+              className="flex-1 h-12 bg-transparent text-white text-sm placeholder:text-zinc-500 outline-none"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && prompt.trim()) {
+                  handleSubmit();
+                }
+              }}
+              disabled={isPending}
+            />
+
+            <button
+              onClick={handleSubmit}
+              disabled={!prompt.trim() || isProcessing || isPending}
+              className={cn(
+                "shrink-0 m-1.5 px-4 py-2 rounded-lg transition-all flex items-center gap-2 text-sm font-medium",
+                prompt.trim() && !isPending
+                  ? "bg-violet-600 hover:bg-violet-500 text-white"
+                  : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
+              )}
+            >
+              {isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <span>Générer</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
+

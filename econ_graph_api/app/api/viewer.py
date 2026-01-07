@@ -14,6 +14,56 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/viewer", tags=["viewer"])
 
+@router.get("/{token}/full", response_model=dict)
+def get_public_project_full(token: str, db: Session = Depends(get_db)):
+    """Get full project data for public access via token - used by /public/[token] route"""
+    project = db.query(Project).filter(Project.public_view_token == token).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found or invalid token")
+
+    nodes = db.query(Node).filter(Node.project_id == project.id).all()
+    edges = db.query(Edge).filter(Edge.project_id == project.id).all()
+    
+    # Sanitize nodes for public view
+    sanitized_nodes = []
+    for n in nodes:
+        node_data = {
+            "id": n.id,
+            "label": n.label,
+            "pos_x": n.pos_x,
+            "pos_y": n.pos_y,
+            "parent_id": n.parent_id if hasattr(n, "parent_id") else None,
+            "slug": n.slug,
+            "unit": n.unit,
+            "value_computed": n.value_computed,
+            "status": n.status,
+            "composite_id": n.composite_id,
+            "computation_definition": "",  # Hide code
+            "notes": n.notes,
+        }
+        sanitized_nodes.append(node_data)
+
+    sanitized_edges = []
+    for e in edges:
+        sanitized_edges.append({
+            "id": e.id,
+            "source": e.source,
+            "target": e.target,
+            "label": e.label,
+            "edge_type": e.edge_type,
+        })
+
+    return {
+        "project": {
+            "id": project.id,
+            "name": project.name,
+            "updated_at": project.updated_at,
+            "user_role": "public"
+        },
+        "nodes": sanitized_nodes,
+        "edges": sanitized_edges,
+    }
+
 @router.get("/{token}", response_model=dict)
 def get_public_project(token: str, db: Session = Depends(get_db)):
     project = db.query(Project).filter(Project.public_view_token == token).first()

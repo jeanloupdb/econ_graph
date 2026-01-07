@@ -66,11 +66,11 @@ export function CustomEdge({
           >
             <Badge
               variant="secondary"
-              className="text-[10px] px-1.5 py-0.5 bg-white dark:bg-zinc-900 shadow-sm border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors flex items-center gap-1"
+              className="text-[10px] px-1.5 py-0.5 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm shadow-lg border border-zinc-200 dark:border-white/[0.08] hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors flex items-center gap-1 text-zinc-600 dark:text-zinc-300"
             >
               {isAlgorithmLabel ? (
                 <>
-                  <Calculator className="h-3 w-3" />
+                  <Calculator className="h-3 w-3 text-blue-600 dark:text-blue-400" />
                   <span>Algorithm</span>
                 </>
               ) : (

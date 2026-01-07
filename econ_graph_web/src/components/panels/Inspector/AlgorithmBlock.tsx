@@ -34,7 +34,7 @@ export function AlgorithmBlock({ code }: AlgorithmBlockProps) {
       <div className="border border-zinc-200 dark:border-zinc-700 rounded-lg overflow-hidden bg-white dark:bg-zinc-950">
         {/* Header avec bouton copier */}
         <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900">
-          <span className="text-xs font-mono text-zinc-500 dark:text-zinc-400">Python</span>
+          <span className="text-xs font-mono text-zinc-800 dark:text-zinc-400">Python</span>
           <div className="flex items-center gap-1">
             <Button
               variant="ghost"

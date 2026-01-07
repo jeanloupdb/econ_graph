@@ -126,6 +126,27 @@
   }
 }
 
+@keyframes blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
 .animate-accordion-down {
   animation: accordion-down 0.2s ease-out;
 }
@@ -157,6 +178,62 @@
 
 .animate-bounce-subtle {
   animation: bounce-subtle 2s ease-in-out infinite;
+}
+
+/* Infinite scroll animations for hero */
+@keyframes scroll-up-slow {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-33.333%);
+  }
+}
+
+@keyframes scroll-up-fast {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-33.333%);
+  }
+}
+
+@keyframes scroll-down {
+  0% {
+    transform: translateY(-33.333%);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.animate-scroll-up-slow {
+  animation: scroll-up-slow 45s linear infinite;
+}
+
+.animate-scroll-up-fast {
+  animation: scroll-up-fast 35s linear infinite;
+}
+
+.animate-scroll-down {
+  animation: scroll-down 40s linear infinite;
+}
+
+/* Subtle pulse for highlighted cards - no shadows */
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.02);
+  }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 4s ease-in-out infinite;
 }
 
 .ai-border-light-shell {
@@ -300,4 +377,101 @@
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
   }
+  
+  /* Graph light mode scrollbars - more visible */
+  .graph-light-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .graph-light-scrollbar::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+  }
+  .graph-light-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(82, 82, 91, 0.5); /* zinc-600 with opacity */
+    border-radius: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+  }
+  .graph-light-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(82, 82, 91, 0.7);
+  }
+  /* Firefox for light mode */
+  .graph-light-scrollbar {
+    scrollbar-width: auto;
+    scrollbar-color: rgba(82, 82, 91, 0.5) rgba(0, 0, 0, 0.05);
+  }
+  
+  /* Force dark theme for all inputs - prevent browser defaults */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="search"] {
+    background-color: rgb(24 24 27) !important; /* zinc-900 */
+    color: rgb(255 255 255) !important; /* white */
+    -webkit-text-fill-color: rgb(255 255 255) !important;
+  }
+  
+  input[type="text"]:valid,
+  input[type="email"]:valid,
+  input[type="password"]:valid,
+  input[type="number"]:valid,
+  input[type="tel"]:valid,
+  input[type="url"]:valid,
+  input[type="search"]:valid,
+  input[type="text"]:invalid,
+  input[type="email"]:invalid,
+  input[type="password"]:invalid,
+  input[type="number"]:invalid,
+  input[type="tel"]:invalid,
+  input[type="url"]:invalid,
+  input[type="search"]:invalid {
+    background-color: rgb(24 24 27) !important; /* zinc-900 */
+    color: rgb(255 255 255) !important; /* white */
+    -webkit-text-fill-color: rgb(255 255 255) !important;
+  }
+  
+  input[type="text"]:focus,
+  input[type="email"]:focus,
+  input[type="password"]:focus,
+  input[type="number"]:focus,
+  input[type="tel"]:focus,
+  input[type="url"]:focus,
+  input[type="search"]:focus {
+    background-color: rgb(24 24 27) !important; /* zinc-900 */
+    color: rgb(255 255 255) !important; /* white */
+    -webkit-text-fill-color: rgb(255 255 255) !important;
+  }
+  
+  /* Remove all browser default outlines and shadows */
+  input,
+  input:focus,
+  input:active,
+  input:valid,
+  input:invalid,
+  input:focus-visible,
+  input:focus-within {
+    outline: none !important;
+    outline-offset: 0 !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    -webkit-box-shadow: none !important;
+    -moz-box-shadow: none !important;
+    box-shadow: none !important;
+  }
+  
+  /* Ensure no white borders from browser defaults */
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
 }
+

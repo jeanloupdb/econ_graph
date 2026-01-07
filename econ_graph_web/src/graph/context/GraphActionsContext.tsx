@@ -9,7 +9,7 @@ export interface GraphActionsContextValue {
   deleteNode: (id: string) => Promise<void>;
   computeNode?: (id: string) => Promise<void>;
   computeProject?: () => Promise<void>;
-  refreshNodes: () => void;
+  refreshNodes: () => void | Promise<void>;
   refreshScenarios?: () => void;
 }
 

@@ -1,4 +1,4 @@
-# Econ Graph API
+# Smart Graph API
 
 Economic Graph API with FastAPI, SQLAlchemy 2.0, PostgreSQL and Docker.
 
@@ -68,11 +68,13 @@ docker compose up --build
 ```
 
 This will:
+
 1. Start PostgreSQL database
 2. Run Alembic migrations
 3. Start the FastAPI application
 
 **Build Performance**:
+
 - Cold build: ~2-3 minutes
 - Rebuild after code changes: ~10-20 seconds ⚡
 - See [DOCKER_BUILD_OPTIMIZATION.md](DOCKER_BUILD_OPTIMIZATION.md) for details
@@ -110,10 +112,12 @@ This will:
 Edges (dependencies) are synchronized automatically from the parameters of each node's `def compute(...):` signature. There are no public `/edges` endpoints; dependencies are created/updated/removed based on compute definitions and project maintenance actions.
 
 **Query parameters for `/rules/check`:**
+
 - `node_ids` - Comma-separated list of node IDs to check (optional, checks all if omitted)
 - `min_severity` - Minimum alert severity (1-5, default: 1)
 
 **Example response:**
+
 ```json
 {
   "summary": {
@@ -156,7 +160,7 @@ curl -X POST http://localhost:8000/nodes \
 
 ### Example: Check Economic Coherence
 
-```bash
+````bash
 # Check all nodes
 curl http://localhost:8000/rules/check
 
@@ -174,8 +178,9 @@ curl -X POST http://localhost:8000/compute/nodes/gdp_growth
 
 # Compute all nodes
 curl -X POST http://localhost:8000/compute/all
-```
-```
+````
+
+````
 
 ## Development
 
@@ -215,7 +220,7 @@ make ps      # Show running containers
 # Cleanup
 make clean       # Clean Python cache files
 make prune-cache # Clear Docker build cache
-```
+````
 
 **Performance tip**: Use `make rebuild` for fast iterations during development!
 
@@ -249,7 +254,7 @@ docker compose run --rm api alembic revision --autogenerate -m "your message"
 
 Migrations are managed by Alembic and run automatically when starting the Docker stack.
 
-```bash
+````bash
 # Check current version
 docker compose exec api alembic current
 
@@ -271,10 +276,11 @@ make db-reset-simple
 
 # Or manually without Makefile
 docker compose run --rm api python -m scripts.reset_and_seed
-```
+````
 
 This seeds project `p` with nodes: `r` (real rate), `pi_e` (expected inflation), `i` (nominal rate computed as r+pi_e), and `g` (GDP growth).
-```
+
+````
 
 ## Models
 
@@ -331,9 +337,10 @@ pytest tests/test_nodes_crud.py
 
 # Run specific test function
 pytest tests/test_rules_engine.py::test_fisher_identity_violation
-```
+````
 
 **Test suite includes:**
+
 - 17+ CRUD operation tests for nodes
 - 15+ rules engine tests covering all rule types
 - Alert system validation tests
@@ -341,6 +348,7 @@ pytest tests/test_rules_engine.py::test_fisher_identity_violation
 - 90%+ code coverage
 
 **Running tests in Docker:**
+
 ```bash
 docker compose run --rm api pytest -v --cov=app
 ```
@@ -350,30 +358,42 @@ docker compose run --rm api pytest -v --cov=app
 The API includes production-ready observability features:
 
 ### Structured Logging
+
 JSON-formatted logs with structlog for easy parsing and analysis:
+
 ```json
-{"event": "Request received", "method": "GET", "path": "/nodes", "timestamp": "2025-11-12T10:30:00Z", "level": "info"}
+{
+  "event": "Request received",
+  "method": "GET",
+  "path": "/nodes",
+  "timestamp": "2025-11-12T10:30:00Z",
+  "level": "info"
+}
 ```
 
 Configure logging via environment variables:
+
 ```bash
 LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR
 ENABLE_STRUCTURED_LOGGING=true
 ```
 
 ### Prometheus Metrics
+
 Automatic instrumentation with request metrics available at `/metrics`:
+
 - HTTP request duration histogram
 - Request count by endpoint and status code
 - Active requests gauge
 - Database connection pool metrics
 
 Example Prometheus scrape config:
+
 ```yaml
 scrape_configs:
-  - job_name: 'econ-graph-api'
+  - job_name: "econ-graph-api"
     static_configs:
-      - targets: ['localhost:8000']
+      - targets: ["localhost:8000"]
 ```
 
 ## CI/CD
@@ -381,6 +401,7 @@ scrape_configs:
 GitHub Actions pipeline automatically runs on push/PR:
 
 1. **Test Job**:
+
    - Spins up PostgreSQL 16 service
    - Runs Alembic migrations
    - Executes full pytest suite with coverage

@@ -710,6 +710,7 @@ export function useInspectorData() {
         computePending,
         onManualCompute: () => handleManualCompute(typedNode.id),
         onEdit: handleOpenEditApiNode,
+        canEdit,
       } satisfies React.ComponentProps<typeof ProviderBlock>)
     : null;
 
@@ -758,6 +759,9 @@ export function useInspectorData() {
       }
     : null;
 
+  const currentProjectRole = useProjectStore((s) => s.getCurrentRole(currentProjectId || ''));
+  const canEdit = ['owner', 'editor'].includes(currentProjectRole || '');
+  
   const headerProps = {
     node: typedNode,
     palette: typedNode ? getPaletteForNode(typedNode.id) : undefined,
@@ -770,8 +774,8 @@ export function useInspectorData() {
     onEditApiNode: handleOpenEditApiNode,
     onTransformToComposite: handleTransformToComposite,
     onDelete: handleRequestDelete,
-    onClose: handleClose,
     selectedNodeIds: useUIStore((s) => s.selectedNodeIds),
+    canEdit,
   } satisfies React.ComponentProps<typeof InspectorHeader>;
 
   const breadcrumbProps = {

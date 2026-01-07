@@ -7,7 +7,6 @@ import type { Node } from "@/lib/types";
 import { useUIStore } from "@/store/uiState";
 import {
     Box,
-    ChevronLeft,
     Edit3,
     ExternalLink,
     Globe,
@@ -29,8 +28,8 @@ interface InspectorHeaderProps {
   onTransformToComposite: () => void;
   selectedNodeIds?: string[];
   onDelete: () => void;
-  onClose: () => void;
   className?: string;
+  canEdit?: boolean;
 }
 
 export function InspectorHeader({
@@ -47,8 +46,8 @@ export function InspectorHeader({
   onTransformToComposite,
   selectedNodeIds,
   onDelete,
-  onClose,
   className,
+  canEdit = true,
 }: InspectorHeaderProps) {
   const developerMode = useUIStore((s) => s.developerMode);
   const isApiNode = (node as any)?.provider_enabled;
@@ -66,14 +65,6 @@ export function InspectorHeader({
   return (
     <div className={`flex items-center justify-between ${className || ''}`}>
       <div className="flex items-center gap-2 min-w-0">
-        <button
-          onClick={onClose}
-          className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-500 dark:text-zinc-400"
-          title="Fermer"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-
         <div className="flex items-center gap-2 min-w-0">
           {/* Node Type Icon */}
           <div className={`w-6 h-6 flex items-center justify-center rounded-md shrink-0 ${tone ? badgeClasses : fallbackClasses}`}>
@@ -103,37 +94,37 @@ export function InspectorHeader({
       </div>
 
       <div className="flex items-center gap-1">
-        {developerMode && isCompositeNode && canOpenCompositeEditor && (
+        {developerMode && canEdit && isCompositeNode && canOpenCompositeEditor && (
           <button
             onClick={onOpenCompositeEditor}
             disabled={!canOpenCompositeEditor}
-            className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-500 dark:text-zinc-400 disabled:opacity-50"
+            className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-700 dark:text-zinc-400 disabled:opacity-50"
             title="Ouvrir dans l'éditeur de composite"
           >
             <ExternalLink className="h-4 w-4" />
           </button>
         )}
 
-        {developerMode && !isCompositeNode && node && (
+        {developerMode && canEdit && !isCompositeNode && node && (
           <button
             onClick={
               isApiNode
                 ? onEditApiNode
                 : onEditNode
             }
-            className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-500 dark:text-zinc-400"
+            className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-700 dark:text-zinc-400"
             title="Modifier"
           >
             <Edit3 className="h-4 w-4" />
           </button>
         )}
 
-        {developerMode && node && (
+        {developerMode && canEdit && node && (
           <div className="relative group">
             <button
               onClick={onDelete}
               title="Supprimer"
-              className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 text-zinc-500 hover:text-red-600 dark:text-zinc-400 dark:hover:text-red-400 transition-colors"
+              className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 text-zinc-700 hover:text-red-600 dark:text-zinc-400 dark:hover:text-red-400 transition-colors"
             >
               <Trash2 className="h-4 w-4" />
             </button>

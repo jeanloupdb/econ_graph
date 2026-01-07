@@ -1,7 +1,6 @@
 "use client";
 
 import { InsertCompositeModal } from "@/components/forms/InsertCompositeModal";
-import { ShareProjectModal } from "@/components/modals/ShareProjectModal";
 import {
     useCompareScenarios,
     useComputeAll,
@@ -10,10 +9,11 @@ import {
     useScenarios,
 } from "@/lib/api/hooks";
 import type { CompareNodeResult } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { useProjectStore } from "@/store/projectState";
 import { useScenarioStore } from "@/store/scenarioState";
 import { useUIStore } from "@/store/uiState";
-import { Loader2, Plus, RefreshCw, Share2 } from "lucide-react";
+import { BarChart3, GitCompare, Home, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
@@ -26,10 +26,13 @@ import { ScenarioExplorer } from "./sidebar/ScenarioExplorer";
 import { SidebarContainer } from "./sidebar/SidebarContainer";
 import { StandardMenuContent } from "./sidebar/StandardMenuContent";
 
-export function MenuSidebar() {
+interface MenuSidebarProps {
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+}
+
+export function MenuSidebar({ collapsed = false, onToggleCollapse }: MenuSidebarProps) {
   const router = useRouter();
-  const setInspectorOpen = useUIStore((s) => s.setInspectorOpen);
-  const setScenarioPanelOpen = useUIStore((s) => s.setScenarioPanelOpen);
   const resetDetailPanels = useUIStore((s) => s.resetDetailPanels);
   const setIsComputing = useUIStore((s) => s.setIsComputing);
   const libraryPanelOpen = useUIStore((s) => s.libraryPanelOpen);
@@ -39,7 +42,6 @@ export function MenuSidebar() {
   const setNodeEditorNodeId = useUIStore((s) => s.setNodeEditorNodeId);
 
   const [showInsertCompositeModal, setShowInsertCompositeModal] = useState(false);
-  const [showShareModal, setShowShareModal] = useState(false);
 
   // Scenario Creation State
   const [showNewScenarioDialog, setShowNewScenarioDialog] = useState(false);
@@ -50,8 +52,6 @@ export function MenuSidebar() {
   const createScenario = useCreateScenario();
   
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
-  const projects = useProjectStore((s) => s.projects);
-  const currentProject = projects.find((p) => p.id === currentProjectId);
   
   const { data: scenarios = [] } = useScenarios(currentProjectId);
   
@@ -185,6 +185,7 @@ export function MenuSidebar() {
 
   // Mode determination for styling
   const mode = useUIStore((s) => s.viewMode);
+  const setViewMode = useUIStore((s) => s.setViewMode);
 
 
 
@@ -214,48 +215,85 @@ export function MenuSidebar() {
   return (
     <>
       <SidebarContainer
+        useFixedPosition={false}
+        collapsed={collapsed}
+        onToggleCollapse={onToggleCollapse}
         header={
-          <>
-            <span className="text-sm font-medium">
-              {mode === 'scenario' ? 'Explorateur de Scénarios' : mode === 'comparison' ? 'Comparaison' : 'Menu'}
-            </span>
-            <div className="flex items-center gap-1">
-              {mode === 'scenario' && (
-                  <button
-                      onClick={() => {
-                        // Trigger inline creation in ScenarioExplorer
-                        useScenarioStore.getState().triggerInlineScenarioCreation();
-                      }}
-                      className="p-1 rounded hover:bg-white/10 transition-colors"
-                      title="Nouveau scénario"
-                  >
-                      <Plus className="h-4 w-4" />
-                  </button>
-              )}
-              <button
-                  onClick={handleCalculateAll}
-                  disabled={computeAll.isPending || computeWithScenario.isPending}
-                  className="p-1 rounded hover:bg-white/10 transition-colors disabled:opacity-50"
-                  title="Tout recalculer"
-              >
-                  {(computeAll.isPending || computeWithScenario.isPending) ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                      <RefreshCw className="h-4 w-4" />
+          collapsed ? null : (
+            <div className="flex flex-col gap-3 w-full">
+              {/* Mode Tabs - Full Width with Clear Active State */}
+              <div className="grid grid-cols-3 gap-1 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-lg">
+                <button
+                  onClick={() => setViewMode('baseline')}
+                  className={cn(
+                    "flex flex-col items-center gap-0.5 py-2 px-2 rounded-md text-xs font-medium transition-all relative",
+                    mode === 'baseline'
+                      ? "bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                      : "text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
                   )}
-              </button>
+                >
+                  <Home className={cn("h-4 w-4", mode === 'baseline' && "text-zinc-900 dark:text-zinc-100")} />
+                  <span>Base</span>
+                  {mode === 'baseline' && (
+                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-zinc-900 dark:bg-zinc-100" />
+                  )}
+                </button>
+                <button
+                  onClick={() => setViewMode('scenario')}
+                  className={cn(
+                    "flex flex-col items-center gap-0.5 py-2 px-2 rounded-md text-xs font-medium transition-all relative",
+                    mode === 'scenario'
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  )}
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  <span>Scénarios</span>
+                </button>
+                <button
+                  onClick={() => setViewMode('comparison')}
+                  className={cn(
+                    "flex flex-col items-center gap-0.5 py-2 px-2 rounded-md text-xs font-medium transition-all relative",
+                    mode === 'comparison'
+                      ? "bg-amber-500 text-white shadow-sm"
+                      : "text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  )}
+                >
+                  <GitCompare className="h-4 w-4" />
+                  <span>Comparer</span>
+                </button>
+              </div>
 
-              {useUIStore.getState().developerMode && (
+              {/* Contextual Action Row */}
+              {mode === 'scenario' && scenarios.length >= 2 && (
+                <button
+                  onClick={() => setViewMode('comparison')}
+                  className="flex items-center justify-center gap-2 w-full py-2 px-3 rounded-lg border-2 border-dashed border-amber-400/50 hover:border-amber-400 bg-amber-50/50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 text-xs font-medium transition-all hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                >
+                  <GitCompare className="h-3.5 w-3.5" />
+                  <span>Comparer ces scénarios</span>
+                </button>
+              )}
+
+              {/* Create scenario button */}
+              {mode === 'scenario' && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-zinc-500 dark:text-zinc-500 font-medium uppercase tracking-wide">
+                    {scenarios.length} scénario{scenarios.length !== 1 ? 's' : ''}
+                  </span>
                   <button
-                      onClick={() => setShowShareModal(true)}
-                      className="p-1 rounded hover:bg-white/10 transition-colors"
-                      title="Partager"
+                    onClick={() => {
+                      useScenarioStore.getState().triggerInlineScenarioCreation();
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                   >
-                      <Share2 className="h-4 w-4" />
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Nouveau</span>
                   </button>
+                </div>
               )}
             </div>
-          </>
+          )
         }
         footer={<NodeDetailsFooter />}
       >
@@ -312,14 +350,6 @@ export function MenuSidebar() {
             setShowInsertCompositeModal(false);
             handleCreateCompositeFromGraph();
           }}
-        />
-      )}
-      {showShareModal && currentProjectId && (
-        <ShareProjectModal
-          open={showShareModal}
-          onClose={() => setShowShareModal(false)}
-          projectId={currentProjectId}
-          projectName={currentProject?.name || "Projet"}
         />
       )}
       {showNewScenarioDialog && (

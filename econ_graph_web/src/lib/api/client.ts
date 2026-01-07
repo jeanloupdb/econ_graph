@@ -1,5 +1,5 @@
 /**
- * API client for Econ Graph backend
+ * API client for SmartGraph backend
  * Handles all HTTP requests with typed responses and error handling
  */
 

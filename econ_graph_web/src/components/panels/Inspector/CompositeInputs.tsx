@@ -35,18 +35,18 @@ export function CompositeInputs({
           <div className="text-xs font-medium text-zinc-900 dark:text-zinc-100">
             {root?.label || root?.slug || root?.id}
           </div>
-          <div className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400">
+          <div className="text-[10px] font-mono text-zinc-800 dark:text-zinc-400">
             {root?.slug && root?.slug !== root?.id
               ? `${root.slug} • ${root.id}`
               : root?.slug || root?.id}
           </div>
           {root?.unit && (
-            <div className="text-[10px] text-zinc-500 dark:text-zinc-400">
+            <div className="text-[10px] text-zinc-800 dark:text-zinc-400">
               Unité : {root.unit}
             </div>
           )}
           {root?.provider_url && (
-            <div className="text-[10px] text-zinc-500 dark:text-zinc-400">
+            <div className="text-[10px] text-zinc-800 dark:text-zinc-400">
               Source API : {root.provider_url}
             </div>
           )}

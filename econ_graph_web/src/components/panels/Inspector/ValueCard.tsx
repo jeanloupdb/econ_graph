@@ -1,6 +1,8 @@
 "use client";
 
+import { useGraphTheme } from "@/lib/context/GraphThemeContext";
 import type { Node } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { formatNumber } from "@/utils/format";
 import { AlertCircle, Settings2, Sparkles } from "lucide-react";
 import type React from "react";
@@ -52,20 +54,24 @@ export function ValueCard({
   onSmartFix,
   isRoot,
 }: ValueCardProps) {
+  const { isLightMode } = useGraphTheme();
   
   // Helper for consistent row styling
   const Row = ({ label, value, subValue, highlight }: { label: string, value: React.ReactNode, subValue?: React.ReactNode, highlight?: string }) => (
-    <div className="flex items-center justify-between py-1.5 pl-3 pr-4 hover:bg-white/5 transition-colors group">
+    <div className={cn(
+      "flex items-center justify-between py-1.5 pl-3 pr-4 transition-colors group",
+      isLightMode ? "hover:bg-zinc-200/50" : "hover:bg-white/5"
+    )}>
       <div className="flex items-center gap-2 min-w-0">
         {highlight && <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: highlight }} />}
-        <span className="text-xs text-zinc-500 dark:text-zinc-400 font-medium truncate">{label}</span>
+        <span className={cn("text-xs font-medium truncate", isLightMode ? "text-zinc-600" : "text-zinc-400")}>{label}</span>
       </div>
       <div className="text-right">
-        <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 font-mono">
+        <div className={cn("text-sm font-semibold font-mono", isLightMode ? "text-zinc-900" : "text-zinc-100")}>
            {value}
-           {node.unit && value !== "—" && <span className="text-xs text-zinc-500 ml-1">{node.unit}</span>}
+           {node.unit && value !== "—" && <span className={cn("text-xs ml-1", isLightMode ? "text-zinc-600" : "text-zinc-500")}>{node.unit}</span>}
         </div>
-        {subValue && <div className="text-[10px] text-zinc-500">{subValue}</div>}
+        {subValue && <div className={cn("text-[10px]", isLightMode ? "text-zinc-600" : "text-zinc-500")}>{subValue}</div>}
       </div>
     </div>
   );
@@ -83,7 +89,7 @@ export function ValueCard({
           value={compareData.value_b != null ? formatNumber(compareData.value_b) : "—"}
           highlight="#10b981"
         />
-        <div className="border-t border-dashed border-white/10 my-1" />
+        <div className={cn("border-t border-dashed my-1", isLightMode ? "border-zinc-300" : "border-white/10")} />
         <Row 
           label="Valeur réelle"
           value={compareData.real_value != null ? formatNumber(compareData.real_value) : "—"}
@@ -106,7 +112,10 @@ export function ValueCard({
         />
         
         {hasError && (
-           <div className="mx-4 mt-2 p-2 rounded bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs flex items-start gap-2">
+           <div className={cn(
+             "mx-4 mt-2 p-2 rounded border text-xs flex items-start gap-2",
+             isLightMode ? "bg-red-50 border-red-200 text-red-700" : "bg-red-500/10 border-red-500/20 text-red-400"
+           )}>
              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
              <div className="flex-1">
                <div className="font-medium mb-1">Erreur de calcul</div>
@@ -124,17 +133,6 @@ export function ValueCard({
            </div>
         )}
 
-        {!hasError && !comparisonEnabled && isRoot && (
-           <div className="px-4 py-2">
-             <button
-               onClick={onOpenScenarioPanel}
-               className="flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-             >
-               <Settings2 className="h-3.5 w-3.5" />
-               Modifier dans le scénario
-             </button>
-           </div>
-        )}
       </div>
     );
   }
@@ -143,16 +141,28 @@ export function ValueCard({
   return (
     <div className="flex flex-col">
       <div className="py-2 pl-3 pr-4">
-        <div className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 font-mono tracking-tight" style={valueStyle}>
+        <div 
+          className={cn(
+            "text-3xl font-bold font-mono tracking-tight",
+            isLightMode ? "text-zinc-900" : "text-zinc-50"
+          )} 
+          style={isLightMode ? undefined : valueStyle}
+        >
           {realValue != null ? formatNumber(realValue) : "—"}
           {node.unit && realValue != null && (
-            <span className="text-base font-normal text-zinc-500 ml-2 align-baseline">{node.unit}</span>
+            <span className={cn(
+              "text-base font-normal ml-2 align-baseline",
+              isLightMode ? "text-zinc-600" : "text-zinc-500"
+            )}>{node.unit}</span>
           )}
         </div>
       </div>
 
       {hasError && (
-           <div className="mx-4 mt-1 p-2 rounded bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs flex items-start gap-2">
+           <div className={cn(
+             "mx-4 mt-1 p-2 rounded border text-xs flex items-start gap-2",
+             isLightMode ? "bg-red-50 border-red-200 text-red-700" : "bg-red-500/10 border-red-500/20 text-red-400"
+           )}>
              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
              <div className="flex-1">
                <div className="font-medium mb-1">Erreur de calcul</div>
@@ -181,19 +191,20 @@ interface ComparisonRowProps {
 }
 
 function ComparisonRow({ label, value, colorClass, unit }: ComparisonRowProps) {
+  const { isLightMode } = useGraphTheme();
   return (
     <div className="space-y-0.5">
       <div className="flex items-baseline gap-2">
         <div className="inline-flex items-center gap-1">
           <span className={`w-2 h-2 rounded-full ${colorClass}`} />
-          <span className="font-medium text-[11px] text-zinc-700 dark:text-zinc-200">
+          <span className={cn("font-medium text-[11px]", isLightMode ? "text-zinc-700" : "text-zinc-200")}>
             {label}
           </span>
         </div>
         <span className="font-mono text-xs">
           {value == null ? "—" : formatNumber(value)}
           {unit && value !== null && (
-            <span className="text-[10px] ml-1 text-zinc-500 dark:text-zinc-400">{unit}</span>
+            <span className={cn("text-[10px] ml-1", isLightMode ? "text-zinc-600" : "text-zinc-400")}>{unit}</span>
           )}
         </span>
       </div>

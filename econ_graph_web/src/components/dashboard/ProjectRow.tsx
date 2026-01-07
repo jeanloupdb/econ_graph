@@ -1,11 +1,21 @@
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { apiClient } from '@/lib/api/client';
-import { Edge, Node as GraphNode } from '@/lib/types';
-import { useQuery } from '@tanstack/react-query';
-import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowRight, Box, CheckCircle2, Clock, GitBranch, Network, Pencil, Share2, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { apiClient } from "@/lib/api/client";
+import { Edge, Node as GraphNode } from "@/lib/types";
+import { useQuery } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  ArrowRight,
+  Box,
+  CheckCircle2,
+  Clock,
+  GitBranch,
+  Pencil,
+  Share2,
+  Trash2,
+} from "lucide-react";
+import { SmartGraphLogo } from "../ui/SmartGraphLogo";
+import { useEffect, useState } from "react";
 
 export interface ProjectRowProps {
   project: any;
@@ -23,11 +33,15 @@ export interface ProjectRowProps {
 
 export function useProjectStats(projectId: string) {
   return useQuery({
-    queryKey: ['project-stats', projectId],
+    queryKey: ["project-stats", projectId],
     queryFn: async () => {
       const [nodes, edges] = await Promise.all([
-        apiClient.get<GraphNode[]>(`/nodes?project=${encodeURIComponent(projectId)}`),
-        apiClient.get<Edge[]>(`/edges?project=${encodeURIComponent(projectId)}`)
+        apiClient.get<GraphNode[]>(
+          `/nodes?project=${encodeURIComponent(projectId)}`
+        ),
+        apiClient.get<Edge[]>(
+          `/edges?project=${encodeURIComponent(projectId)}`
+        ),
       ]);
       return {
         nodes: nodes?.length || 0,
@@ -48,7 +62,7 @@ export function ProjectRow({
   onShare,
   className,
   layoutId,
-  isJustCreated
+  isJustCreated,
 }: ProjectRowProps) {
   const { data: stats } = useProjectStats(project.id);
   const [showCheck, setShowCheck] = useState(isJustCreated);
@@ -66,37 +80,38 @@ export function ProjectRow({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{
         opacity: 1,
-        scale: 1
+        scale: 1,
       }}
       transition={{
         duration: 0.15,
-        delay: isJustCreated ? 0 : index * 0.01
+        delay: isJustCreated ? 0 : index * 0.01,
       }}
       className={`group cursor-pointer transition-colors relative ${
         isSelected
-          ? 'bg-blue-50/50 dark:bg-blue-950/20'
-          : 'hover:bg-zinc-50/50 dark:hover:bg-zinc-900/50'
-      } ${className || ''}`}
+          ? "bg-violet-500/5"
+          : "hover:bg-zinc-800/50"
+      } ${className || ""}`}
     >
       {/* Checkbox */}
       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
         <Checkbox
           checked={isSelected}
           onCheckedChange={onToggleSelect}
+          className="border-zinc-700 data-[state=checked]:bg-violet-600 data-[state=checked]:border-violet-600"
         />
       </td>
 
       {/* Name */}
       <td className="px-4 py-3" onClick={onOpen}>
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-900 group-hover:bg-blue-100 dark:group-hover:bg-blue-950 transition-colors">
-            <Network className="h-4 w-4 text-zinc-600 dark:text-zinc-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
+          <div className="p-1.5 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
+            <SmartGraphLogo size={24} />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <motion.p
                 layoutId={layoutId ? `${layoutId}-title` : undefined}
-                className="text-sm font-medium text-zinc-900 dark:text-white"
+                className="text-sm font-medium text-white"
               >
                 {project.name}
               </motion.p>
@@ -106,19 +121,19 @@ export function ProjectRow({
                     initial={{ scale: 0, rotate: -180 }}
                     animate={{
                       scale: 1,
-                      rotate: 0
+                      rotate: 0,
                     }}
                     exit={{ scale: 0, opacity: 0 }}
                     transition={{
                       type: "spring",
                       stiffness: 200,
-                      damping: 15
+                      damping: 15,
                     }}
-                    className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-950 border border-green-200 dark:border-green-800"
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20"
                   >
-                    <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
-                    <span className="text-[10px] font-semibold text-green-700 dark:text-green-300">
-                      Created
+                    <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                    <span className="text-[10px] font-medium text-emerald-400">
+                      Créé
                     </span>
                   </motion.div>
                 )}
@@ -130,7 +145,7 @@ export function ProjectRow({
 
       {/* Nodes */}
       <td className="px-4 py-3" onClick={onOpen}>
-        <div className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+        <div className="flex items-center gap-1.5 text-xs text-zinc-500">
           <Box className="h-3.5 w-3.5" />
           <span>{stats?.nodes || 0}</span>
         </div>
@@ -138,7 +153,7 @@ export function ProjectRow({
 
       {/* Edges */}
       <td className="px-4 py-3" onClick={onOpen}>
-        <div className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+        <div className="flex items-center gap-1.5 text-xs text-zinc-500">
           <GitBranch className="h-3.5 w-3.5" />
           <span>{stats?.edges || 0}</span>
         </div>
@@ -146,12 +161,12 @@ export function ProjectRow({
 
       {/* Date */}
       <td className="px-4 py-3" onClick={onOpen}>
-        <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="flex items-center gap-1.5 text-xs text-zinc-500">
           <Clock className="h-3.5 w-3.5" />
-          {new Date(project.updatedAt).toLocaleDateString('fr-FR', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric'
+          {new Date(project.updatedAt).toLocaleDateString("fr-FR", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
           })}
         </div>
       </td>
@@ -162,7 +177,7 @@ export function ProjectRow({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-500 hover:text-white hover:bg-zinc-800"
             onClick={(e) => {
               e.stopPropagation();
               onRename();
@@ -173,7 +188,7 @@ export function ProjectRow({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-500 hover:text-white hover:bg-zinc-800"
             onClick={(e) => {
               e.stopPropagation();
               onShare();
@@ -184,7 +199,7 @@ export function ProjectRow({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-500 hover:text-red-400 hover:bg-red-500/10"
             onClick={(e) => {
               e.stopPropagation();
               onDelete();
@@ -192,7 +207,7 @@ export function ProjectRow({
           >
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
-          <ArrowRight className="h-4 w-4 text-zinc-400 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <ArrowRight className="h-4 w-4 text-zinc-600 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
       </td>
     </motion.tr>

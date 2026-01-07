@@ -1,1 +1,1 @@
-"""Test suite for Econ Graph API."""
+"""Test suite for Smart Graph API."""

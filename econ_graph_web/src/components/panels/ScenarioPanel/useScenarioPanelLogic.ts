@@ -58,6 +58,7 @@ export function useScenarioPanelLogic(
 ): ScenarioPanelLogicResult {
   const panelRef = useRef<HTMLDivElement>(null);
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
+  const canEdit = useProjectStore((s) => s.canEdit)();
   const activeScenarioId = useScenarioStore((s) => s.activeScenarioId);
   const setActiveScenario = useScenarioStore((s) => s.setActiveScenario);
   const resetToBaseline = useScenarioStore((s) => s.resetToBaseline);
@@ -661,6 +662,7 @@ export function useScenarioPanelLogic(
     isOpen,
     scenarios,
     activeScenarioId,
+    canEdit,
     onSelectScenario: (scenarioId) => {
       void handleScenarioSelect(scenarioId);
     },

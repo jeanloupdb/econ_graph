@@ -31,8 +31,8 @@ export function ProjectGraphProvider({ children }: ProjectGraphProviderProps) {
 
   const nodes = Array.isArray(nodesQuery.data) ? nodesQuery.data : [];
 
-  const refreshNodes = useCallback(() => {
-    void nodesQuery.refetch();
+  const refreshNodes = useCallback(async () => {
+    await nodesQuery.refetch();
   }, [nodesQuery]);
 
   const dataValue = useMemo(

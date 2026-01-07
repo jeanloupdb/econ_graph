@@ -7,6 +7,8 @@ export interface Project {
   createdAt: string;
   updatedAt: string;
   public_view_token?: string | null;
+  user_id?: string | null;
+  user_role?: 'owner' | 'editor' | 'viewer' | 'public' | null;
 }
 
 interface ProjectState {
@@ -20,6 +22,11 @@ interface ProjectState {
   shareProject: (id: string) => Promise<{ public_view_token: string }>;
   revokeShare: (id: string) => Promise<void>;
   addProject: (project: Project) => void;
+  // Permission helpers
+  canEdit: (projectId?: string | null) => boolean;
+  canShare: (projectId?: string | null) => boolean;
+  isOwner: (projectId?: string | null) => boolean;
+  getCurrentRole: () => 'owner' | 'editor' | 'viewer' | 'public' | null;
 }
 
 const LS_KEY = 'eg_projects_v1';
@@ -67,6 +74,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         createdAt: p.created_at,
         updatedAt: p.updated_at,
         public_view_token: p.public_view_token,
+        user_id: p.user_id,
+        user_role: p.user_role,
       }));
       const cur = typeof window !== 'undefined' ? localStorage.getItem(LS_CUR) : null;
       const nextCurrent = cur || (projs[0]?.id || null);
@@ -144,5 +153,37 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const uniqueProjs = Array.from(new Map(projs.map(p => [p.id, p])).values());
     set({ projects: uniqueProjs });
     save(uniqueProjs, get().currentProjectId);
+  },
+
+  // Permission helpers
+  canEdit: (projectId?: string | null) => {
+    const id = projectId || get().currentProjectId;
+    if (!id) return false;
+    const project = get().projects.find(p => p.id === id);
+    if (!project) return false;
+    return project.user_role === 'owner' || project.user_role === 'editor';
+  },
+
+  canShare: (projectId?: string | null) => {
+    const id = projectId || get().currentProjectId;
+    if (!id) return false;
+    const project = get().projects.find(p => p.id === id);
+    if (!project) return false;
+    return project.user_role === 'owner';
+  },
+
+  isOwner: (projectId?: string | null) => {
+    const id = projectId || get().currentProjectId;
+    if (!id) return false;
+    const project = get().projects.find(p => p.id === id);
+    if (!project) return false;
+    return project.user_role === 'owner';
+  },
+
+  getCurrentRole: () => {
+    const id = get().currentProjectId;
+    if (!id) return null;
+    const project = get().projects.find(p => p.id === id);
+    return project?.user_role || null;
   },
 }));

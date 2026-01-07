@@ -177,10 +177,10 @@ export function ScenarioParameters({
   return (
     <div className="space-y-3">
       <div>
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+        <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-300">
           Paramètres réglables
         </h3>
-        <div className="mt-0.5 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="mt-0.5 flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
           {activeScenarioId ? (
             <>
               <div
@@ -203,12 +203,12 @@ export function ScenarioParameters({
       </div>
 
       {!activeScenarioId && (
-        <div className="flex flex-col items-center justify-center py-6 px-4 text-center space-y-3 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50/50 dark:bg-zinc-900/20 mb-4">
+        <div className="flex flex-col items-center justify-center py-6 px-4 text-center space-y-3 border border-dashed border-zinc-400 dark:border-zinc-800 rounded-lg bg-zinc-200/50 dark:bg-zinc-900/20 mb-4">
           <div className="space-y-1">
             <h4 className="font-medium text-zinc-900 dark:text-zinc-100 text-sm">
               Mode Baseline (Lecture seule)
             </h4>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-[280px] mx-auto">
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 max-w-[280px] mx-auto">
               Les valeurs ci-dessous sont fixes. Pour simuler des impacts, créez ou sélectionnez un scénario.
             </p>
           </div>
@@ -247,7 +247,7 @@ export function ScenarioParameters({
       )}
 
       {filteredRootNodes.length === 0 && compositeSections.length === 0 && (
-        <div className="text-sm text-zinc-500 dark:text-zinc-400 text-center py-8 border border-zinc-200 dark:border-zinc-800 rounded">
+        <div className="text-sm text-zinc-600 dark:text-zinc-400 text-center py-8 border border-zinc-400 dark:border-zinc-800 rounded">
           Aucun nœud réglable disponible.
           <br />
           Créez des nœuds API ou des nœuds d&apos;entrée.
@@ -258,30 +258,30 @@ export function ScenarioParameters({
         filteredRootNodes.map((node) => renderCard(node))}
 
       {compositeSections.length > 0 && (
-        <div className="space-y-3 pt-4 border-t border-dashed border-zinc-200 dark:border-zinc-800">
-          <h4 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 flex items-center gap-2">
+        <div className="space-y-3 pt-4 border-t border-dashed border-zinc-400 dark:border-zinc-800">
+          <h4 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 flex items-center gap-2">
             <Layers className="h-4 w-4 text-amber-600" />
             Composites utilisés
           </h4>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="text-xs text-zinc-600 dark:text-zinc-400">
             Visualisez les paramètres internes des composites présents dans ce projet.
             Les paramètres déjà liés à un nœud du projet peuvent être ajustés directement ci-dessous.
           </p>
           {compositeSections.map(({ composite, params }) => (
             <div
               key={composite.id}
-              className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950/30 p-3 space-y-2"
+              className="rounded-lg border border-zinc-400 dark:border-zinc-800 bg-white dark:bg-zinc-950/30 p-3 space-y-2"
             >
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <div className="font-medium text-sm text-zinc-900 dark:text-zinc-100">
                     {composite.label}
                   </div>
-                  <div className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400">
+                  <div className="text-[11px] font-mono text-zinc-600 dark:text-zinc-400">
                     {composite.slug || composite.id}
                   </div>
                 </div>
-                <div className="text-[11px] text-amber-600 dark:text-amber-300 flex items-center gap-1">
+                <div className="text-[11px] text-amber-700 dark:text-amber-300 flex items-center gap-1">
                   <Layers className="h-3 w-3" />
                   {params.length} paramètres
                 </div>

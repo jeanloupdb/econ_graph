@@ -20,7 +20,7 @@ export function NotesCard({ nodeId }: NotesCardProps) {
           {text}
         </div>
       ) : (
-        <div className="flex items-center gap-2 text-sm text-zinc-500">
+        <div className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-500">
           <span className="italic">Aucune note.</span>
           <InfoHint title="Astuce">
             Saisissez des notes via le bouton « Éditer » en en-tête.

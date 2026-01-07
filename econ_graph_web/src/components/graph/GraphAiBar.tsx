@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   DropdownMenu,
@@ -9,7 +9,12 @@ import {
 import { useGraphActions } from "@/graph/context/GraphActionsContext";
 import { useGraphData } from "@/graph/context/GraphDataContext";
 import { useAiGraphAction } from "@/graph/hooks/useAiGraphAction";
-import { useComposites, useNodeTones, useScenarios, useTheme } from "@/lib/api/hooks";
+import {
+  useComposites,
+  useNodeTones,
+  useScenarios,
+  useTheme,
+} from "@/lib/api/hooks";
 import { cn } from "@/lib/utils";
 import { useProjectStore } from "@/store/projectState";
 import { useScenarioStore } from "@/store/scenarioState";
@@ -19,17 +24,37 @@ import {
   ChevronDown,
   Circle,
   FileText,
-  Info,
   Loader2,
   MousePointer2,
   Plus,
   Sparkles,
   Wand2,
-  X as XIcon
+  X as XIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-export function GraphAiBar({ mode = 'project' }: { mode?: 'project' | 'composite' }) {
+interface Composite {
+  id: string;
+  name: string;
+  description?: string;
+  graph_data?: {
+    nodes?: Array<{ id: string; slug?: string; label: string }>;
+    edges?: Array<{ target: string }>;
+  };
+}
+
+interface GraphNode {
+  id: string;
+  label: string;
+  composite_id?: string;
+  computation_error?: string;
+}
+
+export function GraphAiBar({
+  mode = "project",
+}: {
+  mode?: "project" | "composite";
+}) {
   // Store states
   const isExpanded = useUIStore((s) => s.aiAssistantOpen);
   const setAiAssistantOpen = useUIStore((s) => s.setAiAssistantOpen);
@@ -46,16 +71,17 @@ export function GraphAiBar({ mode = 'project' }: { mode?: 'project' | 'composite
   // Local states
   const [prompt, setPrompt] = useState("");
   const [lastExplanation, setLastExplanation] = useState<string | null>(null);
-  const [creationMode, setCreationMode] = useState<'node' | 'scenario' | null>(null);
-  const [showCommandMenu, setShowCommandMenu] = useState(false);
+  const [creationMode, setCreationMode] = useState<"node" | "scenario" | null>(
+    null
+  );
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   // Derive aiMode from uiMode or creationMode
-  const aiMode: 'global' | 'selection' | 'creation' =
-    creationMode ? 'creation' :
-    uiMode === 'ai-select' ? 'selection' :
-    'global';
+  const aiMode: "global" | "selection" | "creation" = creationMode
+    ? "creation"
+    : uiMode === "ai-select"
+    ? "selection"
+    : "global";
 
   // Data hooks
   const { nodes } = useGraphData();
@@ -67,19 +93,19 @@ export function GraphAiBar({ mode = 'project' }: { mode?: 'project' | 'composite
   const { data: theme } = useTheme();
   const { data: toneEntries } = useNodeTones(currentProjectId);
 
-
   // Available composites for AI
-  const availableComposites = composites.map(c => {
-    const comp = c as any;
-    const cNodes = comp.graph_data?.nodes || [];
-    const cEdges = comp.graph_data?.edges || [];
-    const targets = new Set(cEdges.map((e: any) => e.target));
-    const inputs = cNodes.filter((n: any) => !targets.has(n.id));
+  const availableComposites = (composites as Composite[]).map((c) => {
+    const cNodes = c.graph_data?.nodes || [];
+    const cEdges = c.graph_data?.edges || [];
+    const targets = new Set(cEdges.map((e) => e.target));
+    const inputs = cNodes.filter((n) => !targets.has(n.id));
     return {
-      id: comp.id,
-      name: comp.name,
-      description: comp.description || undefined,
-      input_slugs: inputs.map((n: any) => n.slug || n.label.toLowerCase().replace(/[^a-z0-9]+/g, '_'))
+      id: c.id,
+      name: c.name,
+      description: c.description || undefined,
+      input_slugs: inputs.map(
+        (n) => n.slug || n.label.toLowerCase().replace(/[^a-z0-9]+/g, "_")
+      ),
     };
   });
 
@@ -89,11 +115,12 @@ export function GraphAiBar({ mode = 'project' }: { mode?: 'project' | 'composite
     setLastExplanation(null);
 
     // Determine context based on creation mode
-    let context = mode === 'project' ? "graph_modification" : "composite_modification";
-    if (creationMode === 'node') {
-      context = 'node_creation';
-    } else if (creationMode === 'scenario') {
-      context = 'scenario_creation';
+    let context =
+      mode === "project" ? "graph_modification" : "composite_modification";
+    if (creationMode === "node") {
+      context = "node_creation";
+    } else if (creationMode === "scenario") {
+      context = "scenario_creation";
     }
 
     const explanation = await execute(
@@ -108,501 +135,430 @@ export function GraphAiBar({ mode = 'project' }: { mode?: 'project' | 'composite
       []
     );
 
-    console.log('AI Explanation:', explanation);
-
     if (explanation) {
       setLastExplanation(explanation);
-      // Keep AI bar open if there's an explanation
-      // Don't close or clear
     } else {
-      // Only close if no explanation (action was performed)
       setAiAssistantOpen(false);
       setCreationMode(null);
     }
 
     setPrompt("");
 
-    if (uiMode === 'ai-select') {
-      useUIStore.setState({ mode: 'select' });
+    if (uiMode === "ai-select") {
+      useUIStore.setState({ mode: "select" });
     }
-  };
-
-  const handlePromptChange = (value: string) => {
-    setPrompt(value);
-
-    // Detect "/" command
-    if (value === '/') {
-      setShowCommandMenu(true);
-    } else if (showCommandMenu && !value.startsWith('/')) {
-      setShowCommandMenu(false);
-    }
-  };
-
-  const handleCommandSelect = (command: 'node' | 'scenario') => {
-    setCreationMode(command);
-    setPrompt('');
-    setShowCommandMenu(false);
-    setTimeout(() => inputRef.current?.focus(), 100);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Handle command menu navigation
-    if (showCommandMenu) {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        return;
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setShowCommandMenu(false);
-        setPrompt('');
-        return;
-      }
-    }
-
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (!showCommandMenu) {
-        handleGenerate();
-      }
+      handleGenerate();
     }
   };
 
-  // Don't close when clicking outside - user must click the close button
-  // This allows selecting nodes on the canvas while keeping the AI bar open
-
-  const toggleMode = (newMode: 'global' | 'selection') => {
-    if (newMode === 'selection') {
-      // Switch to ai-select mode to allow multi-selection
-      useUIStore.setState({ mode: 'ai-select' });
+  const toggleMode = (newMode: "global" | "selection") => {
+    if (newMode === "selection") {
+      useUIStore.setState({ mode: "ai-select" });
     } else {
-      // Switch back to normal select mode and clear selection
-      useUIStore.setState({ mode: 'select' });
+      useUIStore.setState({ mode: "select" });
       setSelectedNodeIds([]);
     }
   };
 
   // Helper to get node color based on its tone
   const getNodeColor = (nodeId: string) => {
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node) return { bg: '#e5e7eb', text: '#374151', border: '#9ca3af' };
+    const node = nodes.find((n) => n.id === nodeId) as GraphNode | undefined;
+    if (!node) return { bg: "#e5e7eb", text: "#374151", border: "#9ca3af" };
 
     const isCompositeNode = !!node.composite_id;
     if (isCompositeNode) {
-      return { bg: '#fef3c7', text: '#92400e', border: '#f59e0b' };
+      return { bg: "#fef3c7", text: "#92400e", border: "#f59e0b" };
     }
 
-    // Determine tone
-    const hasError = node.computation_error || (node as any).provider_last_error;
+    const hasError =
+      node.computation_error ||
+      (node as GraphNode & { provider_last_error?: string })
+        .provider_last_error;
     if (hasError) {
-      return { bg: '#fee2e2', text: '#991b1b', border: '#ef4444' };
+      return { bg: "#fee2e2", text: "#991b1b", border: "#ef4444" };
     }
 
-    // Check explicit tone
-    const explicitTone = (toneEntries as any)?.[nodeId]?.tone;
-    const toneColors = (theme as any)?.node_tone?.[explicitTone];
+    const explicitTone = (
+      toneEntries as Record<string, { tone: string }> | undefined
+    )?.[nodeId]?.tone;
+    const toneColors = explicitTone
+      ? (
+          theme as
+            | {
+                node_tone?: Record<
+                  string,
+                  { bg?: string; text?: string; border?: string }
+                >;
+              }
+            | undefined
+        )?.node_tone?.[explicitTone]
+      : undefined;
 
     if (toneColors) {
       return {
-        bg: toneColors.bg || '#e0e7ff',
-        text: toneColors.text || '#3730a3',
-        border: toneColors.border || '#6366f1'
+        bg: toneColors.bg || "#e0e7ff",
+        text: toneColors.text || "#3730a3",
+        border: toneColors.border || "#6366f1",
       };
     }
 
-    // Default colors
-    return { bg: '#e0e7ff', text: '#3730a3', border: '#6366f1' };
+    return { bg: "#e0e7ff", text: "#3730a3", border: "#6366f1" };
   };
 
   const removeNodeFromSelection = (nodeId: string) => {
-    setSelectedNodeIds(selectedNodeIds.filter(id => id !== nodeId));
+    setSelectedNodeIds(selectedNodeIds.filter((id) => id !== nodeId));
   };
 
   // Handle pre-filled prompt when AI bar opens
   useEffect(() => {
     if (isExpanded && aiPromptPrefill) {
-      setPrompt(aiPromptPrefill);
-      setAiPromptPrefill(''); // Clear the prefill after using it
-      setTimeout(() => inputRef.current?.focus(), 100);
+      // Use a microtask to avoid setState in effect
+      Promise.resolve().then(() => {
+        setPrompt(aiPromptPrefill);
+        setAiPromptPrefill("");
+        setTimeout(() => inputRef.current?.focus(), 100);
+      });
     }
   }, [isExpanded, aiPromptPrefill, setAiPromptPrefill]);
 
-  // Debug: log when explanation changes
+  // Handle Escape key to close AI bar
   useEffect(() => {
-    console.log('lastExplanation changed:', lastExplanation);
-    console.log('isPending:', isPending);
-    console.log('isExpanded:', isExpanded);
-    console.log('Should show card:', lastExplanation && !isPending && isExpanded);
-  }, [lastExplanation, isPending, isExpanded]);
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isExpanded) {
+        setAiAssistantOpen(false);
+        setCreationMode(null);
+        setLastExplanation(null);
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [isExpanded, setAiAssistantOpen]);
 
-  // Don't render AI bar in view mode
+  // Auto-switch between global and selection mode based on node selection (in baseline mode)
+  const viewMode = useUIStore((s) => s.viewMode);
+  useEffect(() => {
+    if (!isExpanded || viewMode !== "baseline" || creationMode) return;
+
+    if (selectedNodeIds.length > 0 && uiMode !== "ai-select") {
+      // Node(s) selected → switch to selection mode
+      useUIStore.setState({ mode: "ai-select" });
+    } else if (selectedNodeIds.length === 0 && uiMode === "ai-select") {
+      // No selection → switch back to global mode
+      useUIStore.setState({ mode: "select" });
+    }
+  }, [selectedNodeIds.length, isExpanded, viewMode, creationMode, uiMode]);
+
   if (!developerMode) {
     return null;
   }
 
+  // No backdrop - canvas remains fully interactive
   return (
-    <>
-      {/* Main AI Bar */}
-      <div className="fixed bottom-0 left-0 w-full flex justify-center z-[80] pointer-events-none">
+    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 w-full max-w-2xl px-4">
+      <div className="flex flex-col gap-2">
+        {/* Explanation Card */}
+        {lastExplanation && !isPending && (
+          <div
+            className={cn(
+              "bg-zinc-950/95 backdrop-blur-xl",
+              "border border-white/[0.08] rounded-xl",
+              "p-4 shadow-2xl shadow-black/50",
+              "animate-in slide-in-from-bottom-2 duration-200"
+            )}
+          >
+            <div className="flex gap-3 items-start">
+              <div className="shrink-0 w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-purple-400" />
+              </div>
+              <p className="flex-1 text-sm text-zinc-200 leading-relaxed">
+                {lastExplanation}
+              </p>
+              <button
+                onClick={() => setLastExplanation(null)}
+                className="shrink-0 p-1.5 hover:bg-white/[0.06] rounded-md transition-colors"
+              >
+                <XIcon className="h-4 w-4 text-zinc-500" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Main Input Panel */}
         <div
-          ref={containerRef}
-          className="pointer-events-auto w-full max-w-3xl px-4 mb-4 flex flex-col gap-2"
+          className={cn(
+            "bg-zinc-950/95 backdrop-blur-xl",
+            "border border-white/[0.08] rounded-xl",
+            "shadow-2xl shadow-black/50",
+            "animate-in slide-in-from-bottom-2 duration-200",
+            isPending && "opacity-60 pointer-events-none"
+          )}
         >
-          {/* Explanation Card - positioned above the AI bar */}
-          {lastExplanation && !isPending && isExpanded && (
-            <div className="w-full max-w-lg mx-auto max-h-[40vh] overflow-y-auto">
-              <div className="bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 rounded-xl p-3.5 shadow-lg animate-in slide-in-from-bottom-2 fade-in duration-200">
-                <div className="flex gap-2.5 items-start">
-                  <div className="shrink-0 w-6 h-6 rounded-md bg-blue-50 dark:bg-blue-950 flex items-center justify-center">
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+          {/* Header with mode selector */}
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06]">
+            {/* Mode selector */}
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={cn(
+                    "flex items-center gap-2 h-8 px-3 text-sm rounded-lg transition-colors",
+                    "hover:bg-white/[0.06]",
+                    aiMode === "selection"
+                      ? "bg-white/[0.08] text-zinc-100"
+                      : "text-zinc-400"
+                  )}
+                >
+                  {aiMode === "creation" ? (
+                    <>
+                      <Plus className="h-4 w-4 text-blue-400" />
+                      <span>Créer</span>
+                    </>
+                  ) : aiMode === "global" ? (
+                    <>
+                      <Wand2 className="h-4 w-4 text-purple-400" />
+                      <span>Global</span>
+                    </>
+                  ) : (
+                    <>
+                      <MousePointer2 className="h-4 w-4 text-cyan-400" />
+                      <span>Sélection</span>
+                    </>
+                  )}
+                  <ChevronDown className="h-3 w-3 opacity-60" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuItem
+                  onClick={() => {
+                    toggleMode("global");
+                    setCreationMode(null);
+                  }}
+                >
+                  <Wand2 className="h-4 w-4 mr-2 text-purple-400" />
+                  <span className="text-sm">Mode global</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={selectedNodeIds.length === 0}
+                  onClick={() => {
+                    if (selectedNodeIds.length > 0) {
+                      toggleMode("selection");
+                      setCreationMode(null);
+                    }
+                  }}
+                  className={cn(
+                    selectedNodeIds.length === 0 && "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  <MousePointer2 className={cn(
+                    "h-4 w-4 mr-2",
+                    selectedNodeIds.length === 0 ? "text-zinc-500" : "text-cyan-400"
+                  )} />
+                  <div className="flex flex-col">
+                    <span className="text-sm">Mode sélection</span>
+                    {selectedNodeIds.length === 0 && (
+                      <span className="text-[10px] text-zinc-500">Sélectionnez un nœud d'abord</span>
+                    )}
                   </div>
-                  <p className="flex-1 text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">
-                    {lastExplanation}
-                  </p>
-                  <button
-                    onClick={() => setLastExplanation(null)}
-                    className="shrink-0 p-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded transition-colors"
-                  >
-                    <XIcon className="h-4 w-4 text-zinc-500" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Compact Mode */}
-          {!isExpanded && (
-            <div className="flex items-center gap-2 justify-center">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className="flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-full transition-all shadow-sm hover:shadow"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    <span>Créer</span>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  <DropdownMenuItem onClick={() => {
-                    setCreationMode('node');
-                    setAiAssistantOpen(true);
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setCreationMode("node");
                     setTimeout(() => inputRef.current?.focus(), 100);
-                  }}>
-                    <Circle className="h-4 w-4 mr-2.5 text-zinc-500" />
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-sm font-medium">Créer un nœud</span>
-                      <span className="text-xs text-zinc-500">Avec l'IA ou manuellement</span>
-                    </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                    setCreationMode('scenario');
-                    setAiAssistantOpen(true);
+                  }}
+                >
+                  <Circle className="h-4 w-4 mr-2 text-blue-400" />
+                  <span className="text-sm">Créer un nœud</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setCreationMode("scenario");
                     setTimeout(() => inputRef.current?.focus(), 100);
-                  }}>
-                    <FileText className="h-4 w-4 mr-2.5 text-zinc-500" />
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-sm font-medium">Créer un scénario</span>
-                      <span className="text-xs text-zinc-500">Avec l'IA ou manuellement</span>
-                    </div>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                  }}
+                >
+                  <FileText className="h-4 w-4 mr-2 text-blue-400" />
+                  <span className="text-sm">Créer un scénario</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-              <div className="relative flex-1 max-w-md">
-                <div className="flex items-center h-9 px-3.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-full shadow-sm hover:shadow hover:border-zinc-300 dark:hover:border-zinc-600 transition-all">
-                  <input
-                    type="text"
-                    readOnly
-                    onFocus={() => {
-                      setAiAssistantOpen(true);
-                      setTimeout(() => inputRef.current?.focus(), 100);
-                    }}
-                    placeholder="Demander à l'IA..."
-                    className="flex-1 bg-transparent text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 outline-none cursor-text"
-                  />
-                  <button
-                    disabled
-                    className="shrink-0 h-6 w-6 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 flex items-center justify-center"
-                  >
-                    <ArrowUp className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+            {/* Creation tag */}
+            {aiMode === "creation" && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                {creationMode === "node" ? "Nœud" : "Scénario"}
+                <button
+                  onClick={() => setCreationMode(null)}
+                  className="hover:bg-white/10 rounded p-0.5 transition-colors"
+                >
+                  <XIcon className="h-3 w-3" />
+                </button>
+              </span>
+            )}
 
-          {/* Expanded Mode */}
-          {isExpanded && (
-            <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
-              <div className={cn(
-                "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl shadow-lg relative",
-                isPending && "opacity-60 pointer-events-none"
-              )}>
-                {/* Header with mode selector */}
-                <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-100 dark:border-zinc-800">
-                  {/* Unified mode selector */}
-                  <DropdownMenu modal={false}>
-                    <DropdownMenuTrigger asChild>
-                      <button className={cn(
-                        "flex items-center gap-1.5 h-7 px-2.5 text-xs font-medium rounded-lg transition-all",
-                        "hover:bg-zinc-100 dark:hover:bg-zinc-800",
-                        aiMode === 'selection'
-                          ? "bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300"
-                          : "text-zinc-600 dark:text-zinc-400"
-                      )}>
-                        {aiMode === 'creation' ? (
-                          <>
-                            <Plus className="h-3.5 w-3.5" />
-                            <span>Créer</span>
-                          </>
-                        ) : aiMode === 'global' ? (
-                          <>
-                            <Wand2 className="h-3.5 w-3.5" />
-                            <span>Mode global</span>
-                          </>
-                        ) : (
-                          <>
-                            <MousePointer2 className="h-3.5 w-3.5" />
-                            <span>Mode sélection</span>
-                          </>
-                        )}
-                        <ChevronDown className="h-3 w-3 opacity-50" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-48">
-                      <DropdownMenuItem onClick={() => {
-                        toggleMode('global');
-                        setCreationMode(null);
-                      }} className="group">
-                        <Wand2 className="h-4 w-4 mr-2 text-zinc-500" />
-                        <span className="text-sm">Mode global</span>
-                        <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity" title="Modifier tout le graphe">
-                          <Info className="h-3.5 w-3.5 text-zinc-400" />
-                        </div>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => {
-                        toggleMode('selection');
-                        setCreationMode(null);
-                      }} className="group">
-                        <MousePointer2 className="h-4 w-4 mr-2 text-zinc-500" />
-                        <span className="text-sm">Mode sélection</span>
-                        <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity" title="Sélectionner des nœuds sur le graphe">
-                          <Info className="h-3.5 w-3.5 text-zinc-400" />
-                        </div>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => {
-                        setCreationMode('node');
-                        setTimeout(() => inputRef.current?.focus(), 100);
-                      }} className="group">
-                        <Plus className="h-4 w-4 mr-2 text-zinc-500" />
-                        <span className="text-sm">Nœud</span>
-                        <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity" title="Créer avec l'IA ou manuellement">
-                          <Info className="h-3.5 w-3.5 text-zinc-400" />
-                        </div>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => {
-                        setCreationMode('scenario');
-                        setTimeout(() => inputRef.current?.focus(), 100);
-                      }} className="group">
-                        <Plus className="h-4 w-4 mr-2 text-zinc-500" />
-                        <span className="text-sm">Scénario</span>
-                        <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity" title="Créer avec l'IA ou manuellement">
-                          <Info className="h-3.5 w-3.5 text-zinc-400" />
-                        </div>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  {/* Creation tag */}
-                  {aiMode === 'creation' && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 text-blue-700 dark:text-blue-300 border border-blue-200/50 dark:border-blue-800/50 shadow-sm">
-                      <Plus className="h-3.5 w-3.5" />
-                      {creationMode === 'node' ? 'Créer un nœud' : 'Créer un scénario'}
+            {/* Selected nodes list */}
+            {aiMode === "selection" && selectedNodeIds.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {selectedNodeIds.slice(0, 4).map((nodeId) => {
+                  const node = nodes.find((n) => n.id === nodeId) as
+                    | GraphNode
+                    | undefined;
+                  const colors = getNodeColor(nodeId);
+                  return (
+                    <span
+                      key={nodeId}
+                      className="inline-flex items-center gap-1 h-6 px-2 text-xs rounded-md border"
+                      style={{
+                        backgroundColor: colors.bg,
+                        color: colors.text,
+                        borderColor: colors.border,
+                      }}
+                    >
+                      <span className="truncate max-w-[60px]">
+                        {node?.label || nodeId.slice(0, 6)}
+                      </span>
                       <button
-                        onClick={() => setCreationMode(null)}
-                        className="ml-0.5 hover:bg-blue-200/50 dark:hover:bg-blue-900/50 rounded p-0.5 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeNodeFromSelection(nodeId);
+                        }}
+                        className="hover:opacity-70"
                       >
                         <XIcon className="h-3 w-3" />
                       </button>
                     </span>
-                  )}
+                  );
+                })}
+                {selectedNodeIds.length > 4 && (
+                  <span className="text-xs text-zinc-500">
+                    +{selectedNodeIds.length - 4}
+                  </span>
+                )}
+                <button
+                  onClick={() => setSelectedNodeIds([])}
+                  className="text-xs text-zinc-500 hover:text-zinc-300"
+                >
+                  Effacer
+                </button>
+              </div>
+            )}
 
-                  {/* Selected nodes list */}
-                  {aiMode === 'selection' && selectedNodeIds.length > 0 && (
-                    <div className="flex items-center gap-1.5 flex-wrap max-w-md">
-                      {selectedNodeIds.slice(0, 5).map((nodeId) => {
-                        const node = nodes.find(n => n.id === nodeId);
-                        const colors = getNodeColor(nodeId);
-                        return (
-                          <span
-                            key={nodeId}
-                            className="inline-flex items-center gap-1 h-6 px-2 text-xs font-medium rounded-md border transition-all hover:shadow-sm"
-                            style={{
-                              backgroundColor: colors.bg,
-                              color: colors.text,
-                              borderColor: colors.border
-                            }}
-                          >
-                            <span className="truncate max-w-[80px]">
-                              {node?.label || nodeId.slice(0, 8)}
-                            </span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeNodeFromSelection(nodeId);
-                              }}
-                              className="hover:opacity-70 transition-opacity"
-                            >
-                              <XIcon className="h-3 w-3" />
-                            </button>
-                          </span>
-                        );
-                      })}
-                      {selectedNodeIds.length > 5 && (
-                        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                          +{selectedNodeIds.length - 5}
-                        </span>
-                      )}
-                      {selectedNodeIds.length > 0 && (
-                        <button
-                          onClick={() => setSelectedNodeIds([])}
-                          className="text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors underline"
-                        >
-                          Tout effacer
-                        </button>
-                      )}
-                    </div>
-                  )}
+            <div className="flex-1" />
 
-                  <div className="flex-1" />
+            {/* Manual creation button */}
+            {aiMode === "creation" && (
+              <button
+                onClick={() => {
+                  if (creationMode === "node") {
+                    setNodeEditorNodeId(null);
+                    setNodeEditorMode("create");
+                    setAiAssistantOpen(false);
+                    setCreationMode(null);
+                  } else if (creationMode === "scenario") {
+                    useScenarioStore.getState().triggerInlineScenarioCreation();
+                    setViewMode("scenario");
+                    setAiAssistantOpen(false);
+                    setCreationMode(null);
+                  }
+                }}
+                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                Manuellement →
+              </button>
+            )}
 
-                  {/* Manual creation button in creation mode */}
-                  {aiMode === 'creation' && (
-                    <button
-                      onClick={() => {
-                        if (creationMode === 'node') {
-                          setNodeEditorNodeId(null);
-                          setNodeEditorMode('create');
-                          setAiAssistantOpen(false);
-                          setCreationMode(null);
-                        } else if (creationMode === 'scenario') {
-                          // Trigger inline scenario creation
-                          useScenarioStore.getState().triggerInlineScenarioCreation();
-                          setViewMode('scenario');
-                          setAiAssistantOpen(false);
-                          setCreationMode(null);
-                        }
-                      }}
-                      className="flex items-center gap-1.5 h-7 px-2.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      <span>Créer manuellement</span>
-                    </button>
-                  )}
+            <button
+              onClick={() => {
+                setAiAssistantOpen(false);
+                setCreationMode(null);
+                setLastExplanation(null);
+              }}
+              className="h-8 w-8 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] flex items-center justify-center transition-colors"
+            >
+              <XIcon className="h-4 w-4" />
+            </button>
+          </div>
 
-                  <button
-                    onClick={() => {
-                      setAiAssistantOpen(false);
-                      setCreationMode(null);
-                      setLastExplanation(null); // Clear explanation when closing
-                    }}
-                    className="h-7 w-7 rounded-lg text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center justify-center transition-colors"
-                  >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                </div>
-
-                {/* Input area */}
-                <div className="p-3">
-                  <div className="flex flex-col gap-2">
-                    <div className="relative min-h-[80px]">
-                      {/* Loading message overlay */}
-                      {isPending && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm rounded-lg z-10">
-                          <div className="flex items-center gap-3">
-                            <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" />
-                            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                              L'IA traite votre demande...
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
-                      <textarea
-                        ref={inputRef}
-                        value={prompt}
-                        onChange={(e) => handlePromptChange(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder={
-                          aiMode === 'creation'
-                            ? creationMode === 'node'
-                              ? "Décrivez le nœud à créer..."
-                              : "Décrivez le scénario à créer..."
-                            : aiMode === 'global'
-                              ? "Demandez, modifiez, créez avec l'IA..."
-                              : aiMode === 'selection' && selectedNodeIds.length === 0
-                              ? "Selectionnez des nœuds"
-                              : `Que souhaitez-vous faire avec ${selectedNodeIds.length > 1 ? 'ces nœuds' : 'ce nœud'} ?`
-                        }
-                        disabled={isPending}
-                        className={cn(
-                          "w-full h-full bg-transparent border-none focus:outline-none resize-none text-[15px] text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500",
-                          "scrollbar-hide leading-relaxed",
-                          isPending && "opacity-50 cursor-not-allowed"
-                        )}
-                      />
-
-                      {/* Command menu */}
-                      {showCommandMenu && (
-                        <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg overflow-hidden z-10 w-56">
-                          <button
-                            onClick={() => handleCommandSelect('node')}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors text-left"
-                          >
-                            <Plus className="h-4 w-4 text-zinc-500" />
-                            <span>Nœud</span>
-                          </button>
-                          <button
-                            onClick={() => handleCommandSelect('scenario')}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors text-left"
-                          >
-                            <Plus className="h-4 w-4 text-zinc-500" />
-                            <span>Scénario</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={handleGenerate}
-                        disabled={isPending || !prompt.trim()}
-                        className={cn(
-                          "shrink-0 h-8 w-8 rounded-full flex items-center justify-center transition-all",
-                          isPending
-                            ? "bg-zinc-700 dark:bg-zinc-600 text-white cursor-wait shadow-lg"
-                            : prompt.trim()
-                              ? "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-200 shadow-sm"
-                              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed"
-                        )}
-                      >
-                        {isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <ArrowUp className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
+          {/* Input area */}
+          <div className="p-4">
+            <div className="relative">
+              {isPending && (
+                <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/80 rounded-lg z-10">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="h-5 w-5 animate-spin text-purple-400" />
+                    <span className="text-sm text-zinc-400">Processing...</span>
                   </div>
                 </div>
+              )}
+
+              <textarea
+                ref={inputRef}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  aiMode === "creation"
+                    ? creationMode === "node"
+                      ? "Décrivez le nœud à créer..."
+                      : "Décrivez le scénario..."
+                    : aiMode === "global"
+                    ? "Demandez, modifiez, analysez..."
+                    : selectedNodeIds.length === 0
+                    ? "Sélectionnez des nœuds sur le graphe..."
+                    : `Action sur ${selectedNodeIds.length} nœud(s)...`
+                }
+                disabled={isPending}
+                className={cn(
+                  "w-full min-h-[80px] max-h-[160px] bg-transparent resize-none",
+                  "text-sm text-zinc-100",
+                  "placeholder:text-zinc-600",
+                  "focus:outline-none",
+                  "leading-relaxed",
+                  isPending && "opacity-50"
+                )}
+                autoFocus
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-2 pt-2 mt-2 border-t border-white/[0.06]">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-zinc-600">
+                  <kbd className="px-1 py-0.5 rounded bg-white/[0.06] border border-white/[0.08] text-zinc-500 font-mono text-[9px]">
+                    Enter
+                  </kbd>{" "}
+                  envoyer
+                </span>
+                <span className="text-[10px] text-zinc-600">
+                  <kbd className="px-1 py-0.5 rounded bg-white/[0.06] border border-white/[0.08] text-zinc-500 font-mono text-[9px]">
+                    Esc
+                  </kbd>{" "}
+                  fermer
+                </span>
               </div>
 
+              <button
+                onClick={handleGenerate}
+                disabled={isPending || !prompt.trim()}
+                className={cn(
+                  "flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium transition-all",
+                  prompt.trim() && !isPending
+                    ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:opacity-90 shadow-lg shadow-purple-500/20"
+                    : "bg-white/[0.06] text-zinc-600 cursor-not-allowed"
+                )}
+              >
+                {isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <ArrowUp className="h-3.5 w-3.5" />
+                )}
+                <span>Envoyer</span>
+              </button>
             </div>
-          )}
+          </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }

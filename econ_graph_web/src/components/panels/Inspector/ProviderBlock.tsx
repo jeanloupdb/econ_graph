@@ -16,6 +16,7 @@ interface ProviderBlockProps {
   computePending: boolean;
   onManualCompute: () => void;
   onEdit?: () => void;
+  canEdit?: boolean;
 }
 
 export function ProviderBlock({
@@ -28,6 +29,7 @@ export function ProviderBlock({
   computePending,
   onManualCompute,
   onEdit,
+  canEdit = true,
 }: ProviderBlockProps) {
   if (!(node as any).provider_enabled) {
     return null;
@@ -41,12 +43,12 @@ export function ProviderBlock({
           <Globe className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
           <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">Source API</div>
         </div>
-        {onEdit && (
+        {onEdit && canEdit && (
           <Button
             variant="ghost"
             size="sm"
             onClick={onEdit}
-            className="h-6 px-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+            className="h-6 px-1.5 text-zinc-700 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
           >
             <Edit3 className="h-3 w-3 mr-1" />
             <span className="text-[11px]">Modifier</span>
@@ -58,11 +60,11 @@ export function ProviderBlock({
       <div className="p-2 space-y-2">
         <div className="space-y-1.5">
           <div className="space-y-1">
-            <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">
+            <div className="text-[10px] font-medium text-zinc-800 dark:text-zinc-500 uppercase tracking-wider">
               URL Endpoint
             </div>
             <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-              <Globe className="h-3 w-3 text-zinc-400 shrink-0" />
+              <Globe className="h-3 w-3 text-zinc-600 dark:text-zinc-400 shrink-0" />
               <div className="font-mono text-[11px] text-zinc-700 dark:text-zinc-300 break-all line-clamp-1">
                 {providerUrl || "—"}
               </div>
@@ -70,11 +72,11 @@ export function ProviderBlock({
           </div>
 
           <div className="space-y-1">
-            <div className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider">
+            <div className="text-[10px] font-medium text-zinc-800 dark:text-zinc-500 uppercase tracking-wider">
               Chemin JSON
             </div>
             <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-              <Database className="h-3 w-3 text-zinc-400 shrink-0" />
+              <Database className="h-3 w-3 text-zinc-600 dark:text-zinc-400 shrink-0" />
               <div className="font-mono text-[11px] text-zinc-700 dark:text-zinc-300">
                 {providerJsonPath || "—"}
               </div>
@@ -86,13 +88,13 @@ export function ProviderBlock({
         <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/50 flex flex-col gap-2">
           <div className="flex items-center justify-between text-[11px]">
             <div className="flex items-center gap-1.5">
-              <span className="text-zinc-500">Dernier fetch:</span>
+              <span className="text-zinc-800 dark:text-zinc-500">Dernier fetch:</span>
               {providerLastFetchedAt ? (
                 <span className="font-medium text-zinc-700 dark:text-zinc-300">
                   {formatDate(providerLastFetchedAt)}
                 </span>
               ) : (
-                <span className="italic text-zinc-400">Jamais</span>
+                <span className="italic text-zinc-600 dark:text-zinc-400">Jamais</span>
               )}
             </div>
             {providerLastError && (

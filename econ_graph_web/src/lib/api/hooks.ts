@@ -678,3 +678,44 @@ export function useValidateOverride(
     ...options,
   });
 }
+
+// ============================================================================
+// AI Usage hooks
+// ============================================================================
+
+export interface DailyUsage {
+  date: string;
+  requests: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cost_eur: number;
+}
+
+export interface MonthlyUsage {
+  month: string;
+  requests: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cost_eur: number;
+}
+
+export interface AIUsageStats {
+  total_requests: number;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  estimated_cost_eur: number;
+  daily_usage: DailyUsage[];
+  monthly_usage: MonthlyUsage[];
+}
+
+export function useAIUsage(
+  options?: Omit<UseQueryOptions<AIUsageStats, Error>, 'queryKey' | 'queryFn'>
+) {
+  return useQuery<AIUsageStats, Error>({
+    queryKey: ['ai-usage'] as const,
+    queryFn: () => apiClient.get<AIUsageStats>('/ai/usage'),
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    gcTime: 1000 * 60 * 30, // 30 minutes
+    ...options,
+  });
+}

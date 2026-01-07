@@ -1,6 +1,6 @@
 # Economic Rules Engine
 
-The Econ Graph API includes a sophisticated rules engine for checking economic coherence across nodes. This document describes how the rules engine works and how to use it.
+The Smart Graph API includes a sophisticated rules engine for checking economic coherence across nodes. This document describes how the rules engine works and how to use it.
 
 ## Overview
 
@@ -9,32 +9,40 @@ The rules engine evaluates a set of economic rules against nodes in the database
 ## Rule Types
 
 ### 1. **Identity Rules**
+
 Mathematical identities that must hold exactly (with small tolerance).
 
 **Examples:**
+
 - **Fisher Identity**: `nominal_rate = real_rate + inflation_expected`
 - **Taylor Rule**: `policy_rate = neutral_rate + 1.5 * inflation_gap + 0.5 * output_gap`
 - **Uncovered Interest Parity**: `interest_diff = fx_expected_change`
 
 ### 2. **Bound Check Rules**
+
 Verify computed values are within acceptable ranges.
 
 **Examples:**
+
 - Plausible bounds defined per node
 - Confidence must be in [0, 1]
 
 ### 3. **Inequality Rules**
+
 Monotonicity or ordering constraints.
 
 **Examples:**
+
 - **Discount Curve Monotonicity**: Zero-coupon prices must decrease with maturity
 - **Forward Rate Positivity**: Forward rates should be positive (or near zero)
 - **Yield Curve Normal**: In normal conditions, long rates > short rates
 
 ### 4. **Consistency Rules**
+
 Logical consistency across nodes.
 
 **Examples:**
+
 - Critical economic variables should have computed values
 - Observed nodes must have computed values
 - Imposed nodes should have high confidence
@@ -43,13 +51,13 @@ Logical consistency across nodes.
 
 Alerts are classified by severity (1-5):
 
-| Level | Name | Description |
-|-------|------|-------------|
-| 1 | INFO | Informational, may be expected |
-| 2 | LOW | Minor issue, review recommended |
-| 3 | MEDIUM | Moderate issue, requires attention |
-| 4 | HIGH | Serious issue, investigate immediately |
-| 5 | CRITICAL | Critical violation, action required |
+| Level | Name     | Description                            |
+| ----- | -------- | -------------------------------------- |
+| 1     | INFO     | Informational, may be expected         |
+| 2     | LOW      | Minor issue, review recommended        |
+| 3     | MEDIUM   | Moderate issue, requires attention     |
+| 4     | HIGH     | Serious issue, investigate immediately |
+| 5     | CRITICAL | Critical violation, action required    |
 
 ## API Usage
 
@@ -60,6 +68,7 @@ GET /rules/check
 ```
 
 **Response:**
+
 ```json
 {
   "summary": {
@@ -114,6 +123,7 @@ Returns the full catalog of available rules.
 ### Scenario 1: Fisher Identity Violation
 
 **Setup:**
+
 ```bash
 # Create nodes
 curl -X POST http://localhost:8000/nodes -H "Content-Type: application/json" -d '{
@@ -142,6 +152,7 @@ curl -X POST http://localhost:8000/nodes -H "Content-Type: application/json" -d 
 ```
 
 **Check:**
+
 ```bash
 curl http://localhost:8000/rules/check
 ```
@@ -151,6 +162,7 @@ curl http://localhost:8000/rules/check
 ### Scenario 2: Yield Curve Inversion
 
 **Setup:**
+
 ```bash
 curl -X POST http://localhost:8000/nodes -H "Content-Type: application/json" -d '{
   "id": "yield_2y",
@@ -197,7 +209,7 @@ def _check_my_new_rule(self, rule: RuleDefinition) -> None:
     """Check my new economic rule."""
     # Find relevant nodes
     node1 = self._find_node_by_pattern(["pattern1", "alias1"])
-    
+
     # Check condition
     if violation_detected:
         self.alerts.append(

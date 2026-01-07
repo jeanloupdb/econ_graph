@@ -1,47 +1,69 @@
-'use client';
+"use client";
 
-import { MenuSidebar } from '@/components/chrome/MenuSidebar';
-import { Topbar } from '@/components/chrome/Topbar';
-import { GraphAiBar } from '@/components/graph/GraphAiBar';
-import { GraphCanvas } from '@/components/graph/GraphCanvas';
-import { Inspector } from '@/components/panels/Inspector';
-import { LibraryPanel } from '@/components/panels/LibraryPanel';
-import { ScenarioPanel } from '@/components/panels/ScenarioPanel';
-import { ProjectGraphProvider } from '@/graph/providers/ProjectGraphProvider';
-import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
-import { useProjectStore } from '@/store/projectState';
-import { useUIStore } from '@/store/uiState';
-import { useEffect, useRef } from 'react';
+import { CollapsibleModePanel } from "@/components/chrome/CollapsibleModePanel";
+import { TopbarMinimal } from "@/components/chrome/TopbarMinimal";
+import { AuthOverlay } from "@/components/auth/AuthOverlay";
+import { CommandPalette } from "@/components/command/CommandPalette";
+import { BottomToolbar } from "@/components/graph/BottomToolbar";
+import { GraphAiBar } from "@/components/graph/GraphAiBar";
+import { GraphCanvas } from "@/components/graph/GraphCanvas";
+import { Inspector } from "@/components/panels/Inspector";
+import { LibraryPanel } from "@/components/panels/LibraryPanel";
+import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
+import { ProjectGraphProvider } from "@/graph/providers/ProjectGraphProvider";
+import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
+import { useProjectStore } from "@/store/projectState";
+import { useUIStore } from "@/store/uiState";
+import { useEffect, useRef } from "react";
+import { ReactFlowProvider } from "reactflow";
 
-import { useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useState } from 'react';
-import { toast } from 'sonner';
+import { useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useState } from "react";
+import { toast } from "sonner";
 
-import { useGraphActions } from '@/graph/context/GraphActionsContext';
-import { useGraphData } from '@/graph/context/GraphDataContext';
-import { useInsertCompositeNode } from '@/graph/hooks/useInsertCompositeNode';
-import { queryKeys, useComputeWithScenario } from '@/lib/api/hooks';
-import { PENDING_COMPOSITE_INSERT_KEY, PENDING_COMPOSITE_REFRESH_KEY } from '@/lib/composites/constants';
-import type { PendingCompositeInsertPayload, PendingCompositeRefreshPayload } from '@/lib/composites/types';
-import { useScenarioStore } from '@/store/scenarioState';
+import { useGraphActions } from "@/graph/context/GraphActionsContext";
+import { useGraphData } from "@/graph/context/GraphDataContext";
+import { useInsertCompositeNode } from "@/graph/hooks/useInsertCompositeNode";
+import { queryKeys, useComputeWithScenario } from "@/lib/api/hooks";
+import {
+  PENDING_COMPOSITE_INSERT_KEY,
+  PENDING_COMPOSITE_REFRESH_KEY,
+} from "@/lib/composites/constants";
+import type {
+  PendingCompositeInsertPayload,
+  PendingCompositeRefreshPayload,
+} from "@/lib/composites/types";
+import { useScenarioStore } from "@/store/scenarioState";
+import { GraphThemeProvider, useGraphTheme, GRAPH_LIGHT_COLORS } from "@/lib/context/GraphThemeContext";
 
 function GraphPageContent() {
-  const inspectorOpen = useUIStore((state) => state.inspectorOpen);
-  const scenarioPanelOpen = useUIStore((state) => state.scenarioPanelOpen);
-  const setScenarioPanelOpen = useUIStore((state) => state.setScenarioPanelOpen);
+  const { isLightMode } = useGraphTheme();
+  const inspectorOpen = useUIStore((s) => s.inspectorOpen);
+  const scenarioPanelOpen = useUIStore((s) => s.scenarioPanelOpen);
+  const setScenarioPanelOpen = useUIStore(
+    (state) => state.setScenarioPanelOpen
+  );
   const resetDetailPanels = useUIStore((state) => state.resetDetailPanels);
-  const developerMode = useUIStore((state) => state.developerMode);
-  
+  const aiAssistantOpen = useUIStore((s) => s.aiAssistantOpen);
+  const setViewMode = useUIStore((s) => s.setViewMode);
+  const setFloatingPanelOpen = useUIStore((s) => s.setFloatingPanelOpen);
+
   const loadProjects = useProjectStore((s) => s.load);
   const projects = useProjectStore((s) => s.projects);
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const setCurrentProject = useProjectStore((s) => s.setCurrentProject);
-  
+
   const searchParams = useSearchParams();
-  const projectIdParam = searchParams.get('project');
+  const projectIdParam = searchParams.get("project");
 
   const prevProjectIdRef = useRef<string | null>(null);
+
+  // Reset to baseline mode with sidebar open on page load
+  useEffect(() => {
+    setViewMode("baseline");
+    setFloatingPanelOpen(true);
+  }, [setViewMode, setFloatingPanelOpen]);
 
   useEffect(() => {
     loadProjects();
@@ -50,8 +72,7 @@ function GraphPageContent() {
   // Sync URL project param with store
   useEffect(() => {
     if (projectIdParam && projects.length > 0) {
-      // Only switch if the project exists in the loaded list
-      const targetProject = projects.find(p => p.id === projectIdParam);
+      const targetProject = projects.find((p) => p.id === projectIdParam);
       if (targetProject && currentProjectId !== projectIdParam) {
         setCurrentProject(projectIdParam);
       }
@@ -67,8 +88,7 @@ function GraphPageContent() {
   }, [currentProjectId, resetDetailPanels]);
 
   const handleFitView = () => {
-    // This will be handled by ReactFlow's fitView
-    console.log('Fit view triggered');
+    console.log("Fit view triggered");
   };
 
   useKeyboardShortcuts({
@@ -82,25 +102,45 @@ function GraphPageContent() {
       <PendingCompositeRefreshHandler />
       <ScenarioAutoLoader />
       <ProjectAutoComputer />
-      <div className="flex h-screen flex-col">
-        <Topbar />
-        <MenuSidebar />
 
-        <div className="flex flex-1 overflow-hidden">
-          <div className="flex-1 relative overflow-hidden">
+      {/* Auth Overlay - shows when user tries to edit while not authenticated */}
+      <AuthOverlay />
+
+      {/* Global Command Palette (Ctrl+K) */}
+      <CommandPalette />
+
+      <div 
+        className={`flex h-screen flex-col ${isLightMode ? '' : 'dark'}`}
+        style={isLightMode ? { backgroundColor: GRAPH_LIGHT_COLORS.pageBg } : { backgroundColor: '#0a0a0b' }}
+      >
+        {/* Topbar - barre supérieure */}
+        <TopbarMinimal />
+
+        {/* Contenu principal - zone de travail */}
+        <div className="flex-1 relative overflow-hidden">
+          {/* Canvas central avec ReactFlow - toujours plein écran */}
+          <ReactFlowProvider>
             <GraphCanvas />
-            {developerMode && <GraphAiBar />}
-            <LibraryPanelWrapper />
-          </div>
 
-          {scenarioPanelOpen ? (
-            <ScenarioPanel
-              isOpen={scenarioPanelOpen}
-              onClose={() => setScenarioPanelOpen(false)}
-            />
-          ) : (
-            inspectorOpen && <Inspector />
-          )}
+            {/* Bottom Toolbar - barre d'outils flottante centrée */}
+            <BottomToolbar />
+
+            {/* AI Assistant Bar - sans backdrop, interactions parallèles */}
+            {aiAssistantOpen && <GraphAiBar />}
+
+            {/* Library Panel */}
+            <LibraryPanelWrapper />
+          </ReactFlowProvider>
+
+          {/* Collapsible Mode Panel - floating header when collapsed, full sidebar when expanded */}
+          <CollapsibleModePanel />
+
+          {/* Inspector - overlay flottant à droite */}
+          <FloatingInspectorWrapper
+            inspectorOpen={inspectorOpen}
+            scenarioPanelOpen={scenarioPanelOpen}
+            setScenarioPanelOpen={setScenarioPanelOpen}
+          />
         </div>
       </div>
     </ProjectGraphProvider>
@@ -113,7 +153,9 @@ function PendingCompositeInsertHandler() {
   const setCurrentProject = useProjectStore((s) => s.setCurrentProject);
   const graphActions = useGraphActions();
   const { nodes } = useGraphData();
-  const [pending, setPending] = useState<PendingCompositeInsertPayload | null>(null);
+  const [pending, setPending] = useState<PendingCompositeInsertPayload | null>(
+    null
+  );
   const processingRef = useRef(false);
   const queryClient = useQueryClient();
 
@@ -129,7 +171,7 @@ function PendingCompositeInsertHandler() {
             computation_definition: definition,
           });
         } catch (error) {
-          console.warn('Failed to resynchronise edges for node', depId, error);
+          console.warn("Failed to resynchronise edges for node", depId, error);
         }
       }
     },
@@ -137,7 +179,7 @@ function PendingCompositeInsertHandler() {
   );
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     const raw = window.sessionStorage.getItem(PENDING_COMPOSITE_INSERT_KEY);
     if (!raw) return;
     try {
@@ -146,7 +188,7 @@ function PendingCompositeInsertHandler() {
         setPending({
           compositeId: parsed.compositeId,
           projectId: parsed.projectId ?? null,
-          mode: parsed.mode || 'insert',
+          mode: parsed.mode || "insert",
           nodesToDelete: parsed.nodesToDelete || [],
           replaceNodeId: parsed.replaceNodeId,
           replaceNodeSlug: parsed.replaceNodeSlug,
@@ -155,7 +197,7 @@ function PendingCompositeInsertHandler() {
         });
       }
     } catch (error) {
-      console.warn('Invalid pending composite payload', error);
+      console.warn("Invalid pending composite payload", error);
     } finally {
       window.sessionStorage.removeItem(PENDING_COMPOSITE_INSERT_KEY);
     }
@@ -171,12 +213,15 @@ function PendingCompositeInsertHandler() {
     processingRef.current = true;
     (async () => {
       try {
-        if (pending.mode === 'transform' && pending.nodesToDelete?.length) {
+        if (pending.mode === "transform" && pending.nodesToDelete?.length) {
           for (const nodeId of pending.nodesToDelete) {
             try {
               await graphActions.deleteNode(nodeId);
             } catch (error) {
-              console.warn('Unable to delete node during composite transform:', error);
+              console.warn(
+                "Unable to delete node during composite transform:",
+                error
+              );
             }
           }
         }
@@ -186,22 +231,32 @@ function PendingCompositeInsertHandler() {
         });
         await resyncDependentEdges(pending.dependentsToResync);
         toast.success(
-          pending.mode === 'transform'
-            ? 'Composite créé à partir du sous-graphe.'
-            : `Composite inséré : ${created?.label || 'Composite'}`
+          pending.mode === "transform"
+            ? "Composite créé à partir du sous-graphe."
+            : `Composite inséré : ${created?.label || "Composite"}`
         );
         if (pending.projectId) {
-          queryClient.invalidateQueries({ queryKey: queryKeys.projectExposedRoots(pending.projectId) });
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.projectExposedRoots(pending.projectId),
+          });
         }
       } catch (error) {
-        console.error('Failed to insert composite after return:', error);
+        console.error("Failed to insert composite after return:", error);
         toast.error("Impossible d'insérer automatiquement ce composite.");
       } finally {
         processingRef.current = false;
         setPending(null);
       }
     })();
-  }, [pending, currentProjectId, graphActions, insertCompositeNode, queryClient, resyncDependentEdges, setCurrentProject]);
+  }, [
+    pending,
+    currentProjectId,
+    graphActions,
+    insertCompositeNode,
+    queryClient,
+    resyncDependentEdges,
+    setCurrentProject,
+  ]);
 
   return null;
 }
@@ -211,12 +266,14 @@ function PendingCompositeRefreshHandler() {
   const graphActions = useGraphActions();
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const setCurrentProject = useProjectStore((s) => s.setCurrentProject);
-  const [pending, setPending] = useState<PendingCompositeRefreshPayload | null>(null);
+  const [pending, setPending] = useState<PendingCompositeRefreshPayload | null>(
+    null
+  );
   const processingRef = useRef(false);
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     const raw = window.sessionStorage.getItem(PENDING_COMPOSITE_REFRESH_KEY);
     if (!raw) return;
     try {
@@ -225,7 +282,7 @@ function PendingCompositeRefreshHandler() {
         setPending(parsed);
       }
     } catch (error) {
-      console.warn('Invalid pending composite refresh payload', error);
+      console.warn("Invalid pending composite refresh payload", error);
     } finally {
       window.sessionStorage.removeItem(PENDING_COMPOSITE_REFRESH_KEY);
     }
@@ -239,7 +296,9 @@ function PendingCompositeRefreshHandler() {
       return;
     }
     if (!nodes || nodes.length === 0) return;
-    const targets = nodes.filter((node) => node.composite_id === pending.compositeId);
+    const targets = nodes.filter(
+      (node) => node.composite_id === pending.compositeId
+    );
     if (targets.length === 0) {
       setPending(null);
       return;
@@ -255,20 +314,29 @@ function PendingCompositeRefreshHandler() {
             await computeFn(node.id);
           }
         }
-        toast.success('Composite mis à jour dans le projet.');
+        toast.success("Composite mis à jour dans le projet.");
         const targetProject = pending.projectId || currentProjectId;
         if (targetProject) {
-          queryClient.invalidateQueries({ queryKey: queryKeys.projectExposedRoots(targetProject) });
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.projectExposedRoots(targetProject),
+          });
         }
       } catch (error) {
-        console.error('Failed to recompute composite nodes:', error);
-        toast.error('Impossible de recalculer les nœuds composites.');
+        console.error("Failed to recompute composite nodes:", error);
+        toast.error("Impossible de recalculer les nœuds composites.");
       } finally {
         processingRef.current = false;
         setPending(null);
       }
     })();
-  }, [pending, currentProjectId, graphActions, nodes, queryClient, setCurrentProject]);
+  }, [
+    pending,
+    currentProjectId,
+    graphActions,
+    nodes,
+    queryClient,
+    setCurrentProject,
+  ]);
 
   return null;
 }
@@ -276,7 +344,9 @@ function PendingCompositeRefreshHandler() {
 function ScenarioAutoLoader() {
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const activeScenarioId = useScenarioStore((s) => s.activeScenarioId);
-  const setScenarioComputedValues = useScenarioStore((s) => s.setScenarioComputedValues);
+  const setScenarioComputedValues = useScenarioStore(
+    (s) => s.setScenarioComputedValues
+  );
   const computeWithScenario = useComputeWithScenario();
   const loadedRef = useRef(false);
 
@@ -296,10 +366,15 @@ function ScenarioAutoLoader() {
         });
         setScenarioComputedValues(activeScenarioId, result.results);
       } catch (error) {
-        console.error('Failed to auto-load scenario values:', error);
+        console.error("Failed to auto-load scenario values:", error);
       }
     })();
-  }, [currentProjectId, activeScenarioId, computeWithScenario, setScenarioComputedValues]);
+  }, [
+    currentProjectId,
+    activeScenarioId,
+    computeWithScenario,
+    setScenarioComputedValues,
+  ]);
 
   return null;
 }
@@ -335,18 +410,62 @@ function ProjectAutoComputer() {
 
 export default function GraphPage() {
   return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">Loading...</div>}>
-      <GraphPageContent />
-    </Suspense>
+    <GraphThemeProvider>
+      <Suspense
+        fallback={
+          <div className="flex h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+            Loading...
+          </div>
+        }
+      >
+        <GraphPageContent />
+      </Suspense>
+    </GraphThemeProvider>
   );
 }
 
 function LibraryPanelWrapper() {
   const libraryPanelOpen = useUIStore((s) => s.libraryPanelOpen);
-  if (!libraryPanelOpen) return null;
+  const canEdit = useProjectStore((s) => s.canEdit)();
+  
+  // Don't show library panel if user can't edit (viewers/public)
+  if (!libraryPanelOpen || !canEdit) return null;
+  
   return (
     <div className="absolute left-0 top-0 z-10 h-full shadow-xl">
       <LibraryPanel />
+    </div>
+  );
+}
+
+function FloatingInspectorWrapper({
+  inspectorOpen,
+  scenarioPanelOpen,
+  setScenarioPanelOpen,
+}: {
+  inspectorOpen: boolean;
+  scenarioPanelOpen: boolean;
+  setScenarioPanelOpen: (open: boolean) => void;
+}) {
+  const { isLightMode } = useGraphTheme();
+  
+  if (!inspectorOpen && !scenarioPanelOpen) return null;
+
+  return (
+    <div 
+      className="absolute right-0 top-0 bottom-0 z-30 w-[320px] border-l overflow-hidden"
+      style={isLightMode 
+        ? { backgroundColor: GRAPH_LIGHT_COLORS.panelBg, borderColor: GRAPH_LIGHT_COLORS.panelBorder }
+        : { backgroundColor: '#0a0a0b', borderColor: 'rgba(255,255,255,0.06)' }
+      }
+    >
+      {inspectorOpen && <Inspector />}
+      {scenarioPanelOpen && !inspectorOpen && (
+        <ScenarioPanel
+          isOpen={scenarioPanelOpen}
+          onClose={() => setScenarioPanelOpen(false)}
+        />
+      )}
     </div>
   );
 }
