@@ -1,7 +1,7 @@
 """Add ai_usage table for tracking AI consumption
 
-Revision ID: 007
-Revises: 006
+Revision ID: 007_add_ai_usage_table
+Revises: 006_add_node_composite_id
 Create Date: 2025-01-07
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '007'
-down_revision = '006'
+revision = '007_add_ai_usage_table'
+down_revision = '006_add_node_composite_id'
 branch_labels = None
 depends_on = None
 
