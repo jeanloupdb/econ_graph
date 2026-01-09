@@ -1,7 +1,8 @@
 import { apiClient } from '@/lib/api/client';
-// import { useGraphActions } from '@/graph/context/GraphActionsContext';
+import { queryKeys } from '@/lib/api/hooks';
 import { Scenario } from '@/lib/types';
 import { useProjectStore } from '@/store/projectState';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -58,6 +59,7 @@ export function useAiGraphAction() {
   const currentProjectId = useProjectStore(s => s.currentProjectId);
   const { createProject } = useProjectStore();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const execute = async (
     prompt: string,
@@ -265,8 +267,64 @@ export function useAiGraphAction() {
         const parameters = nodesToCreate.filter(n => n.type === 'parameter');
         const computedNodes = nodesToCreate.filter(n => n.type !== 'parameter');
 
-          // Helper to create node based on mode
-        const createNodeHelper = async (nodeDef: AiNodeDefinition) => {
+        // 2. Smart positioning: find empty space and arrange nodes intelligently
+        const calculateSmartPosition = (
+          nodeIndex: number, 
+          isParameter: boolean,
+          totalParams: number,
+          totalComputed: number
+        ): { x: number; y: number } => {
+          // Analyze existing nodes to find occupied space
+          const existingPositions = (currentNodes || [])
+            .filter((n: any) => n.pos_x != null && n.pos_y != null)
+            .map((n: any) => ({ x: n.pos_x, y: n.pos_y }));
+          
+          // Find the rightmost and bottommost positions
+          const maxX = existingPositions.length > 0 
+            ? Math.max(...existingPositions.map(p => p.x), 0) 
+            : 0;
+          const maxY = existingPositions.length > 0 
+            ? Math.max(...existingPositions.map(p => p.y), 0) 
+            : 0;
+          
+          // Node spacing
+          const HORIZONTAL_SPACING = 280;
+          const VERTICAL_SPACING = 160;
+          const START_OFFSET = 100;
+          
+          // Place parameters in top row(s), computed nodes below
+          if (isParameter) {
+            const paramsPerRow = Math.min(4, totalParams); // Max 4 params per row
+            const row = Math.floor(nodeIndex / paramsPerRow);
+            const col = nodeIndex % paramsPerRow;
+            
+            return {
+              x: maxX + START_OFFSET + (col * HORIZONTAL_SPACING),
+              y: START_OFFSET + (row * VERTICAL_SPACING)
+            };
+          } else {
+            // Computed nodes: place below parameters
+            const paramRows = Math.ceil(totalParams / 4);
+            const computedPerRow = Math.min(3, totalComputed); // Max 3 computed per row
+            const row = Math.floor(nodeIndex / computedPerRow);
+            const col = nodeIndex % computedPerRow;
+            
+            const baseY = Math.max(
+              START_OFFSET + (paramRows * VERTICAL_SPACING) + VERTICAL_SPACING,
+              maxY + VERTICAL_SPACING
+            );
+            
+            return {
+              x: maxX + START_OFFSET + (col * HORIZONTAL_SPACING),
+              y: baseY + (row * VERTICAL_SPACING)
+            };
+          }
+        };
+
+        let paramIndex = 0;
+
+        // Helper to create node based on mode
+        const createNodeHelper = async (nodeDef: AiNodeDefinition, isParam: boolean, indexInType: number) => {
           const label = nodeDef.label || nodeDef.id;
           const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
           
@@ -275,13 +333,18 @@ export function useAiGraphAction() {
               computation = computation.replace(/return\s+null/g, 'return 0.0');
           }
 
+          // Calculate smart position unless AI provided specific coordinates
+          const position = (nodeDef.pos_x != null && nodeDef.pos_y != null)
+            ? { x: nodeDef.pos_x, y: nodeDef.pos_y }
+            : calculateSmartPosition(indexInType, isParam, parameters.length, computedNodes.length);
+
           const payload = {
             label: label,
             slug: slug,
             project_id: mode === 'project' ? targetProjectId : undefined,
             composite_id: nodeDef.composite_id || (targetCompositeId || undefined), // Use specific composite_id if provided (for composite node), else targetCompositeId (if creating new composite)
-            pos_x: nodeDef.pos_x ?? Math.random() * 500,
-            pos_y: nodeDef.pos_y ?? Math.random() * 500,
+            pos_x: position.x,
+            pos_y: position.y,
             computation_definition: (nodeDef.value !== undefined && nodeDef.value !== null)
                 ? `def compute():\n    return ${nodeDef.value}`
                 : computation,
@@ -313,10 +376,12 @@ export function useAiGraphAction() {
 
         // 2. Create all parameters first (no dependencies)
         for (const nodeDef of parameters) {
-          await createNodeHelper(nodeDef);
+          await createNodeHelper(nodeDef, true, paramIndex++);
         }
 
         // 3. Create computed nodes with multi-pass retry for dependencies
+        // Track each node's index in the original array
+        const computedNodeIndices = new Map(computedNodes.map((n, i) => [n.id, i]));
         let remaining = [...computedNodes];
         let progress = true;
         
@@ -326,7 +391,8 @@ export function useAiGraphAction() {
 
           for (const nodeDef of remaining) {
             try {
-              await createNodeHelper(nodeDef);
+              const nodeIndex = computedNodeIndices.get(nodeDef.id) || 0;
+              await createNodeHelper(nodeDef, false, nodeIndex);
               progress = true; 
             } catch (e: any) {
               // If error is 422 (dependency missing), keep for next pass
@@ -400,11 +466,47 @@ export function useAiGraphAction() {
         }
       }
 
-      // Recompute graph to update values
-      if (mode === 'project' && graphActions?.computeProject) {
-        await graphActions.computeProject();
-      } else if (mode === 'composite' && graphActions?.computeNode) {
-         if (graphActions.refreshNodes) graphActions.refreshNodes();
+      // CRITICAL: Full refresh after all mutations
+      // The order matters: invalidate → refresh → wait → compute → refresh
+      
+      if (mode === 'project' && targetProjectId) {
+        // 1. Invalidate all related queries first (ALL node queries, edges, stats)
+        // Invalidate all node-related queries (including individual node queries)
+        queryClient.invalidateQueries({ 
+          queryKey: ['nodes'] 
+        });
+        queryClient.invalidateQueries({ 
+          queryKey: queryKeys.projectEdges(targetProjectId) 
+        });
+        queryClient.invalidateQueries({ 
+          queryKey: ['project-stats', targetProjectId] 
+        });
+        
+        // 2. Refresh nodes+edges via graphActions (this awaits the refetch)
+        if (graphActions?.refreshNodes) {
+          await graphActions.refreshNodes();
+        }
+        
+        // 3. Wait for React to process the new data
+        await new Promise(resolve => setTimeout(resolve, 150));
+        
+        // 4. Recompute graph to calculate all node values
+        if (graphActions?.computeProject) {
+          await graphActions.computeProject();
+        }
+        
+        // 5. Final refresh to get the computed values
+        if (graphActions?.refreshNodes) {
+          await graphActions.refreshNodes();
+        }
+        
+        // 6. One more small delay for UI to catch up
+        await new Promise(resolve => setTimeout(resolve, 50));
+      } else if (mode === 'composite') {
+        // For composite mode, just refresh
+        if (graphActions?.refreshNodes) {
+          await graphActions.refreshNodes();
+        }
       }
 
       // 2. Process Scenarios

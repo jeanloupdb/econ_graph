@@ -107,3 +107,4 @@ def calculate_cost_eur(prompt_tokens: int, completion_tokens: int) -> float:
     return round(total_usd * USD_TO_EUR_RATE, 6)
 
 
+

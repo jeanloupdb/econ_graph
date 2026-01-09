@@ -319,8 +319,8 @@
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.22 0 0);
+  --popover-foreground: oklch(0.95 0 0);
   --primary: oklch(0.922 0 0);
   --primary-foreground: oklch(0.205 0 0);
   --secondary: oklch(0.269 0 0);
@@ -355,6 +355,18 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Force dark theme for Radix Portals (Popovers, Dropdowns) */
+.dark [data-radix-popper-content-wrapper] {
+  --popover-bg: rgb(39 39 42); /* zinc-800 */
+  --popover-fg: rgb(250 250 250); /* zinc-50 */
+}
+
+.dark [data-radix-popper-content-wrapper] > div {
+  background-color: var(--popover-bg) !important;
+  color: var(--popover-fg) !important;
+  border-color: rgb(82 82 91) !important; /* zinc-600 */
 }
 
 @layer utilities {

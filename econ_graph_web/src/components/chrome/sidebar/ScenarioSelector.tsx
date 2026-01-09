@@ -72,7 +72,7 @@ export function ScenarioSelector({
             <ChevronDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[280px] p-0 bg-slate-950 border-slate-800">
+        <PopoverContent className="w-[280px] p-0">
           <div className="max-h-[300px] overflow-y-auto custom-scrollbar p-1">
             <button
               onClick={() => {
@@ -80,8 +80,8 @@ export function ScenarioSelector({
                 setOpen(false);
               }}
               className={cn(
-                "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none hover:bg-white/10 hover:text-white transition-colors",
-                isBaseline ? "bg-white/10 text-white" : "text-slate-400"
+                "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors",
+                isBaseline ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white" : "text-zinc-600 dark:text-zinc-400"
               )}
             >
               <div className="flex items-center gap-2">
@@ -109,8 +109,8 @@ export function ScenarioSelector({
                     setOpen(false);
                   }}
                   className={cn(
-                    "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none hover:bg-white/10 hover:text-white transition-colors",
-                    isSelected ? "bg-white/10 text-white" : "text-slate-400"
+                    "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors",
+                    isSelected ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white" : "text-zinc-600 dark:text-zinc-400"
                   )}
                 >
                   <div className="flex items-center gap-2 truncate">
@@ -132,7 +132,7 @@ export function ScenarioSelector({
             })}
             
             {scenarios.length === 0 && (
-                <div className="py-6 text-center text-xs text-slate-600 italic">
+                <div className="py-6 text-center text-xs text-zinc-500 dark:text-zinc-400 italic">
                     Aucun autre scénario disponible
                 </div>
             )}

@@ -14,7 +14,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { toast } from "sonner";
 
 interface InlineAiBarProps {
@@ -27,12 +27,24 @@ export function InlineAiBar({ onGenerate, isPending }: InlineAiBarProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const developerMode = useUIStore((s) => s.developerMode);
 
+  // Reset isSubmitting when isPending becomes true (overlay is now handling it)
+  useEffect(() => {
+    if (isPending) {
+      setIsSubmitting(false);
+    }
+  }, [isPending]);
+
+  // Combined loading state: submitting locally OR agent is running
+  const isLoading = isSubmitting || isPending;
+
   const handleSubmit = () => {
-    if (!prompt.trim() || isPending) return;
+    if (!prompt.trim() || isLoading) return;
+    setIsSubmitting(true);
     onGenerate(prompt, file || undefined);
     setPrompt("");
     setFile(null);
@@ -229,20 +241,20 @@ export function InlineAiBar({ onGenerate, isPending }: InlineAiBarProps) {
                   handleSubmit();
                 }
               }}
-              disabled={isPending}
+              disabled={isLoading}
             />
 
             <button
               onClick={handleSubmit}
-              disabled={!prompt.trim() || isProcessing || isPending}
+              disabled={!prompt.trim() || isProcessing || isLoading}
               className={cn(
                 "shrink-0 m-1.5 px-4 py-2 rounded-lg transition-all flex items-center gap-2 text-sm font-medium",
-                prompt.trim() && !isPending
+                prompt.trim() && !isLoading
                   ? "bg-violet-600 hover:bg-violet-500 text-white"
                   : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
               )}
             >
-              {isPending ? (
+              {isLoading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <>

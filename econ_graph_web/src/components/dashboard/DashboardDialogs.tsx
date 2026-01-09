@@ -30,7 +30,7 @@ export function CreateProjectDialog({
 }: CreateDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-zinc-900 border-zinc-800/50 shadow-2xl shadow-black/50">
+      <DialogContent className="sm:max-w-md  shadow-2xl shadow-black/50">
         <DialogHeader className="space-y-3">
           <div className="mx-auto w-12 h-12 rounded-full bg-violet-500/10 flex items-center justify-center">
             <FolderPlus className="w-6 h-6 text-violet-400" />
@@ -97,7 +97,7 @@ export function RenameProjectDialog({
 }: RenameDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-zinc-900 border-zinc-800/50 shadow-2xl shadow-black/50">
+      <DialogContent className="sm:max-w-md  shadow-2xl shadow-black/50">
         <DialogHeader className="space-y-3">
           <div className="mx-auto w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center">
             <Pencil className="w-5 h-5 text-blue-400" />
@@ -158,7 +158,7 @@ export function DeleteProjectDialog({
 }: DeleteDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-zinc-900 border-zinc-800/50 shadow-2xl shadow-black/50">
+      <DialogContent className="sm:max-w-md  shadow-2xl shadow-black/50">
         <DialogHeader className="space-y-3">
           <div className="mx-auto w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
             <Trash2 className="w-5 h-5 text-red-400" />
@@ -215,7 +215,7 @@ export function BatchDeleteDialog({
 }: BatchDeleteDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-zinc-900 border-zinc-800/50 shadow-2xl shadow-black/50">
+      <DialogContent className="sm:max-w-md  shadow-2xl shadow-black/50">
         <DialogHeader className="space-y-3">
           <div className="mx-auto w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center">
             <AlertTriangle className="w-5 h-5 text-amber-400" />

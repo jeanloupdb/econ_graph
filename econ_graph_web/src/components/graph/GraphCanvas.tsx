@@ -168,18 +168,20 @@ function GraphCanvasInner({ readOnly }: { readOnly?: boolean }) {
       return;
     }
 
+    // Use explicit edges from API if available, otherwise derive from computation definitions
     const derivedEdges =
-      explicitEdges ||
-      nodesData.flatMap((n) =>
-        deriveEdgesFromCompute(
-          {
-            id: n.id,
-            computation_definition:
-              (n as any).computation_definition || undefined,
-          },
-          { resolveSlug: (slug) => slugToId.get(slug) }
-        )
-      );
+      (explicitEdges && explicitEdges.length > 0)
+        ? explicitEdges
+        : nodesData.flatMap((n) =>
+            deriveEdgesFromCompute(
+              {
+                id: n.id,
+                computation_definition:
+                  (n as any).computation_definition || undefined,
+              },
+              { resolveSlug: (slug) => slugToId.get(slug) }
+            )
+          );
 
     const nodes: ReactFlowNode[] = nodesData.map((node, index) => {
       const persisted =

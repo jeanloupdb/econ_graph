@@ -1,17 +1,19 @@
 import { useProjectStats } from "@/components/dashboard/ProjectRow";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ProjectPromptTooltip } from "@/components/ui/ProjectPromptTooltip";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Box,
   CheckCircle2,
   GitBranch,
+  Info,
   Pencil,
   Share2,
   Trash2,
 } from "lucide-react";
-import { SmartGraphLogo } from "../ui/SmartGraphLogo";
 import { useEffect, useState } from "react";
+import { SmartGraphLogo } from "../ui/SmartGraphLogo";
 
 export interface ProjectCardProps {
   project: any;
@@ -100,9 +102,21 @@ export function ProjectCard({
           <SmartGraphLogo size={28} />
         </div>
         <div className="flex-1 min-w-0 pr-6">
-          <h3 className="text-sm font-medium text-white truncate mb-0.5">
-            {project.name}
-          </h3>
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <h3 className="text-sm font-medium text-white truncate">
+              {project.name}
+            </h3>
+            {(project.generation_prompt || project.description) && (
+              <ProjectPromptTooltip
+                generationPrompt={project.generation_prompt}
+                description={project.description}
+                side="right"
+                className="flex-shrink-0 p-0.5 rounded-md text-zinc-500 hover:text-violet-400 hover:bg-violet-500/10 transition-all duration-200"
+              >
+                <Info className="h-3.5 w-3.5" />
+              </ProjectPromptTooltip>
+            )}
+          </div>
           <p className="text-xs text-zinc-500">
             {new Date(project.updatedAt).toLocaleDateString("fr-FR", {
               day: "numeric",

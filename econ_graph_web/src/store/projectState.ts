@@ -9,6 +9,8 @@ export interface Project {
   public_view_token?: string | null;
   user_id?: string | null;
   user_role?: 'owner' | 'editor' | 'viewer' | 'public' | null;
+  generation_prompt?: string | null;
+  description?: string | null;
 }
 
 interface ProjectState {
@@ -76,6 +78,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         public_view_token: p.public_view_token,
         user_id: p.user_id,
         user_role: p.user_role,
+        generation_prompt: p.generation_prompt,
+        description: p.description,
       }));
       const cur = typeof window !== 'undefined' ? localStorage.getItem(LS_CUR) : null;
       const nextCurrent = cur || (projs[0]?.id || null);

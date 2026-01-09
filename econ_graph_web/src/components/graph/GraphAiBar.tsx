@@ -350,17 +350,24 @@ export function GraphAiBar({
                     }
                   }}
                   className={cn(
-                    selectedNodeIds.length === 0 && "opacity-50 cursor-not-allowed"
+                    selectedNodeIds.length === 0 &&
+                      "opacity-50 cursor-not-allowed"
                   )}
                 >
-                  <MousePointer2 className={cn(
-                    "h-4 w-4 mr-2",
-                    selectedNodeIds.length === 0 ? "text-zinc-500" : "text-cyan-400"
-                  )} />
+                  <MousePointer2
+                    className={cn(
+                      "h-4 w-4 mr-2",
+                      selectedNodeIds.length === 0
+                        ? "text-zinc-400"
+                        : "text-cyan-400"
+                    )}
+                  />
                   <div className="flex flex-col">
                     <span className="text-sm">Mode sélection</span>
                     {selectedNodeIds.length === 0 && (
-                      <span className="text-[10px] text-zinc-500">Sélectionnez un nœud d'abord</span>
+                      <span className="text-[10px] text-zinc-400">
+                        Sélectionnez un nœud d'abord
+                      </span>
                     )}
                   </div>
                 </DropdownMenuItem>

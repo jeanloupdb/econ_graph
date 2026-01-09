@@ -430,7 +430,9 @@ async def executeur(state: PipelineState) -> PipelineState:
             name=structure.get('project_name', 'Nouveau projet'),
             user_id=state["user_id"],
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
+            generation_prompt=state["prompt"],  # Store the original prompt
+            description=full_description if full_description else None  # Store the AI-understood intent
         )
         db.add(project)
         db.flush()

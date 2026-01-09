@@ -349,7 +349,9 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
             "updated_at": p.updated_at,
             "public_view_token": p.public_view_token,
             "user_id": p.user_id,
-            "user_role": user_role
+            "user_role": user_role,
+            "generation_prompt": p.generation_prompt,
+            "description": p.description
         }
         enriched.append(project_dict)
     
@@ -365,7 +367,9 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db), curren
         name=payload.name, 
         user_id=current_user.id,
         created_at=datetime.utcnow(), 
-        updated_at=datetime.utcnow()
+        updated_at=datetime.utcnow(),
+        generation_prompt=payload.generation_prompt,
+        description=payload.description
     )
     db.add(p)
     db.flush()
@@ -378,7 +382,9 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db), curren
         "updated_at": p.updated_at,
         "public_view_token": p.public_view_token,
         "user_id": p.user_id,
-        "user_role": "owner"
+        "user_role": "owner",
+        "generation_prompt": p.generation_prompt,
+        "description": p.description
     }
 
 

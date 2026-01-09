@@ -157,7 +157,7 @@ export function NewApiNodeModal({ open, onClose, nodeId }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(value) => { if (!value) onClose(); }}>
-      <DialogContent className="max-w-3xl w-full !p-0 !gap-0 overflow-hidden !border-2 !border-zinc-300 dark:!border-zinc-400 sm:rounded-xl bg-white dark:bg-zinc-900 shadow-2xl [&>button.absolute]:hidden">
+      <DialogContent className="max-w-3xl w-full !p-0 !gap-0 overflow-hidden !border-2 sm:rounded-xl shadow-2xl [&>button.absolute]:hidden">
         
         {/* Header */}
         <DialogHeader className="p-6 pb-4 border-b border-zinc-200 dark:border-zinc-700 shrink-0">

@@ -288,7 +288,7 @@ export function FullscreenCodeEditor({
                 <div className="border-b border-border px-6 py-3 shrink-0 space-y-3">
                   <div className="flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                    <span className="text-sm font-medium">Assistant IA</span>
+                    <span className="text-sm font-medium text-foreground">Assistant IA</span>
                   </div>
 
                   <AiInput
@@ -307,7 +307,7 @@ export function FullscreenCodeEditor({
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="w-full justify-between h-8 px-2 text-xs"
+                          className="w-full justify-between h-8 px-2 text-xs text-foreground"
                         >
                           <span className="flex items-center gap-2">
                             Historique ({chatHistory.length})
@@ -331,7 +331,7 @@ export function FullscreenCodeEditor({
                                   <Badge variant={msg.role === 'user' ? 'default' : 'secondary'} className="text-[10px] px-1.5 py-0">
                                     {msg.role === 'user' ? 'Vous' : 'IA'}
                                   </Badge>
-                                  <span className="flex-1">{msg.content}</span>
+                                  <span className="flex-1 text-foreground">{msg.content}</span>
                                 </div>
                               </div>
                             ))}
@@ -425,7 +425,7 @@ export function FullscreenCodeEditor({
               <div className="w-[300px] border-l border-border flex flex-col bg-muted/20">
                 <div className="px-4 py-3 border-b border-border shrink-0">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-medium">Variables</h3>
+                    <h3 className="text-sm font-medium text-foreground">Variables</h3>
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                       {variables.length}
                     </Badge>

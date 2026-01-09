@@ -425,6 +425,7 @@ export default function GraphPage() {
 }
 
 function LibraryPanelWrapper() {
+  const { isLightMode } = useGraphTheme();
   const libraryPanelOpen = useUIStore((s) => s.libraryPanelOpen);
   const canEdit = useProjectStore((s) => s.canEdit)();
   
@@ -432,7 +433,7 @@ function LibraryPanelWrapper() {
   if (!libraryPanelOpen || !canEdit) return null;
   
   return (
-    <div className="absolute left-0 top-0 z-10 h-full shadow-xl">
+    <div className={`absolute left-0 top-0 z-10 h-full shadow-xl ${isLightMode ? '' : 'dark'}`}>
       <LibraryPanel />
     </div>
   );
@@ -453,7 +454,7 @@ function FloatingInspectorWrapper({
 
   return (
     <div 
-      className="absolute right-0 top-0 bottom-0 z-30 w-[320px] border-l overflow-hidden"
+      className={`absolute right-0 top-0 bottom-0 z-30 w-[320px] border-l overflow-hidden ${isLightMode ? '' : 'dark'}`}
       style={isLightMode 
         ? { backgroundColor: GRAPH_LIGHT_COLORS.panelBg, borderColor: GRAPH_LIGHT_COLORS.panelBorder }
         : { backgroundColor: '#0a0a0b', borderColor: 'rgba(255,255,255,0.06)' }

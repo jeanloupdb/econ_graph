@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ProjectPromptTooltip } from "@/components/ui/ProjectPromptTooltip";
 import { apiClient } from "@/lib/api/client";
 import { Edge, Node as GraphNode } from "@/lib/types";
 import { useQuery } from "@tanstack/react-query";
@@ -10,6 +11,7 @@ import {
   CheckCircle2,
   Clock,
   GitBranch,
+  Info,
   Pencil,
   Share2,
   Trash2,
@@ -115,6 +117,16 @@ export function ProjectRow({
               >
                 {project.name}
               </motion.p>
+              {(project.generation_prompt || project.description) && (
+                <ProjectPromptTooltip
+                  generationPrompt={project.generation_prompt}
+                  description={project.description}
+                  side="bottom"
+                  className="flex-shrink-0 p-0.5 rounded-md text-zinc-500 hover:text-violet-400 hover:bg-violet-500/10 transition-all duration-200"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </ProjectPromptTooltip>
+              )}
               <AnimatePresence>
                 {showCheck && (
                   <motion.div

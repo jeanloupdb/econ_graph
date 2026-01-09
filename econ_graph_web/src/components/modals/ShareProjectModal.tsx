@@ -111,7 +111,7 @@ export function ShareProjectModal({
 
   return (
     <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
-      <DialogContent className="sm:max-w-[500px] gap-0 p-0 overflow-hidden bg-zinc-900 border-zinc-800/50 shadow-2xl shadow-black/50">
+      <DialogContent className="sm:max-w-[500px] gap-0 p-0 overflow-hidden shadow-2xl shadow-black/50">
         <DialogHeader className="px-6 py-4 border-b border-zinc-800">
           <DialogTitle className="text-lg font-semibold text-white">
             Partager le projet
@@ -204,14 +204,17 @@ export function ShareProjectModal({
                     className="h-9 text-sm bg-zinc-800/50 border-zinc-700 text-white placeholder:text-zinc-500"
                   />
                   <select
-                    className="h-9 rounded-md border border-zinc-700 bg-zinc-800/50 px-3 py-1 text-sm text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30"
+                    className="h-9 rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30"
                     value={inviteRole}
                     onChange={(e) =>
                       setInviteRole(e.target.value as "viewer" | "editor")
                     }
+                    style={{
+                      colorScheme: 'dark'
+                    }}
                   >
-                    <option value="viewer">Lecteur</option>
-                    <option value="editor">Éditeur</option>
+                    <option value="viewer" className="bg-zinc-800 text-white">Lecteur</option>
+                    <option value="editor" className="bg-zinc-800 text-white">Éditeur</option>
                   </select>
                   <Button
                     size="sm"

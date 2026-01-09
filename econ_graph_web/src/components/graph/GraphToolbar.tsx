@@ -621,7 +621,7 @@ export function GraphToolbar({
                     setTimeout(() => inputRef.current?.focus(), 100);
                   }}
                 >
-                  <Circle className="h-4 w-4 mr-2.5 text-zinc-500" />
+                  <Circle className="h-4 w-4 mr-2.5 text-zinc-500 dark:text-zinc-400" />
                   <div className="flex flex-col gap-0.5">
                     <span className="text-sm font-medium">Créer un nœud</span>
                     <span className="text-xs text-zinc-500">
@@ -636,7 +636,7 @@ export function GraphToolbar({
                     setTimeout(() => inputRef.current?.focus(), 100);
                   }}
                 >
-                  <FileText className="h-4 w-4 mr-2.5 text-zinc-500" />
+                  <FileText className="h-4 w-4 mr-2.5 text-zinc-500 dark:text-zinc-400" />
                   <div className="flex flex-col gap-0.5">
                     <span className="text-sm font-medium">
                       Créer un scénario

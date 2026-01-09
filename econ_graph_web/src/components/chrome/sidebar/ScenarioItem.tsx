@@ -462,7 +462,7 @@ function ParameterItem({
                     <Pencil
                       className={cn(
                         "h-3.5 w-3.5 mr-2",
-                        isLightMode ? "text-zinc-600" : "text-zinc-500"
+                        isLightMode ? "text-zinc-600" : "text-zinc-400"
                       )}
                     />
                     Modifier la valeur
@@ -478,7 +478,7 @@ function ParameterItem({
                     <FunctionSquare
                       className={cn(
                         "h-3.5 w-3.5 mr-2",
-                        isLightMode ? "text-zinc-600" : "text-zinc-500"
+                        isLightMode ? "text-zinc-600" : "text-zinc-400"
                       )}
                     />
                     Fonction
@@ -631,20 +631,15 @@ export function ScenarioItem({
   canEdit?: boolean;
 }) {
   const { isLightMode } = useGraphTheme();
-  const [isExpanded, setIsExpanded] = useState(isActive);
+  // Simply derive expanded state from isActive - active scenarios are always expanded
+  const isExpanded = isActive;
+
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const { nodes = [] } = useGraphData();
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const activeScenarioId = useScenarioStore((s) => s.activeScenarioId);
   const resetToBaseline = useScenarioStore((s) => s.resetToBaseline);
   const deleteScenarioMutation = useDeleteScenario();
-
-  // Auto-expand when active
-  useEffect(() => {
-    if (isActive) {
-      setIsExpanded(true);
-    }
-  }, [isActive]);
 
   // Identify parameters (roots)
   const parameters = useMemo(() => {
@@ -763,7 +758,7 @@ export function ScenarioItem({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              setIsExpanded(!isExpanded);
+              // Chevron is disabled for active scenarios - they're always expanded
             }}
             className={cn(
               "p-0.5 rounded transition-colors shrink-0",

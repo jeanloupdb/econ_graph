@@ -38,6 +38,7 @@ import type {
 export const queryKeys = {
   nodes: ['nodes'] as const,
   projectNodes: (project: string) => ['nodes', 'project', project] as const,
+  projectEdges: (project: string) => ['edges', 'project', project] as const,
   node: (id: string) => ['nodes', id] as const,
   nodeDeps: (id: string) => ['nodes', id, 'deps'] as const,
   nodeDependents: (id: string) => ['nodes', id, 'dependents'] as const,
@@ -76,6 +77,19 @@ export function useProjectNodes(
   return useQuery<Node[], Error>({
     queryKey: queryKeys.projectNodes(projectParam),
     queryFn: () => apiClient.get<Node[]>(`/nodes${project ? `?project=${encodeURIComponent(project)}` : ''}`),
+    enabled: !!project,
+    ...options,
+  });
+}
+
+export function useProjectEdges(
+  project: string | null | undefined,
+  options?: Omit<UseQueryOptions<Edge[], Error>, 'queryKey' | 'queryFn'>
+) {
+  const projectParam = project || '';
+  return useQuery<Edge[], Error>({
+    queryKey: queryKeys.projectEdges(projectParam),
+    queryFn: () => apiClient.get<Edge[]>(`/edges${project ? `?project=${encodeURIComponent(project)}` : ''}`),
     enabled: !!project,
     ...options,
   });

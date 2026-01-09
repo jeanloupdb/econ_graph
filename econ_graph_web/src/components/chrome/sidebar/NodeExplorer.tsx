@@ -303,7 +303,7 @@ function NodeItem({
                       handleOpenInspector(e);
                     }}
                   >
-                    <Info className="h-3.5 w-3.5 mr-2 text-zinc-700 dark:text-zinc-500" />
+                    <Info className="h-3.5 w-3.5 mr-2 text-zinc-500 dark:text-zinc-400" />
                     Détails du nœud
                   </DropdownMenuItem>
                   {mode === 'scenario' && (
@@ -329,7 +329,7 @@ function NodeItem({
                               }}
                               className="gap-2"
                           >
-                              <Pencil className="h-3.5 w-3.5 text-zinc-700 dark:text-zinc-500" />
+                              <Pencil className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400" />
                               Modifier
                           </DropdownMenuItem>
                           <DropdownMenuItem
@@ -522,7 +522,7 @@ export function NodeExplorer({ onEditNode, searchQuery }: { onEditNode?: (id: st
       )}
 
       <Dialog open={!!deleteNodeId} onOpenChange={(open) => !open && setDeleteNodeId(null)}>
-        <DialogContent className="bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle className="text-base text-zinc-900 dark:text-zinc-100">Supprimer le nœud</DialogTitle>
           </DialogHeader>

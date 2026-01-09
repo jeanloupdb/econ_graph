@@ -6,10 +6,13 @@ from datetime import datetime
 class ProjectCreate(BaseModel):
   id: str = Field(..., min_length=1, max_length=64)
   name: str = Field(..., min_length=1, max_length=200)
+  generation_prompt: Optional[str] = None
+  description: Optional[str] = None
 
 
 class ProjectUpdate(BaseModel):
   name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+  description: Optional[str] = None
 
 
 class ProjectOut(BaseModel):
@@ -20,6 +23,8 @@ class ProjectOut(BaseModel):
   public_view_token: Optional[str] = None
   user_id: Optional[str] = None  # owner_id
   user_role: Optional[str] = None  # "owner" | "editor" | "viewer"
+  generation_prompt: Optional[str] = None
+  description: Optional[str] = None
 
   class Config:
     from_attributes = True

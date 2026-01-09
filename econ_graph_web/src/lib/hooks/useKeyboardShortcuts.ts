@@ -5,7 +5,7 @@
 
 import { useEffect } from 'react';
 import { useUIStore } from '@/store/uiState';
-import { useHistoryStore } from '@/store/history';
+import { useCommandHistoryStore } from '@/store/commandHistory';
 
 interface KeyboardShortcutsOptions {
   onFitView?: () => void;
@@ -17,8 +17,10 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
   const { enabled = true } = options;
   const clearSelection = useUIStore((state) => state.clearSelection);
   const toggleCommandPalette = useUIStore((state) => state.toggleCommandPalette);
-  const undo = useHistoryStore((state) => state.undo);
-  const redo = useHistoryStore((state) => state.redo);
+  const undo = useCommandHistoryStore((state) => state.undo);
+  const redo = useCommandHistoryStore((state) => state.redo);
+  const canUndo = useCommandHistoryStore((state) => state.canUndo);
+  const canRedo = useCommandHistoryStore((state) => state.canRedo);
 
   useEffect(() => {
     if (!enabled) return;
@@ -54,14 +56,18 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
       // Ctrl/Cmd+Z - undo
       if (isMod && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
-        undo();
+        if (canUndo) {
+          undo();
+        }
         return;
       }
 
-      // Ctrl/Cmd+Shift+Z - redo
-      if (isMod && e.key === 'z' && e.shiftKey) {
+      // Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y - redo
+      if ((isMod && e.key === 'z' && e.shiftKey) || (isMod && e.key === 'y')) {
         e.preventDefault();
-        redo();
+        if (canRedo) {
+          redo();
+        }
         return;
       }
 
@@ -88,6 +94,8 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
     toggleCommandPalette,
     undo,
     redo,
+    canUndo,
+    canRedo,
     options.onFitView,
   ]);
 }
