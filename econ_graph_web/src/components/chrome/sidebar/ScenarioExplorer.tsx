@@ -119,7 +119,9 @@ export function ScenarioExplorer({
                         Scénarios
                     </p>
                 </div>
-                {scenarios.map(scenario => (
+                {[...scenarios]
+                  .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+                  .map(scenario => (
                     <ScenarioItem
                         key={scenario.id}
                         scenario={scenario}

@@ -3,18 +3,17 @@
 import { NewApiNodeModal } from "@/components/forms/NewApiNodeModal";
 // import { NewNodeModal } from "@/components/forms/NewNodeModal"; // TODO: Removed, need to adapt CompositeEditor
 import { GraphAddNodeMenu } from "@/components/graph/GraphAddNodeMenu";
-import { GraphAiBar } from "@/components/graph/GraphAiBar";
 import { GraphCanvas } from "@/components/graph/GraphCanvas";
 import { Inspector } from "@/components/panels/Inspector";
 import { LibraryPanel } from "@/components/panels/LibraryPanel";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
 } from "@/components/ui/dialog";
 import { useGraphActions } from "@/graph/context/GraphActionsContext";
 import { useGraphData } from "@/graph/context/GraphDataContext";
@@ -22,25 +21,25 @@ import { CompositeGraphProvider } from "@/graph/providers/CompositeGraphProvider
 import { apiClient } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/hooks";
 import {
-  PENDING_COMPOSITE_INSERT_KEY,
-  PENDING_COMPOSITE_REFRESH_KEY
+    PENDING_COMPOSITE_INSERT_KEY,
+    PENDING_COMPOSITE_REFRESH_KEY
 } from "@/lib/composites/constants";
 import {
-  normalizeCompositeNodes,
-  serializeCompositeGraph,
+    normalizeCompositeNodes,
+    serializeCompositeGraph,
 } from "@/lib/composites/graph";
 import type {
-  PendingCompositeInsertPayload,
-  PendingCompositeRefreshPayload,
-  TransformCompositeSessionPayload,
+    PendingCompositeInsertPayload,
+    PendingCompositeRefreshPayload,
+    TransformCompositeSessionPayload,
 } from "@/lib/composites/types";
 import { deriveEdgesFromCompute } from "@/lib/layout/graph";
 import type {
-  Composite,
-  CompositeCreateInput,
-  CompositeGraphData,
-  CompositeUpdateInput,
-  Node,
+    Composite,
+    CompositeCreateInput,
+    CompositeGraphData,
+    CompositeUpdateInput,
+    Node,
 } from "@/lib/types";
 import { useUIStore } from "@/store/uiState";
 import { formatNumber } from "@/utils/format";
@@ -50,7 +49,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  type CompositeRootInfo
+    type CompositeRootInfo
 } from "./ExposedRootsManager";
 
 interface CompositeEditorProps {
@@ -608,7 +607,6 @@ function CompositeEditorLayout({
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 relative overflow-hidden">
           <GraphCanvas />
-          <GraphAiBar mode="composite" />
           <LibraryPanelWrapper />
         </div>
         <Inspector />

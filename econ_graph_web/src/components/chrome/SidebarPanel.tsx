@@ -1,32 +1,32 @@
 "use client";
 
-import { cn } from "@/lib/utils";
-import { useUIStore } from "@/store/uiState";
-import { useScenarioStore } from "@/store/scenarioState";
-import { useProjectStore } from "@/store/projectState";
-import { X, BarChart3, GitCompare, Home, Plus } from "lucide-react";
-import { useCallback, useState } from "react";
+import { InsertCompositeModal } from "@/components/forms/InsertCompositeModal";
 import {
-  useCompareScenarios,
-  useComputeAll,
-  useComputeWithScenario,
-  useCreateScenario,
-  useScenarios,
+    useCompareScenarios,
+    useComputeAll,
+    useComputeWithScenario,
+    useCreateScenario,
+    useScenarios,
 } from "@/lib/api/hooks";
-import { toast } from "sonner";
 import type { CompareNodeResult } from "@/lib/types";
-import { StandardMenuContent } from "./sidebar/StandardMenuContent";
-import { ScenarioExplorer } from "./sidebar/ScenarioExplorer";
+import { cn } from "@/lib/utils";
+import { useProjectStore } from "@/store/projectState";
+import { useScenarioStore } from "@/store/scenarioState";
+import { useUIStore } from "@/store/uiState";
+import { BarChart3, GitCompare, Home, Plus, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useCallback, useState } from "react";
+import { toast } from "sonner";
+import { ApiNodeEditor } from "./sidebar/ApiNodeEditor";
 import { ComparisonSidebarContent } from "./sidebar/ComparisonSidebarContent";
 import { NodeEditor } from "./sidebar/NodeEditor";
-import { ApiNodeEditor } from "./sidebar/ApiNodeEditor";
-import { InsertCompositeModal } from "@/components/forms/InsertCompositeModal";
-import { useRouter } from "next/navigation";
+import { ScenarioExplorer } from "./sidebar/ScenarioExplorer";
+import { StandardMenuContent } from "./sidebar/StandardMenuContent";
 
 import type { ViewMode } from "@/lib/types";
 
 const MODE_CONFIG: Record<
-  ViewMode,
+  Exclude<ViewMode, 'columns'>,
   {
     icon: typeof Home;
     label: string;

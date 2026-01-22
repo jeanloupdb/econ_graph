@@ -150,7 +150,7 @@ export function Inspector() {
           )}
 
           {algorithmProps && (
-            <CollapsibleSection title="Algorithme" defaultOpen={false}>
+            <CollapsibleSection title="Algorithme" defaultOpen={true}>
               <AlgorithmBlock {...algorithmProps} />
             </CollapsibleSection>
           )}

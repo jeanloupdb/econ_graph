@@ -1,19 +1,20 @@
 "use client";
 
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useComputeWithScenario, useScenarios } from "@/lib/api/hooks";
+import { useGraphTheme } from "@/lib/context/GraphThemeContext";
 import { useProjectStore } from "@/store/projectState";
 import { useScenarioStore } from "@/store/scenarioState";
 import { useUIStore } from "@/store/uiState";
-import { ChevronDown, ChevronLeft, Code2, Eye } from "lucide-react";
+import { ChevronDown, ChevronLeft, Moon, Sun } from "lucide-react";
 import Link from "next/link";
-import { SmartGraphLogo } from "../ui/SmartGraphLogo";
 import { useEffect, useRef, useState } from "react";
+import { SmartGraphLogo } from "../ui/SmartGraphLogo";
 import { UserMenu } from "./UserMenu";
 
 export function Topbar() {
@@ -39,6 +40,7 @@ export function Topbar() {
 
   const { data: scenarios = [] } = useScenarios(currentProjectId);
   const currentScenario = scenarios.find((s) => s.id === activeScenarioId);
+  const { isLightMode, toggleGraphTheme } = useGraphTheme();
 
   // Determine current mode
   const mode = useUIStore((s) => s.viewMode);
@@ -215,31 +217,22 @@ export function Topbar() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Visualizer/Developer Switch - Linear style */}
-          <div className="flex items-center h-9 gap-1 p-1 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
-            <button
-              onClick={() => useUIStore.getState().setDeveloperMode(false)}
-              className={`h-full flex items-center gap-1.5 px-3 text-xs font-medium rounded transition-colors ${
-                !useUIStore((s) => s.developerMode)
-                  ? "bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100"
-                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-              }`}
-            >
-              <Eye className="h-3.5 w-3.5" />
-              <span>View</span>
-            </button>
-            <button
-              onClick={() => useUIStore.getState().setDeveloperMode(true)}
-              className={`h-full flex items-center gap-1.5 px-3 text-xs font-medium rounded transition-colors ${
-                useUIStore((s) => s.developerMode)
-                  ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
-                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-              }`}
-            >
-              <Code2 className="h-3.5 w-3.5" />
-              <span>Edit</span>
-            </button>
-          </div>
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleGraphTheme}
+            className={`h-9 w-9 flex items-center justify-center rounded-md border transition-colors ${
+              isLightMode
+                ? "border-zinc-200 bg-zinc-50 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100"
+                : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"
+            }`}
+            title={isLightMode ? "Passer en mode sombre" : "Passer en mode clair"}
+          >
+            {isLightMode ? (
+              <Moon className="h-4 w-4" />
+            ) : (
+              <Sun className="h-4 w-4" />
+            )}
+          </button>
 
           <UserMenu />
         </div>

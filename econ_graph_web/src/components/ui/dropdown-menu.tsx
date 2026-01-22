@@ -15,22 +15,22 @@ const DropdownMenuContent = React.forwardRef<
   const { isLightMode } = useGraphTheme();
   
   return (
-    <PopoverPrimitive.Portal>
+  <PopoverPrimitive.Portal>
       <div className={isLightMode ? '' : 'dark'}>
-        <PopoverPrimitive.Content
-          ref={ref}
-          align={align}
-          sideOffset={sideOffset}
-          className={cn(
-            "z-[100] min-w-[8rem] overflow-hidden rounded-md border p-1 shadow-md",
-            "bg-popover text-popover-foreground border-border",
-            "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
-            className
-          )}
-          {...props}
-        />
+    <PopoverPrimitive.Content
+      ref={ref}
+      align={align}
+      sideOffset={sideOffset}
+      className={cn(
+        "z-[100] min-w-[8rem] overflow-hidden rounded-md border p-1 shadow-md",
+        "bg-popover text-popover-foreground border-border",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        className
+      )}
+      {...props}
+    />
       </div>
-    </PopoverPrimitive.Portal>
+  </PopoverPrimitive.Portal>
   );
 });
 DropdownMenuContent.displayName = PopoverPrimitive.Content.displayName;

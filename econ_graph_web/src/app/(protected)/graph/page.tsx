@@ -1,12 +1,13 @@
 "use client";
 
+import { AuthOverlay } from "@/components/auth/AuthOverlay";
 import { CollapsibleModePanel } from "@/components/chrome/CollapsibleModePanel";
 import { TopbarMinimal } from "@/components/chrome/TopbarMinimal";
-import { AuthOverlay } from "@/components/auth/AuthOverlay";
 import { CommandPalette } from "@/components/command/CommandPalette";
 import { BottomToolbar } from "@/components/graph/BottomToolbar";
-import { GraphAiBar } from "@/components/graph/GraphAiBar";
+import { CausalStateView } from "@/components/graph/CausalStateView";
 import { GraphCanvas } from "@/components/graph/GraphCanvas";
+import { ProjectChatPanel } from "@/components/graph/ProjectChatPanel";
 import { Inspector } from "@/components/panels/Inspector";
 import { LibraryPanel } from "@/components/panels/LibraryPanel";
 import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
@@ -18,6 +19,7 @@ import { useEffect, useRef } from "react";
 import { ReactFlowProvider } from "reactflow";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { AnimatePresence } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useState } from "react";
 import { toast } from "sonner";
@@ -27,15 +29,15 @@ import { useGraphData } from "@/graph/context/GraphDataContext";
 import { useInsertCompositeNode } from "@/graph/hooks/useInsertCompositeNode";
 import { queryKeys, useComputeWithScenario } from "@/lib/api/hooks";
 import {
-  PENDING_COMPOSITE_INSERT_KEY,
-  PENDING_COMPOSITE_REFRESH_KEY,
+    PENDING_COMPOSITE_INSERT_KEY,
+    PENDING_COMPOSITE_REFRESH_KEY,
 } from "@/lib/composites/constants";
 import type {
-  PendingCompositeInsertPayload,
-  PendingCompositeRefreshPayload,
+    PendingCompositeInsertPayload,
+    PendingCompositeRefreshPayload,
 } from "@/lib/composites/types";
+import { GRAPH_LIGHT_COLORS, GraphThemeProvider, useGraphTheme } from "@/lib/context/GraphThemeContext";
 import { useScenarioStore } from "@/store/scenarioState";
-import { GraphThemeProvider, useGraphTheme, GRAPH_LIGHT_COLORS } from "@/lib/context/GraphThemeContext";
 
 function GraphPageContent() {
   const { isLightMode } = useGraphTheme();
@@ -46,22 +48,25 @@ function GraphPageContent() {
   );
   const resetDetailPanels = useUIStore((state) => state.resetDetailPanels);
   const aiAssistantOpen = useUIStore((s) => s.aiAssistantOpen);
+  const setAiAssistantOpen = useUIStore((s) => s.setAiAssistantOpen);
   const setViewMode = useUIStore((s) => s.setViewMode);
+  const workspaceView = useUIStore((s) => s.workspaceView);
   const setFloatingPanelOpen = useUIStore((s) => s.setFloatingPanelOpen);
 
   const loadProjects = useProjectStore((s) => s.load);
   const projects = useProjectStore((s) => s.projects);
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const setCurrentProject = useProjectStore((s) => s.setCurrentProject);
+  const currentProject = projects.find((p) => p.id === currentProjectId);
 
   const searchParams = useSearchParams();
   const projectIdParam = searchParams.get("project");
 
   const prevProjectIdRef = useRef<string | null>(null);
 
-  // Reset to baseline mode with sidebar open on page load
+  // Reset to columns mode with sidebar open on page load
   useEffect(() => {
-    setViewMode("baseline");
+    setViewMode("columns");
     setFloatingPanelOpen(true);
   }, [setViewMode, setFloatingPanelOpen]);
 
@@ -116,24 +121,34 @@ function GraphPageContent() {
         {/* Topbar - barre supérieure */}
         <TopbarMinimal />
 
+        {/* Project Chat Panel - overlay à gauche */}
+        <AnimatePresence>
+          {aiAssistantOpen && currentProjectId && currentProject && (
+            <ProjectChatPanel
+              projectId={currentProjectId}
+              projectName={currentProject.name}
+              generationPrompt={currentProject.generation_prompt}
+              onClose={() => setAiAssistantOpen(false)}
+            />
+          )}
+        </AnimatePresence>
+
         {/* Contenu principal - zone de travail */}
-        <div className="flex-1 relative overflow-hidden">
-          {/* Canvas central avec ReactFlow - toujours plein écran */}
-          <ReactFlowProvider>
-            <GraphCanvas />
+        <div className="flex-1 relative overflow-hidden flex flex-col">
+          {workspaceView === 'causal' ? (
+             <CausalStateView />
+          ) : (
+            <ReactFlowProvider>
+              <div className="flex-1 relative overflow-hidden">
+                <GraphCanvas />
+                <BottomToolbar />
+                <LibraryPanelWrapper />
+              </div>
+            </ReactFlowProvider>
+          )}
 
-            {/* Bottom Toolbar - barre d'outils flottante centrée */}
-            <BottomToolbar />
-
-            {/* AI Assistant Bar - sans backdrop, interactions parallèles */}
-            {aiAssistantOpen && <GraphAiBar />}
-
-            {/* Library Panel */}
-            <LibraryPanelWrapper />
-          </ReactFlowProvider>
-
-          {/* Collapsible Mode Panel - floating header when collapsed, full sidebar when expanded */}
-          <CollapsibleModePanel />
+          {/* Collapsible Mode Panel - only visible in Expert mode */}
+          {workspaceView === 'graph' && <CollapsibleModePanel />}
 
           {/* Inspector - overlay flottant à droite */}
           <FloatingInspectorWrapper

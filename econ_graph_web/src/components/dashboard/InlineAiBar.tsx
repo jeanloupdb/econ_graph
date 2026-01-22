@@ -13,6 +13,7 @@ import {
   Paperclip,
   Sparkles,
   X,
+  Wand2,
 } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
 import { toast } from "sonner";
@@ -20,9 +21,10 @@ import { toast } from "sonner";
 interface InlineAiBarProps {
   onGenerate: (prompt: string, file?: File) => void;
   isPending: boolean;
+  onOpenWizard?: () => void;
 }
 
-export function InlineAiBar({ onGenerate, isPending }: InlineAiBarProps) {
+export function InlineAiBar({ onGenerate, isPending, onOpenWizard }: InlineAiBarProps) {
   const [prompt, setPrompt] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [isFocused, setIsFocused] = useState(false);
@@ -265,6 +267,22 @@ export function InlineAiBar({ onGenerate, isPending }: InlineAiBarProps) {
             </button>
           </div>
         </div>
+
+        {/* Wizard button */}
+        {onOpenWizard && (
+          <div className="mt-3 flex items-center justify-center">
+            <button
+              onClick={onOpenWizard}
+              disabled={isLoading}
+              className="group flex items-center gap-2 px-4 py-2 rounded-lg border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800/80 hover:border-zinc-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Wand2 className="h-4 w-4 text-violet-400 transition-transform group-hover:rotate-12" />
+              <span className="text-sm text-zinc-300 font-medium">
+                Besoin d'aide ? Mode guidé
+              </span>
+            </button>
+          </div>
+        )}
       </div>
     </motion.div>
   );

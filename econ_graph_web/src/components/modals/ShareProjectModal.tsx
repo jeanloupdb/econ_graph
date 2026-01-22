@@ -3,19 +3,17 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { Switch } from "@/components/ui/switch";
 import { apiClient } from "@/lib/api/client";
 import { useProjectStore } from "@/store/projectState";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, ExternalLink, Globe, Trash2, User } from "lucide-react";
+import { Trash2, User, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -39,15 +37,23 @@ export function ShareProjectModal({
   projectId,
   projectName,
 }: ShareProjectModalProps) {
-  const { projects, shareProject, revokeShare, isOwner } = useProjectStore();
+  const { projects, isOwner } = useProjectStore();
   const project = projects.find((p) => p.id === projectId);
-  const publicToken = project?.public_view_token;
   const userIsOwner = isOwner(projectId);
 
-  const [isCopied, setIsCopied] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"viewer" | "editor">("viewer");
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const queryClient = useQueryClient();
+
+  // User Search Query
+  const { data: searchResults = [], isLoading: isSearching } = useQuery({
+    queryKey: ["user-search", inviteEmail],
+    queryFn: async () => {
+      if (inviteEmail.length < 2) return [];
+      return apiClient.get<any[]>(`/auth/search?q=${encodeURIComponent(inviteEmail)}`);
+    },
+    enabled: inviteEmail.length >= 2,
+  });
 
   // Collaborators Query
   const { data: collaborators = [], isLoading: isLoadingCollabs } = useQuery({
@@ -60,12 +66,13 @@ export function ShareProjectModal({
     enabled: open,
   });
 
-  // Add Collaborator Mutation
+  // Add Collaborator Mutation - always as editor
   const addCollaborator = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (targetEmail?: string) => {
+      const emailToUse = targetEmail || inviteEmail;
       return apiClient.post(`/projects/${projectId}/collaborators`, {
-        email_or_username: inviteEmail,
-        role: inviteRole,
+        email_or_username: emailToUse,
+        role: "editor", // Always editor now
       });
     },
     onSuccess: () => {
@@ -73,7 +80,8 @@ export function ShareProjectModal({
         queryKey: ["project-collaborators", projectId],
       });
       setInviteEmail("");
-      toast.success("Collaborateur ajouté");
+      setShowSuggestions(false);
+      toast.success("Collaborateur ajouté en tant qu'éditeur");
     },
     onError: () => {
       toast.error("Impossible d'ajouter le collaborateur");
@@ -96,156 +104,137 @@ export function ShareProjectModal({
     },
   });
 
-  const handlePublicToggle = async (enabled: boolean) => {
-    try {
-      if (enabled) {
-        await shareProject(projectId);
-      } else {
-        await revokeShare(projectId);
-      }
-    } catch (e) {
-      console.error("Failed to toggle share", e);
-      toast.error("Impossible de modifier le partage public");
+  const handleInvite = (email?: string) => {
+    const emailToUse = email || inviteEmail;
+    if (emailToUse.trim()) {
+      addCollaborator.mutate(emailToUse);
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
-      <DialogContent className="sm:max-w-[500px] gap-0 p-0 overflow-hidden shadow-2xl shadow-black/50">
+      <DialogContent className="sm:max-w-[480px] gap-0 p-0 overflow-hidden shadow-2xl shadow-black/50">
         <DialogHeader className="px-6 py-4 border-b border-zinc-800">
-          <DialogTitle className="text-lg font-semibold text-white">
-            Partager le projet
+          <DialogTitle className="text-lg font-semibold text-white flex items-center gap-2">
+            <UserPlus className="w-5 h-5 text-violet-400" />
+            Inviter des collaborateurs
           </DialogTitle>
         </DialogHeader>
 
-        <div className="p-6 space-y-6">
-          {/* Public Access Section - only for owners */}
-          {userIsOwner && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <div className="text-sm font-medium text-zinc-100 flex items-center gap-2">
-                    <Globe className="w-4 h-4 text-zinc-400" />
-                    Lien public
-                  </div>
-                  <div className="text-xs text-zinc-500 max-w-[300px]">
-                    Toute personne disposant du lien pourra consulter le projet
-                    en lecture seule.
-                  </div>
-                </div>
-                <Switch
-                  checked={!!publicToken}
-                  onCheckedChange={handlePublicToggle}
-                />
-              </div>
-
-              {publicToken && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <Input
-                        readOnly
-                        value={`${window.location.origin}/public/${publicToken}`}
-                        className="font-mono text-xs h-9 bg-zinc-800/50 border-zinc-700 text-zinc-300 pr-20"
-                      />
-                      <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 hover:bg-zinc-700"
-                          onClick={() => {
-                            navigator.clipboard.writeText(
-                              `${window.location.origin}/public/${publicToken}`
-                            );
-                            setIsCopied(true);
-                            setTimeout(() => setIsCopied(false), 2000);
-                            toast.success("Lien copié !");
-                          }}
-                        >
-                          {isCopied ? (
-                            <Check className="h-3.5 w-3.5 text-emerald-400" />
-                          ) : (
-                            <Copy className="h-3.5 w-3.5 text-zinc-400" />
-                          )}
-                        </Button>
-                        <a
-                          href={`/public/${publicToken}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-zinc-700 text-zinc-400 hover:text-violet-400 transition-colors"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {userIsOwner && <Separator className="bg-zinc-800" />}
-
+        <div className="p-6 space-y-5">
           {/* Collaborators Section */}
           <div className="space-y-4">
-            <div className="space-y-3">
+            {/* Only show invite form for owners */}
+            {userIsOwner && (
+              <div className="space-y-2">
+                <label className="text-sm text-zinc-400">
+                  Ajouter un collaborateur (aura les droits d'édition)
+                </label>
+                <div className="relative">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Email ou nom d'utilisateur"
+                      value={inviteEmail}
+                      onChange={(e) => {
+                        setInviteEmail(e.target.value);
+                        setShowSuggestions(true);
+                      }}
+                      onFocus={() => setShowSuggestions(true)}
+                      onKeyDown={(e) => e.key === "Enter" && handleInvite()}
+                      className="h-10 text-sm bg-zinc-800/50 border-zinc-700 text-white placeholder:text-zinc-500"
+                    />
+                    <Button
+                      size="sm"
+                      className="h-10 px-4 shrink-0 bg-violet-600 hover:bg-violet-500 text-white"
+                      onClick={() => handleInvite()}
+                      disabled={!inviteEmail.trim() || addCollaborator.isPending}
+                    >
+                      Inviter
+                    </Button>
+                  </div>
+
+                  {/* Suggestions List */}
+                  {showSuggestions && inviteEmail.length >= 2 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
+                      {isSearching ? (
+                        <div className="px-4 py-3 text-xs text-zinc-500 italic">
+                          Recherche...
+                        </div>
+                      ) : searchResults.length > 0 ? (
+                        <div className="max-h-[200px] overflow-y-auto">
+                          {searchResults.map((user) => (
+                            <button
+                              key={user.id}
+                              onClick={() => {
+                                handleInvite(user.email);
+                              }}
+                              className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-violet-600/20 text-left transition-colors group"
+                            >
+                              <Avatar className="h-7 w-7">
+                                <AvatarImage
+                                  src={`https://avatar.vercel.sh/${user.username}`}
+                                />
+                                <AvatarFallback className="text-[10px] bg-zinc-800 text-zinc-400 group-hover:bg-violet-600/30 group-hover:text-violet-200">
+                                  {user.username.slice(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium text-white group-hover:text-violet-200">
+                                  {user.username}
+                                </div>
+                                <div className="text-xs text-zinc-500 group-hover:text-violet-300/70 truncate">
+                                  {user.email}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="px-4 py-3 text-xs text-zinc-500 italic">
+                          Aucun utilisateur trouvé
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Backdrop for closing suggestions */}
+                  {showSuggestions && (
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setShowSuggestions(false)}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Collaborators list */}
+            <div className="space-y-2">
               <div className="text-sm font-medium text-zinc-100 flex items-center gap-2">
                 <User className="w-4 h-4 text-zinc-400" />
-                Membres de l&apos;équipe
+                Collaborateurs ({collaborators.length})
               </div>
 
-              {/* Only show invite form for owners */}
-              {userIsOwner && (
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Email ou nom d'utilisateur"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    className="h-9 text-sm bg-zinc-800/50 border-zinc-700 text-white placeholder:text-zinc-500"
-                  />
-                  <select
-                    className="h-9 rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/30"
-                    value={inviteRole}
-                    onChange={(e) =>
-                      setInviteRole(e.target.value as "viewer" | "editor")
-                    }
-                    style={{
-                      colorScheme: 'dark'
-                    }}
-                  >
-                    <option value="viewer" className="bg-zinc-800 text-white">Lecteur</option>
-                    <option value="editor" className="bg-zinc-800 text-white">Éditeur</option>
-                  </select>
-                  <Button
-                    size="sm"
-                    className="h-9 px-3 shrink-0 bg-violet-600 hover:bg-violet-500 text-white"
-                    onClick={() => addCollaborator.mutate()}
-                    disabled={!inviteEmail.trim() || addCollaborator.isPending}
-                  >
-                    Inviter
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-1">
               {isLoadingCollabs ? (
-                <div className="py-4 text-center text-sm text-zinc-500">
+                <div className="py-6 text-center text-sm text-zinc-500">
                   Chargement...
                 </div>
               ) : collaborators.length === 0 ? (
-                <div className="py-4 text-center text-sm text-zinc-500 italic">
-                  Aucun collaborateur pour le moment.
+                <div className="py-6 text-center text-sm text-zinc-500">
+                  <p className="mb-1">Aucun collaborateur</p>
+                  <p className="text-xs text-zinc-600">
+                    Invitez quelqu'un pour collaborer sur ce projet
+                  </p>
                 </div>
               ) : (
-                <div className="space-y-1 max-h-[200px] overflow-y-auto custom-scroll -mr-2 pr-2">
+                <div className="space-y-1 max-h-[240px] overflow-y-auto custom-scroll -mr-2 pr-2">
                   {collaborators.map((collab) => (
                     <div
                       key={collab.user_id}
-                      className="flex items-center justify-between py-2 group rounded-lg px-2 hover:bg-zinc-800/50 transition-colors"
+                      className="flex items-center justify-between py-2.5 group rounded-lg px-3 hover:bg-zinc-800/50 transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
+                        <Avatar className="h-9 w-9">
                           <AvatarImage
                             src={`https://avatar.vercel.sh/${collab.username}`}
                           />
@@ -263,8 +252,8 @@ export function ShareProjectModal({
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-xs text-zinc-500 capitalize">
-                          {collab.role === "viewer" ? "Lecteur" : "Éditeur"}
+                        <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                          Éditeur
                         </span>
                         {userIsOwner && (
                           <Button
@@ -300,3 +289,4 @@ export function ShareProjectModal({
     </Dialog>
   );
 }
+

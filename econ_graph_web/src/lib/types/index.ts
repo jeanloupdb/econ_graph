@@ -193,7 +193,7 @@ export interface GraphEdge {
 
 export type InteractionMode = 'select' | 'add' | 'connect' | 'lasso' | 'ai-select';
 
-export type ViewMode = 'baseline' | 'scenario' | 'comparison';
+export type ViewMode = 'baseline' | 'scenario' | 'comparison' | 'columns';
 
 export interface GraphViewport {
   x: number;

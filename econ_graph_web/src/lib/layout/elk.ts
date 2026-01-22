@@ -1,50 +1,66 @@
-'use client';
-
 import ELK from 'elkjs/lib/elk.bundled.js';
-
-type NodeIn = { id: string };
-type EdgeIn = { source: string; target: string };
+import { Edge, Node } from 'reactflow';
 
 const elk = new ELK();
 
-export async function computeElkLayout(
-  nodes: NodeIn[],
-  edges: EdgeIn[],
-  options?: { direction?: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' }
-): Promise<Map<string, { x: number; y: number }>> {
-  const dir = options?.direction || 'DOWN';
-  // Estimate sizes (keep consistent for clean spacing)
-  const defaultWidth = 220;
-  const defaultHeight = 90;
+// ELK Layout Options
+const defaultOptions = {
+  'elk.algorithm': 'layered',
+  'elk.direction': 'RIGHT',
+  'elk.spacing.nodeNode': '80', // Horizontal spacing
+  'elk.layered.spacing.nodeNodeBetweenLayers': '150', // Vertical spacing (since rotated right)
+  'elk.edgeRouting': 'ORTHOGONAL',
+  'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+};
 
-  const elkGraph: any = {
-    id: 'root',
-    layoutOptions: {
-      'elk.algorithm': 'layered',
-      'elk.direction': dir,
-      // Force strict layering so every target sits below its source
-      'elk.layered.layering.strategy': 'LONGEST_PATH',
-      // Place parents centered over their children for straighter verticals
-      'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
-      'elk.layered.nodePlacement.bk.fixedAlignment': 'CENTER',
-      'elk.spacing.nodeNode': '60',
-      'elk.layered.spacing.nodeNodeBetweenLayers': '160',
-      'elk.layered.mergeEdges': 'true',
-      'elk.layered.crossingMinimization.semiInteractive': 'true',
-      'elk.layered.edgeStraightening': 'true',
-      'elk.edgeRouting': 'ORTHOGONAL',
-      'elk.spacing.edgeNode': '50',
-    },
-    children: nodes.map((n) => ({ id: n.id, width: defaultWidth, height: defaultHeight })),
-    edges: edges.map((e, i) => ({ id: `${e.source}->${e.target}#${i}` , sources: [e.source], targets: [e.target] })),
+export async function computeElkLayout(
+  nodes: Node[],
+  edges: Edge[],
+  options: {
+    direction?: 'RIGHT' | 'DOWN';
+    nodeWidth?: number;
+    nodeHeight?: number;
+  } = {}
+) {
+  const isHorizontal = options.direction === 'RIGHT';
+  
+  const layoutOptions = {
+    ...defaultOptions,
+    'elk.direction': isHorizontal ? 'RIGHT' : 'DOWN',
+    // Adjust spacing based on direction if needed
   };
 
-  const out = await elk.layout(elkGraph);
-  const pos = new Map<string, { x: number; y: number }>();
-  if (out.children) {
-    for (const c of out.children) {
-      pos.set(c.id, { x: Math.round(c.x || 0), y: Math.round(c.y || 0) });
-    }
+  const elkNodes = nodes.map((node) => ({
+    id: node.id,
+    width: node.width ?? options.nodeWidth ?? 240,
+    height: node.height ?? options.nodeHeight ?? 120,
+  }));
+
+  const elkEdges = edges.map((edge) => ({
+    id: edge.id,
+    sources: [edge.source],
+    targets: [edge.target],
+  }));
+
+  const graph = {
+    id: 'root',
+    layoutOptions: layoutOptions,
+    children: elkNodes,
+    edges: elkEdges,
+  };
+
+  try {
+    const layoutedGraph = await elk.layout(graph);
+    
+    const positions = new Map<string, { x: number; y: number }>();
+    
+    layoutedGraph.children?.forEach((node) => {
+      positions.set(node.id, { x: node.x!, y: node.y! });
+    });
+
+    return positions;
+  } catch (error) {
+    console.error('ELK Layout failed:', error);
+    return new Map(); // Return empty map on failure to avoid crash
   }
-  return pos;
 }

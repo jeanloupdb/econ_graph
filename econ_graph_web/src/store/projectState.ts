@@ -16,7 +16,8 @@ export interface Project {
 interface ProjectState {
   projects: Project[];
   currentProjectId: string | null;
-  load: () => void;
+  isLoading: boolean;
+  load: () => Promise<void>;
   createProject: (name: string) => Promise<Project>;
   deleteProject: (id: string) => void;
   renameProject: (id: string, name: string) => void;
@@ -26,7 +27,6 @@ interface ProjectState {
   addProject: (project: Project) => void;
   // Permission helpers
   canEdit: (projectId?: string | null) => boolean;
-  canShare: (projectId?: string | null) => boolean;
   isOwner: (projectId?: string | null) => boolean;
   getCurrentRole: () => 'owner' | 'editor' | 'viewer' | 'public' | null;
 }
@@ -44,10 +44,14 @@ function save(projects: Project[], currentProjectId: string | null) {
 export const useProjectStore = create<ProjectState>((set, get) => ({
   projects: [],
   currentProjectId: null,
+  isLoading: true,
 
   load: async () => {
+    set({ isLoading: true });
     let fallbackProjects: Project[] = [];
     let fallbackCurrent: string | null = null;
+
+    // 1. Try LocalStorage for immediate UI
     if (typeof window !== 'undefined') {
       try {
         const cached = localStorage.getItem(LS_KEY);
@@ -68,21 +72,28 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         // ignore JSON errors
       }
     }
+
+    // 2. Fetch from API (only completed projects now)
     try {
-      let raw: any[] = await apiClient.get<any[]>('/projects');
-      const projs: Project[] = (raw || []).map((p) => ({
-        id: p.id,
-        name: p.name,
-        createdAt: p.created_at,
-        updatedAt: p.updated_at,
-        public_view_token: p.public_view_token,
-        user_id: p.user_id,
-        user_role: p.user_role,
-        generation_prompt: p.generation_prompt,
-        description: p.description,
-      }));
+      const raw: any[] = await apiClient.get<any[]>('/projects');
+      // Filter only completed projects (no more drafts)
+      const projs: Project[] = (raw || [])
+        .filter((p) => p.status !== 'draft')
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          createdAt: p.created_at,
+          updatedAt: p.updated_at,
+          public_view_token: p.public_view_token,
+          user_id: p.user_id,
+          user_role: p.user_role,
+          generation_prompt: p.generation_prompt,
+          description: p.description,
+        }));
       const cur = typeof window !== 'undefined' ? localStorage.getItem(LS_CUR) : null;
-      const nextCurrent = cur || (projs[0]?.id || null);
+      const exists = projs.find(p => p.id === cur);
+      const nextCurrent = exists ? cur : (projs[0]?.id || null);
+
       set({ projects: projs, currentProjectId: nextCurrent });
       save(projs, nextCurrent);
     } catch (err) {
@@ -90,6 +101,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       if (fallbackProjects.length === 0) {
         set({ projects: [], currentProjectId: null });
       }
+    } finally {
+      set({ isLoading: false });
     }
   },
 
@@ -98,13 +111,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const idBase = name.trim().toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
     const id = `${idBase || 'project'}-${Date.now().toString(36)}`.slice(0, 48);
     const p: Project = { id, name: name.trim() || 'Untitled Project', createdAt: now, updatedAt: now };
-    
-    // Persist via API and wait for it
+
     try {
-      await apiClient.post<Project, { id: string; name: string }>('/projects', { id: p.id, name: p.name });
+      await apiClient.post<Project, { id: string; name: string; status: string }>('/projects', { id: p.id, name: p.name, status: 'completed' });
     } catch (e) {
       console.error("Failed to create project on backend", e);
-      // We still continue with local state, but this might be risky if backend is down
     }
 
     const projs = [...get().projects, p];
@@ -147,13 +158,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const projs = get().projects.map((p) => (p.id === id ? { ...p, public_view_token: null } : p));
     set({ projects: projs });
     save(projs, get().currentProjectId);
-    set({ projects: projs });
-    save(projs, get().currentProjectId);
   },
 
   addProject: (project: Project) => {
     const projs = [project, ...get().projects];
-    // Ensure uniqueness just in case
     const uniqueProjs = Array.from(new Map(projs.map(p => [p.id, p])).values());
     set({ projects: uniqueProjs });
     save(uniqueProjs, get().currentProjectId);
@@ -166,14 +174,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const project = get().projects.find(p => p.id === id);
     if (!project) return false;
     return project.user_role === 'owner' || project.user_role === 'editor';
-  },
-
-  canShare: (projectId?: string | null) => {
-    const id = projectId || get().currentProjectId;
-    if (!id) return false;
-    const project = get().projects.find(p => p.id === id);
-    if (!project) return false;
-    return project.user_role === 'owner';
   },
 
   isOwner: (projectId?: string | null) => {

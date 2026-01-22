@@ -4,10 +4,10 @@ import { useGraphData } from "@/graph/context/GraphDataContext";
 import { useInsertCompositeNode } from "@/graph/hooks/useInsertCompositeNode";
 import { useTheme } from "@/lib/api/hooks";
 import {
-  GRAPH_LIGHT_COLORS,
-  useGraphTheme,
+    GRAPH_LIGHT_COLORS,
+    useGraphTheme,
 } from "@/lib/context/GraphThemeContext";
-import { computeBottomUpLayout } from "@/lib/layout/custom";
+import { computeElkLayout } from "@/lib/layout/elk";
 import { deriveEdgesFromCompute } from "@/lib/layout/graph";
 import { cn } from "@/lib/utils";
 import { useGraphStore } from "@/store/graphState";
@@ -16,13 +16,13 @@ import { useUIStore } from "@/store/uiState";
 import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import ReactFlow, {
-  Background,
-  BackgroundVariant,
-  Edge,
-  Node as ReactFlowNode,
-  useEdgesState,
-  useNodesState,
-  useReactFlow,
+    Background,
+    BackgroundVariant,
+    Edge,
+    Node as ReactFlowNode,
+    useEdgesState,
+    useNodesState,
+    useReactFlow,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { CustomEdge } from "./CustomEdge";
@@ -358,10 +358,10 @@ function GraphCanvasInner({ readOnly }: { readOnly?: boolean }) {
               { resolveSlug: (slug) => slugToId.get(slug) }
             )
           );
-        const pos = computeBottomUpLayout(
-          nodesData.map((n) => ({ id: n.id })),
-          derived.map((e) => ({ source: e.source, target: e.target })),
-          { nodeSpacing: 260, layerSpacing: 180 }
+        const pos = await computeElkLayout(
+          nodesData.map((n) => ({ id: n.id, width: 220, height: 120 } as any)),
+          derived.map((e) => ({ id: e.id || `${e.source}-${e.target}`, source: e.source, target: e.target } as any)),
+          { direction: 'RIGHT' }
         );
         const positions = Array.from(pos.entries()).map(([id, p]) => ({
           id,

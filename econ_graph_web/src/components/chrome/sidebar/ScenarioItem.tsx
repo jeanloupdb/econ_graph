@@ -9,6 +9,7 @@ import {
 import { useGraphData } from "@/graph/context/GraphDataContext";
 import { useGraphTheme } from "@/lib/context/GraphThemeContext";
 import { deriveEdgesFromCompute } from "@/lib/layout/graph";
+import type { Node, Scenario, ScenarioNodeOverride } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/uiState";
 import { formatNumber } from "@/utils/format";
@@ -54,8 +55,8 @@ function ParameterItem({
   scenarioId,
   canEdit = true,
 }: {
-  node: any;
-  override: any;
+  node: Node;
+  override: ScenarioNodeOverride | null | undefined;
   isActive: boolean;
   scenarioId: string;
   canEdit?: boolean;
@@ -81,6 +82,9 @@ function ParameterItem({
   const scenarioComputedValues = useScenarioStore(
     (s) => s.scenarioComputedValues
   );
+  const scenarioValuesScenarioId = useScenarioStore(
+    (s) => s.scenarioValuesScenarioId
+  );
 
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -102,10 +106,10 @@ function ParameterItem({
   if (override?.mode === "value") {
     effectiveValue = override.override_value;
   } else if (
-    scenarioComputedValues?.[scenarioId]?.[node.id]?.scenario_value !==
-    undefined
+    scenarioValuesScenarioId === scenarioId &&
+    scenarioComputedValues?.[node.id]?.scenario_value !== undefined
   ) {
-    effectiveValue = scenarioComputedValues[scenarioId][node.id].scenario_value;
+    effectiveValue = scenarioComputedValues[node.id].scenario_value;
   } else {
     effectiveValue = baselineValue;
   }
@@ -625,7 +629,7 @@ export function ScenarioItem({
   onSelect,
   canEdit = true,
 }: {
-  scenario: any;
+  scenario: Scenario;
   isActive: boolean;
   onSelect: () => void;
   canEdit?: boolean;
@@ -661,9 +665,9 @@ export function ScenarioItem({
   }, [nodes]);
 
   const overridesMap = useMemo(() => {
-    const map = new Map<string, any>();
+    const map = new Map<string, ScenarioNodeOverride>();
     if (scenario.overrides) {
-      scenario.overrides.forEach((o: any) => map.set(o.node_id, o));
+      scenario.overrides.forEach((o: ScenarioNodeOverride) => map.set(o.node_id, o));
     }
     return map;
   }, [scenario.overrides]);
@@ -779,19 +783,21 @@ export function ScenarioItem({
 
         {isExpanded && (
           <div className="pl-5 pr-2 pb-2 space-y-1 animate-in slide-in-from-top-1 duration-200">
-            {parameters.map((node) => {
-              const override = overridesMap.get(node.id);
-              return (
-                <ParameterItem
-                  key={node.id}
-                  node={node}
-                  override={override}
-                  isActive={isActive}
-                  scenarioId={scenario.id}
-                  canEdit={canEdit}
-                />
-              );
-            })}
+            {[...parameters]
+              .sort((a, b) => (a.label || a.id || "").toLowerCase().localeCompare((b.label || b.id || "").toLowerCase()))
+              .map((node) => {
+                const override = overridesMap.get(node.id);
+                return (
+                  <ParameterItem
+                    key={node.id}
+                    node={node}
+                    override={override}
+                    isActive={isActive}
+                    scenarioId={scenario.id}
+                    canEdit={canEdit}
+                  />
+                );
+              })}
             {parameters.length === 0 && (
               <div
                 className={cn(

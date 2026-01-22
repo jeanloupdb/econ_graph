@@ -35,6 +35,7 @@ interface AgentState {
   // Actions
   startTask: (taskId: string) => void;
   addLog: (log: AgentLog) => void;
+  addLogs: (logs: AgentLog[]) => void;
   setStatus: (status: AgentStatus) => void;
   setCurrentStep: (step: string) => void;
   completeTask: (projectId?: string, errorMessage?: string) => void;
@@ -64,6 +65,18 @@ export const useAgentStore = create<AgentState>((set) => ({
         currentTask: {
           ...state.currentTask,
           logs: [...state.currentTask.logs, log],
+        },
+      };
+    }),
+
+  addLogs: (newLogs: AgentLog[]) =>
+    set((state) => {
+      if (!state.currentTask) return state;
+
+      return {
+        currentTask: {
+          ...state.currentTask,
+          logs: [...state.currentTask.logs, ...newLogs],
         },
       };
     }),

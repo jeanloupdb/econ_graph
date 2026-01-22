@@ -1,161 +1,48 @@
 "use client";
 
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { ProjectPromptTooltip } from "@/components/ui/ProjectPromptTooltip";
-import { useComputeWithScenario, useScenarios } from "@/lib/api/hooks";
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useGraphTheme } from "@/lib/context/GraphThemeContext";
 import { cn } from "@/lib/utils";
 import { useProjectStore } from "@/store/projectState";
-import { useScenarioStore } from "@/store/scenarioState";
 import { useUIStore } from "@/store/uiState";
 import {
-  BarChart3,
-  ChevronDown,
   ChevronLeft,
-  Code2,
-  Eye,
-  Info,
+  ChevronRight,
+  Columns3,
+  Network,
+  Search,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
 import { SmartGraphLogo } from "../ui/SmartGraphLogo";
 import { UserMenu } from "./UserMenu";
 
 export function TopbarMinimal() {
   const { isLightMode } = useGraphTheme();
-  const setIsComputing = useUIStore((s) => s.setIsComputing);
-  const scenarioAutoStatusRef = useRef<Record<string, "idle" | "pending">>({});
-  const scenarioAutoRetryTimeoutRef = useRef<Record<string, number | null>>({});
-  const [scenarioAutoTick, setScenarioAutoTick] = useState(0);
 
-  const computeWithScenario = useComputeWithScenario();
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const projects = useProjectStore((s) => s.projects);
   const currentProject = projects.find((p) => p.id === currentProjectId);
-  const activeScenarioId = useScenarioStore((s) => s.activeScenarioId);
-  const setActiveScenario = useScenarioStore((s) => s.setActiveScenario);
-  const scenarioValuesScenarioId = useScenarioStore(
-    (s) => s.scenarioValuesScenarioId
-  );
-  const setScenarioComputedValues = useScenarioStore(
-    (s) => s.setScenarioComputedValues
-  );
-  const comparisonEnabled = useScenarioStore((s) => s.comparisonEnabled);
 
-  const { data: scenarios = [] } = useScenarios(currentProjectId);
-  const currentScenario = scenarios.find((s) => s.id === activeScenarioId);
-
-  const mode = useUIStore((s) => s.viewMode);
-  const setViewMode = useUIStore((s) => s.setViewMode);
-  const developerMode = useUIStore((s) => s.developerMode);
-  const setDeveloperMode = useUIStore((s) => s.setDeveloperMode);
-  const canEdit = useProjectStore((s) => s.canEdit)();
+  const workspaceView = useUIStore((s) => s.workspaceView);
+  const setWorkspaceView = useUIStore((s) => s.setWorkspaceView);
+  const aiAssistantOpen = useUIStore((s) => s.aiAssistantOpen);
+  const setAiAssistantOpen = useUIStore((s) => s.setAiAssistantOpen);
   const currentRole = useProjectStore((s) => s.getCurrentRole)();
-
-  // Sync viewMode when activeScenarioId changes
-  useEffect(() => {
-    if (activeScenarioId && mode !== "scenario" && mode !== "comparison") {
-      setViewMode("scenario");
-    }
-  }, [activeScenarioId, mode, setViewMode]);
-
-  // Auto-compute logic for scenarios
-  useEffect(() => {
-    const clearAllRetryTimeouts = () => {
-      Object.values(scenarioAutoRetryTimeoutRef.current).forEach(
-        (timeoutId) => {
-          if (timeoutId) clearTimeout(timeoutId);
-        }
-      );
-      scenarioAutoRetryTimeoutRef.current = {};
-    };
-
-    if (
-      !activeScenarioId ||
-      !currentProjectId ||
-      comparisonEnabled ||
-      computeWithScenario.isPending
-    ) {
-      scenarioAutoStatusRef.current = {};
-      clearAllRetryTimeouts();
-      return;
-    }
-
-    if (scenarioValuesScenarioId === activeScenarioId) {
-      scenarioAutoStatusRef.current[activeScenarioId] = "idle";
-      const timeoutId = scenarioAutoRetryTimeoutRef.current[activeScenarioId];
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        scenarioAutoRetryTimeoutRef.current[activeScenarioId] = null;
-      }
-      return;
-    }
-
-    const status = scenarioAutoStatusRef.current[activeScenarioId] ?? "idle";
-    if (status === "pending") return;
-
-    const scenarioIdForRun = activeScenarioId;
-    scenarioAutoStatusRef.current[scenarioIdForRun] = "pending";
-    let cancelled = false;
-
-    const runPreload = async () => {
-      try {
-        const result = await computeWithScenario.mutateAsync({
-          projectId: currentProjectId || undefined,
-          scenarioId: scenarioIdForRun,
-        });
-        if (cancelled) return;
-        setScenarioComputedValues(scenarioIdForRun, result.results);
-        scenarioAutoStatusRef.current[scenarioIdForRun] = "idle";
-        const timeoutId = scenarioAutoRetryTimeoutRef.current[scenarioIdForRun];
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-          scenarioAutoRetryTimeoutRef.current[scenarioIdForRun] = null;
-        }
-      } catch (error) {
-        if (cancelled) return;
-        console.error("❌ Failed to preload scenario values:", error);
-        scenarioAutoStatusRef.current[scenarioIdForRun] = "idle";
-        if (!scenarioAutoRetryTimeoutRef.current[scenarioIdForRun]) {
-          scenarioAutoRetryTimeoutRef.current[scenarioIdForRun] =
-            window.setTimeout(() => {
-              scenarioAutoRetryTimeoutRef.current[scenarioIdForRun] = null;
-              setScenarioAutoTick((tick) => tick + 1);
-            }, 5000);
-        }
-      }
-    };
-
-    void runPreload();
-
-    return () => {
-      cancelled = true;
-      if (scenarioAutoStatusRef.current[scenarioIdForRun] === "pending") {
-        scenarioAutoStatusRef.current[scenarioIdForRun] = "idle";
-      }
-    };
-  }, [
-    activeScenarioId,
-    currentProjectId,
-    comparisonEnabled,
-    scenarioValuesScenarioId,
-    computeWithScenario,
-    setScenarioComputedValues,
-    scenarioAutoTick,
-  ]);
 
   return (
     <div
       className={cn(
-        "h-16 flex items-center justify-between px-6 border-b shrink-0 relative z-30",
-        isLightMode
-          ? "bg-zinc-300 border-zinc-500"
-          : "bg-[#0a0a0b] border-white/[0.06]"
+        "h-16 flex items-center justify-between px-6 shrink-0 relative z-30",
+        workspaceView === 'causal'
+          ? "bg-transparent border-b-0"
+          : isLightMode
+            ? "bg-zinc-300 border-b border-zinc-500"
+            : "bg-[#0a0a0b] border-b border-white/[0.06]"
       )}
     >
       {/* Left side */}
@@ -191,151 +78,115 @@ export function TopbarMinimal() {
           <span className="truncate max-w-[240px]">
             {currentProject?.name || "Projet"}
           </span>
-          {(currentProject?.generation_prompt ||
-            currentProject?.description) && (
-            <ProjectPromptTooltip
-              generationPrompt={currentProject?.generation_prompt}
-              description={currentProject?.description}
-              side="bottom"
-              align="start"
-              className={cn(
-                "flex-shrink-0 p-0.5 rounded-md transition-all duration-200",
-                isLightMode
-                  ? "text-zinc-500 hover:text-violet-600 hover:bg-violet-50"
-                  : "text-zinc-500 hover:text-violet-400 hover:bg-violet-500/10"
-              )}
-            >
-              <Info className="h-3.5 w-3.5" />
-            </ProjectPromptTooltip>
-          )}
-
-          {/* Scenario indicator when in scenario mode */}
-          {mode === "scenario" && activeScenarioId && (
-            <>
-              <span className={isLightMode ? "text-zinc-600" : "text-zinc-500"}>
-                /
-              </span>
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 rounded-lg",
-                    isLightMode
-                      ? "text-blue-600 text-sm font-medium"
-                      : "text-blue-500 text-sm font-medium",
-                    isLightMode ? "hover:bg-zinc-200" : "hover:bg-white/[0.04]",
-                    "transition-colors"
-                  )}
-                >
-                  <BarChart3 className="h-4 w-4" />
-                  <span className="truncate max-w-[140px]">
-                    {currentScenario?.name || "Scénario"}
-                  </span>
-                  <ChevronDown className="h-4 w-4 opacity-60" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  {scenarios.map((s) => (
-                    <DropdownMenuItem
-                      key={s.id}
-                      onClick={async () => {
-                        setActiveScenario(s.id);
-                        try {
-                          setIsComputing(true);
-                          const result = await computeWithScenario.mutateAsync({
-                            projectId: currentProjectId || undefined,
-                            scenarioId: s.id,
-                          });
-                          setScenarioComputedValues(s.id, result.results);
-                        } catch (error) {
-                          console.error("Failed to compute scenario:", error);
-                        } finally {
-                          setIsComputing(false);
-                        }
-                      }}
-                      className={
-                        s.id === activeScenarioId ? "bg-blue-500/10" : ""
-                      }
-                    >
-                      {s.name}
-                    </DropdownMenuItem>
-                  ))}
-                  {scenarios.length === 0 && (
-                    <div className="px-3 py-2 text-sm text-zinc-500">
-                      Aucun scénario
-                    </div>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </>
-          )}
         </h1>
+      </div>
+
+      {/* Center - AI Search Bar */}
+      <div className="flex-1 flex justify-center px-8">
+        {currentRole !== "public" && (
+          <button
+            onClick={() => setAiAssistantOpen(!aiAssistantOpen)}
+            className={cn(
+              "group flex items-center gap-3 w-full max-w-xl h-11 px-5 rounded-2xl text-sm transition-all duration-300",
+              aiAssistantOpen
+                ? isLightMode
+                  ? "bg-violet-100/80 border border-violet-200 text-violet-900 hover:bg-violet-100"
+                  : "bg-violet-500/10 border border-violet-500/20 text-violet-100 hover:bg-violet-500/20"
+                : isLightMode
+                  ? "bg-white/80 backdrop-blur-sm border border-zinc-200/80 hover:border-zinc-300 hover:shadow-md hover:bg-white"
+                  : "bg-zinc-800/50 backdrop-blur-sm border border-zinc-700/50 hover:border-zinc-600 hover:bg-zinc-800/80"
+            )}
+          >
+            {aiAssistantOpen ? (
+               <Network className={cn(
+                "h-4 w-4 shrink-0 transition-colors duration-200",
+                isLightMode ? "text-violet-600" : "text-violet-400"
+               )} />
+            ) : (
+              <Search className={cn(
+                "h-4 w-4 shrink-0 transition-colors duration-200",
+                isLightMode
+                  ? "text-zinc-400 group-hover:text-zinc-600"
+                  : "text-zinc-500 group-hover:text-zinc-300"
+              )} />
+            )}
+            
+            <span className={cn(
+              "flex-1 text-left transition-colors duration-200 font-medium",
+              aiAssistantOpen
+                ? isLightMode ? "text-violet-900" : "text-violet-100"
+                : isLightMode
+                  ? "text-zinc-400 group-hover:text-zinc-600 font-normal"
+                  : "text-zinc-500 group-hover:text-zinc-300 font-normal"
+            )}>
+              {aiAssistantOpen ? "Fermer l'assistant" : "Demandez à l'IA..."}
+            </span>
+            <kbd className={cn(
+              "hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium transition-colors",
+              aiAssistantOpen
+                ? isLightMode
+                  ? "bg-violet-200/50 text-violet-700"
+                  : "bg-violet-500/20 text-violet-300"
+                : isLightMode
+                  ? "bg-zinc-100 text-zinc-400 group-hover:bg-zinc-200 group-hover:text-zinc-500"
+                  : "bg-zinc-700/50 text-zinc-500 group-hover:bg-zinc-700 group-hover:text-zinc-400"
+            )}>
+              {aiAssistantOpen ? "Échap" : "Smart Edit"}
+            </kbd>
+          </button>
+        )}
       </div>
 
       {/* Right side */}
       <div className="flex items-center gap-3">
-        {/* View/Edit Toggle - only show if user can edit */}
-        {canEdit ? (
-          <div
-            className={cn(
-              "flex items-center h-9 p-1 rounded-lg",
-              isLightMode ? "bg-zinc-200" : "bg-white/[0.04]"
-            )}
-          >
-            <button
-              onClick={() => setDeveloperMode(false)}
-              className={cn(
-                "flex items-center gap-2 h-full px-3 rounded-md text-sm font-medium transition-all",
-                !developerMode
-                  ? isLightMode
-                    ? "bg-zinc-300 text-zinc-900 shadow-sm"
-                    : "bg-white/[0.08] text-zinc-100 shadow-sm"
-                  : isLightMode
-                  ? "text-zinc-600 hover:text-zinc-800"
-                  : "text-zinc-400 hover:text-zinc-200"
+
+        {/* View Toggle Button */}
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setWorkspaceView(workspaceView === 'causal' ? 'graph' : 'causal')}
+                className={cn(
+                  "group flex items-center gap-2 h-9 px-3 rounded-lg text-sm font-medium border transition-all duration-150",
+                  isLightMode
+                    ? "text-zinc-600 bg-zinc-200 border-zinc-300 hover:bg-zinc-300 hover:border-zinc-400"
+                    : "text-zinc-300 bg-zinc-800 border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600"
+                )}
+              >
+                {workspaceView === 'causal' ? (
+                  <>
+                    <Network className="h-4 w-4" />
+                    <span>Graphe</span>
+                  </>
+                ) : (
+                  <>
+                    <Columns3 className="h-4 w-4" />
+                    <span>Colonnes</span>
+                  </>
+                )}
+                <ChevronRight className={cn(
+                  "h-3.5 w-3.5 transition-transform duration-150 group-hover:translate-x-0.5",
+                  isLightMode ? "text-zinc-400" : "text-zinc-500"
+                )} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-[220px] text-center">
+              {workspaceView === 'causal' ? (
+                <p className="text-xs">
+                  <span className="font-medium">Vue Graphe</span>
+                  <br />
+                  <span className="text-zinc-400">Vue technique pour développeurs et profils avancés</span>
+                </p>
+              ) : (
+                <p className="text-xs">
+                  <span className="font-medium">Vue Colonnes</span>
+                  <br />
+                  <span className="text-zinc-400">Vue simplifiée par étapes causales</span>
+                </p>
               )}
-            >
-              <Eye className="h-4 w-4" />
-              <span>Vue</span>
-            </button>
-            <button
-              onClick={() => setDeveloperMode(true)}
-              className={cn(
-                "flex items-center gap-2 h-full px-3 rounded-md text-sm font-medium transition-all",
-                developerMode
-                  ? isLightMode
-                    ? "bg-zinc-300 text-zinc-900 shadow-sm"
-                    : "bg-white/[0.08] text-zinc-100 shadow-sm"
-                  : isLightMode
-                  ? "text-zinc-600 hover:text-zinc-800"
-                  : "text-zinc-400 hover:text-zinc-200"
-              )}
-            >
-              <Code2 className="h-4 w-4" />
-              <span>Éditer</span>
-            </button>
-          </div>
-        ) : (
-          <div
-            className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded-lg",
-              isLightMode ? "bg-zinc-200" : "bg-white/[0.04]"
-            )}
-          >
-            <Eye
-              className={cn(
-                "h-4 w-4",
-                isLightMode ? "text-zinc-600" : "text-zinc-400"
-              )}
-            />
-            <span
-              className={cn(
-                "text-sm font-medium",
-                isLightMode ? "text-zinc-600" : "text-zinc-400"
-              )}
-            >
-              Mode Vue
-            </span>
-          </div>
-        )}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         {/* User Menu */}
         <UserMenu />

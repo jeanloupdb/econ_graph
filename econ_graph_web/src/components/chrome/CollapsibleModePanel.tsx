@@ -8,7 +8,7 @@ import {
   useCreateScenario,
   useScenarios,
 } from "@/lib/api/hooks";
-import { useGraphTheme, GRAPH_LIGHT_COLORS } from "@/lib/context/GraphThemeContext";
+import { GRAPH_LIGHT_COLORS, useGraphTheme } from "@/lib/context/GraphThemeContext";
 import type { CompareNodeResult, ViewMode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useProjectStore } from "@/store/projectState";
@@ -22,7 +22,7 @@ import {
   GitCompare,
   Home,
   Minimize2,
-  Plus,
+  Plus
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -34,7 +34,7 @@ import { ScenarioExplorer } from "./sidebar/ScenarioExplorer";
 import { StandardMenuContent } from "./sidebar/StandardMenuContent";
 
 const MODE_CONFIG: Record<
-  ViewMode,
+  Exclude<ViewMode, 'columns'>,  // Exclude columns from the config
   {
     icon: typeof Home;
     label: string;

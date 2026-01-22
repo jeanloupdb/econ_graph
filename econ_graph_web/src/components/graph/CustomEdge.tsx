@@ -1,9 +1,9 @@
 'use client';
 
-import { BaseEdge, EdgeLabelRenderer, EdgeProps, getBezierPath, useReactFlow } from 'reactflow';
 import { Badge } from '@/components/ui/badge';
-import { Calculator } from 'lucide-react';
 import { useUIStore } from '@/store/uiState';
+import { Calculator } from 'lucide-react';
+import { BaseEdge, EdgeLabelRenderer, EdgeProps, getSmoothStepPath, useReactFlow } from 'reactflow';
 
 export function CustomEdge({
   id,
@@ -21,14 +21,15 @@ export function CustomEdge({
   const { getEdges } = useReactFlow();
   const setSelectedEdgeIds = useUIStore((state) => state.setSelectedEdgeIds);
 
-  // Standard edge rendering
-  const [edgePath, labelX, labelY] = getBezierPath({
+  // Standard edge rendering - use SmoothStep for circuit-like orthogonal edges
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     sourcePosition,
     targetX,
     targetY,
     targetPosition,
+    borderRadius: 20, // Nice rounded corners
   });
 
   const isAlgorithmLabel = typeof label === 'string' && label.includes('Algorithm');

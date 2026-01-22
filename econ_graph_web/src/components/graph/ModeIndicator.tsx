@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import { useScenarioStore } from "@/store/scenarioState";
 import { useUIStore } from "@/store/uiState";
-import { BarChart3, GitCompare, Home } from "lucide-react";
+import { BarChart3, Columns, GitCompare, Home } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 const MODE_CONFIG = {
@@ -30,6 +30,14 @@ const MODE_CONFIG = {
     color: "bg-amber-500 dark:bg-amber-400",
     textColor: "text-white dark:text-zinc-900",
     description: "Comparer deux scénarios",
+  },
+  columns: {
+    icon: Columns,
+    label: "Colonnes",
+    shortLabel: "Cols",
+    color: "bg-emerald-500 dark:bg-emerald-400",
+    textColor: "text-white dark:text-zinc-900",
+    description: "Vue tabulaire en colonnes",
   },
 };
 
@@ -59,7 +67,7 @@ export function ModeIndicator() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleModeChange = (newMode: "baseline" | "scenario" | "comparison") => {
+  const handleModeChange = (newMode: "baseline" | "scenario" | "comparison" | "columns") => {
     if (nodeEditorMode) return;
     
     setViewMode(newMode);

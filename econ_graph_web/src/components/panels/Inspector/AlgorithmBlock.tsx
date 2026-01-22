@@ -2,9 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import type { NodeToneKey } from "@/lib/api/hooks";
+import { formatPythonCode } from "@/lib/python-formatter";
 import Editor from '@monaco-editor/react';
 import { Copy } from "lucide-react";
-import { useState } from "react";
+import { useMemo } from "react";
 import { toast } from "sonner";
 
 interface AlgorithmBlockProps {
@@ -22,9 +23,11 @@ interface AlgorithmBlockProps {
 }
 
 export function AlgorithmBlock({ code }: AlgorithmBlockProps) {
-  const [localCode] = useState(code ? String(code).trim() : "");
+  const normalized = useMemo(() => {
+    return code ? formatPythonCode(String(code).trim()) : "";
+  }, [code]);
 
-  const normalized = localCode || "";
+
   if (!normalized) {
     return null;
   }

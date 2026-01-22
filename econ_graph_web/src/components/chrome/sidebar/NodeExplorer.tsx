@@ -470,7 +470,18 @@ export function NodeExplorer({ onEditNode, searchQuery }: { onEditNode?: (id: st
       }
     });
 
-    return { parameters: params, results: res, intermediates: inter };
+    // Stable sort helper
+    const sortNodes = (a: any, b: any) => {
+        const labelA = (a.label || a.data?.label || a.id).toLowerCase();
+        const labelB = (b.label || b.data?.label || b.id).toLowerCase();
+        return labelA.localeCompare(labelB);
+    };
+
+    return { 
+        parameters: params.sort(sortNodes), 
+        results: res.sort(sortNodes), 
+        intermediates: inter.sort(sortNodes) 
+    };
   }, [nodes, edges, searchQuery]);
 
   const hasSelectedParam = useMemo(() => parameters.some(n => selectedNodeIds.includes(n.id)), [parameters, selectedNodeIds]);

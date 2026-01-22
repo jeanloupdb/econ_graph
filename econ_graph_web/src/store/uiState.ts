@@ -126,6 +126,10 @@ interface UIState {
   };
   setNodeCreationDraft: (draft: Partial<UIState['nodeCreationDraft']>) => void;
   resetNodeCreationDraft: () => void;
+
+  // Workspace View (causal, graph)
+  workspaceView: 'causal' | 'graph';
+  setWorkspaceView: (view: 'causal' | 'graph') => void;
 }
 
 let highlightTimeout: number | null = null;
@@ -133,7 +137,7 @@ let highlightTimeout: number | null = null;
 export const useUIStore = create<UIState>((set) => ({
   // Initial state
   mode: 'select',
-  viewMode: 'baseline',
+  viewMode: 'columns',
   inspectorOpen: true,
   scenarioPanelOpen: false,
   leftSidebarOpen: true,
@@ -155,6 +159,7 @@ export const useUIStore = create<UIState>((set) => ({
   isComputing: false,
   editNodeModalOpen: false,
   developerMode: true,
+  workspaceView: 'causal',
 
   // Node Editor State
   nodeEditorMode: null,
@@ -191,6 +196,20 @@ export const useUIStore = create<UIState>((set) => ({
   setMode: (mode) => set({ mode }),
   setViewMode: (mode) => set({ viewMode: mode }),
   setDeveloperMode: (mode) => set({ developerMode: mode }),
+  setWorkspaceView: (view) => set({
+    workspaceView: view,
+    // When switching views, hide inspector and clear selections
+    inspectorOpen: false,
+    scenarioPanelOpen: false,
+    selectedNodeId: null,
+    selectedEdgeId: null,
+    selectedEdgeIds: [],
+    panelStack: [],
+    // Additionally hide floating panel when going to graph mode
+    ...(view === 'graph' ? {
+      floatingPanelOpen: false,
+    } : {}),
+  }),
   setEditNodeModalOpen: (open) => set({ editNodeModalOpen: open }),
   toggleInspector: () =>
     set((state) => ({

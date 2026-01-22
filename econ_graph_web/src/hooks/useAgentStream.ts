@@ -4,9 +4,9 @@
 
 import { API_BASE_URL, apiClient } from "@/lib/api/client";
 import {
-  useAgentStore,
-  type AgentLog,
-  type AgentStatus,
+    useAgentStore,
+    type AgentLog,
+    type AgentStatus,
 } from "@/store/agentState";
 import { useEffect, useRef } from "react";
 
@@ -34,55 +34,78 @@ export function useAgentStream(
     console.log("[Agent Stream] Connecting to:", url);
     const eventSource = new EventSource(url);
     eventSourceRef.current = eventSource;
+    
+    // Batching system
+    let logBuffer: AgentLog[] = [];
+    let flushTimeout: NodeJS.Timeout | null = null;
+
+    const flushLogs = () => {
+      if (logBuffer.length > 0) {
+        const store = useAgentStore.getState();
+        store.addLogs([...logBuffer]);
+        logBuffer = [];
+      }
+      flushTimeout = null;
+    };
 
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data) as AgentLog;
 
-        console.log("[Agent Stream] Received:", data);
+        // Ajouter au buffer
+        logBuffer.push(data);
 
-        // Access store directly without hooks to avoid re-render issues
-        const store = useAgentStore.getState();
-
-        // Ajouter le log
-        store.addLog(data);
-
-        // Mettre à jour le statut selon le type de log
-        if (data.type === "start") {
-          store.setStatus("initializing");
+        // Planifier le flush si pas déjà fait
+        if (!flushTimeout) {
+          flushTimeout = setTimeout(flushLogs, 100);
         }
 
-        // Détection de l'étape actuelle
-        if (data.step) {
-          store.setCurrentStep(data.step);
+        // Pour les événements critiques, flush immédiat pour garantir la réactivité
+        if (data.type === 'start' || data.type === 'complete' || data.step) {
+          if (flushTimeout) clearTimeout(flushTimeout);
+          flushLogs();
 
-          // Mapper les steps aux statuts (pipeline optimisé - plus de planificateur)
-          const stepToStatus: Record<string, AgentStatus> = {
-            analyste: "analyzing",
-            executeur: "executing",
-            validateur: "validating",
-            correcteur: "correcting",
-          };
+          // Traitement des changements d'état (après le flush des logs)
+          const store = useAgentStore.getState();
 
-          const status = stepToStatus[data.step];
-          if (status) {
-            store.setStatus(status);
+          // Mettre à jour le statut selon le type de log
+          if (data.type === "start") {
+            store.setStatus("initializing");
+          }
+  
+          // Détection de l'étape actuelle
+          if (data.step) {
+            store.setCurrentStep(data.step);
+  
+            // Mapper les steps aux statuts (pipeline optimisé - plus de planificateur)
+            const stepToStatus: Record<string, AgentStatus> = {
+              analyste: "analyzing",
+              executeur: "executing",
+              validateur: "validating",
+              correcteur: "correcting",
+            };
+  
+            const status = stepToStatus[data.step];
+            if (status) {
+              store.setStatus(status);
+            }
+          }
+  
+          // Gestion de la complétion
+          if (data.type === "complete") {
+            const isSuccess = (data as any).status === "success";
+            const projectId = (data as any).project_id;
+            const errorMessage = isSuccess ? undefined : data.message;
+  
+            store.completeTask(projectId, errorMessage);
+            eventSource.close();
+  
+            if (optionsRef.current?.onComplete) {
+              optionsRef.current.onComplete(projectId, errorMessage);
+            }
           }
         }
 
-        // Gestion de la complétion
-        if (data.type === "complete") {
-          const isSuccess = (data as any).status === "success";
-          const projectId = (data as any).project_id;
-          const errorMessage = isSuccess ? undefined : data.message;
-
-          store.completeTask(projectId, errorMessage);
-          eventSource.close();
-
-          if (optionsRef.current?.onComplete) {
-            optionsRef.current.onComplete(projectId, errorMessage);
-          }
-        }
       } catch (error) {
         console.error("[Agent Stream] Error parsing message:", error);
       }
@@ -98,6 +121,9 @@ export function useAgentStream(
       if (eventSourceRef.current) {
         console.log("[Agent Stream] Closing connection");
         eventSourceRef.current.close();
+      }
+      if (flushTimeout) {
+        clearTimeout(flushTimeout);
       }
     };
   }, [taskId]);
