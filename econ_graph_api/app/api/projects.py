@@ -1,6 +1,6 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Dict, Optional, Set
 from datetime import datetime
 from app.core.db import get_db
@@ -22,6 +22,7 @@ from app.schemas.project import (
 )
 from app.models.node import Node
 from app.api.nodes import _collect_composite_roots, _extract_composite_root_info
+from app.api.insights_trigger import schedule_project_insights
 from app.schemas.composite import CompositeGraphData
 from pydantic import ValidationError
 from sqlalchemy import text, select, or_
@@ -321,12 +322,22 @@ def _flatten_composite_root_entry(
 
 @router.get("", response_model=List[ProjectOut])
 def list_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    projects = db.query(Project).outerjoin(ProjectCollaborator).filter(
+    # Note: Can't use .distinct() with JSON columns in PostgreSQL
+    # So we fetch all and deduplicate manually
+    projects_query = db.query(Project).options(joinedload(Project.collaborators)).outerjoin(ProjectCollaborator).filter(
         or_(
             Project.user_id == current_user.id,
             ProjectCollaborator.user_id == current_user.id
         )
-    ).order_by(Project.updated_at.desc()).distinct().all()
+    ).order_by(Project.updated_at.desc()).all()
+    
+    # Deduplicate by project ID
+    seen_ids = set()
+    projects = []
+    for p in projects_query:
+        if p.id not in seen_ids:
+            seen_ids.add(p.id)
+            projects.append(p)
     
     # Enrich with user_role
     enriched = []
@@ -341,17 +352,31 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
             ).first()
             user_role = collab.role if collab else None
         
+        owner_data = None
+        if p.owner:
+            owner_data = {
+                "id": p.owner.id,
+                "username": p.owner.username,
+                "email": p.owner.email
+            }
+
+        collaborator_count = len(p.collaborators or [])
+
         # Convert to dict and add user_role
         project_dict = {
             "id": p.id,
             "name": p.name,
+            "status": getattr(p, 'status', 'completed'),  # Default for old projects
             "created_at": p.created_at,
             "updated_at": p.updated_at,
             "public_view_token": p.public_view_token,
             "user_id": p.user_id,
             "user_role": user_role,
+            "collaborator_count": collaborator_count,
+            "wizard_state": getattr(p, 'wizard_state', None),
             "generation_prompt": p.generation_prompt,
-            "description": p.description
+            "description": p.description,
+            "owner": owner_data
         }
         enriched.append(project_dict)
     
@@ -359,13 +384,20 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
 
 
 @router.post("", response_model=ProjectOut, status_code=201)
-def create_project(payload: ProjectCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_project(
+    payload: ProjectCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    background_tasks: BackgroundTasks = None,
+):
     if db.query(Project).filter(Project.id == payload.id).first():
         raise HTTPException(status_code=409, detail="Project id already exists")
     p = Project(
         id=payload.id, 
         name=payload.name, 
         user_id=current_user.id,
+        status=payload.status,
+        wizard_state=payload.wizard_state,
         created_at=datetime.utcnow(), 
         updated_at=datetime.utcnow(),
         generation_prompt=payload.generation_prompt,
@@ -373,16 +405,20 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db), curren
     )
     db.add(p)
     db.flush()
+    schedule_project_insights(db, p.id, current_user.id, background_tasks)
     
     # Return with user_role
     return {
         "id": p.id,
         "name": p.name,
+        "status": p.status,
         "created_at": p.created_at,
         "updated_at": p.updated_at,
         "public_view_token": p.public_view_token,
         "user_id": p.user_id,
         "user_role": "owner",
+        "collaborator_count": 0,
+        "wizard_state": p.wizard_state,
         "generation_prompt": p.generation_prompt,
         "description": p.description
     }
@@ -412,15 +448,73 @@ def _get_project_with_access(db: Session, project_id: str, user: User, required_
     return p
 
 
+@router.get("/{project_id}", response_model=ProjectOut)
+def get_project(project_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    p = _get_project_with_access(db, project_id, current_user, required_role="viewer")
+    
+    # Determine user role
+    user_role = "viewer"
+    if p.user_id == current_user.id:
+        user_role = "owner"
+    else:
+        collab = db.query(ProjectCollaborator).filter(
+            ProjectCollaborator.project_id == p.id,
+            ProjectCollaborator.user_id == current_user.id
+        ).first()
+        if collab:
+            user_role = collab.role
+
+    owner_data = None
+    if p.owner:
+       owner_data = {
+          "id": p.owner.id, 
+          "username": p.owner.username, 
+          "email": p.owner.email
+       }
+
+    collaborator_count = db.query(ProjectCollaborator).filter(
+        ProjectCollaborator.project_id == p.id
+    ).count()
+
+    return {
+        "id": p.id,
+        "name": p.name,
+        "status": p.status,
+        "created_at": p.created_at,
+        "updated_at": p.updated_at,
+        "public_view_token": p.public_view_token,
+        "user_id": p.user_id,
+        "user_role": user_role,
+        "collaborator_count": collaborator_count,
+        "wizard_state": p.wizard_state,
+        "generation_prompt": p.generation_prompt,
+        "description": p.description,
+        "owner": owner_data
+    }
+
+
 @router.patch("/{project_id}", response_model=ProjectOut)
-def update_project(project_id: str, payload: ProjectUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def update_project(
+    project_id: str,
+    payload: ProjectUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    background_tasks: BackgroundTasks = None,
+):
     p = _get_project_with_access(db, project_id, current_user, required_role="editor")
     
     data = payload.model_dump(exclude_unset=True)
     if 'name' in data and data['name']:
         p.name = data['name']
+    if 'status' in data and data['status']:
+        p.status = data['status']
+    if 'wizard_state' in data:
+        p.wizard_state = data['wizard_state']
+    if 'description' in data:
+        p.description = data['description']
     p.updated_at = datetime.utcnow()
     db.flush()
+    schedule_project_insights(db, p.id, current_user.id, background_tasks)
     
     # Determine user role
     if p.user_id == current_user.id:
@@ -432,14 +526,23 @@ def update_project(project_id: str, payload: ProjectUpdate, db: Session = Depend
         ).first()
         user_role = collab.role if collab else None
     
+    collaborator_count = db.query(ProjectCollaborator).filter(
+        ProjectCollaborator.project_id == p.id
+    ).count()
+
     return {
         "id": p.id,
         "name": p.name,
+        "status": p.status,
         "created_at": p.created_at,
         "updated_at": p.updated_at,
         "public_view_token": p.public_view_token,
         "user_id": p.user_id,
-        "user_role": user_role
+        "user_role": user_role,
+        "collaborator_count": collaborator_count,
+        "wizard_state": p.wizard_state,
+        "generation_prompt": p.generation_prompt,
+        "description": p.description
     }
 
 
@@ -453,6 +556,13 @@ def delete_project(project_id: str, db: Session = Depends(get_db), current_user:
         raise HTTPException(status_code=403, detail="Only the project owner can delete it")
 
     # Deleting a project should cascade delete nodes/edges via FK constraints
+    # Explicitly delete conversation to avoid "null value in column project_id" error
+    # if SQLAlchemy tries to nullify relationships before deletion.
+    db.execute(
+        text("DELETE FROM project_conversation WHERE project_id = :pid"),
+        {"pid": project_id}
+    )
+    
     db.delete(p)
     db.flush()
     return
@@ -472,6 +582,10 @@ def share_project(project_id: str, db: Session = Depends(get_db), current_user: 
         p.public_view_token = secrets.token_urlsafe(32)
         db.flush()
     
+    collaborator_count = db.query(ProjectCollaborator).filter(
+        ProjectCollaborator.project_id == p.id
+    ).count()
+
     return {
         "id": p.id,
         "name": p.name,
@@ -479,7 +593,8 @@ def share_project(project_id: str, db: Session = Depends(get_db), current_user: 
         "updated_at": p.updated_at,
         "public_view_token": p.public_view_token,
         "user_id": p.user_id,
-        "user_role": "owner"
+        "user_role": "owner",
+        "collaborator_count": collaborator_count
     }
 
 
@@ -495,6 +610,10 @@ def revoke_project_share(project_id: str, db: Session = Depends(get_db), current
     p.public_view_token = None
     db.flush()
     
+    collaborator_count = db.query(ProjectCollaborator).filter(
+        ProjectCollaborator.project_id == p.id
+    ).count()
+
     return {
         "id": p.id,
         "name": p.name,
@@ -502,7 +621,8 @@ def revoke_project_share(project_id: str, db: Session = Depends(get_db), current
         "updated_at": p.updated_at,
         "public_view_token": p.public_view_token,
         "user_id": p.user_id,
-        "user_role": "owner"
+        "user_role": "owner",
+        "collaborator_count": collaborator_count
     }
 
 
@@ -840,7 +960,12 @@ def _sanitize_backref_artifacts(code: str) -> str:
 
 
 @router.post("/{project_id}/normalize-compute", response_model=dict)
-def normalize_compute(project_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def normalize_compute(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    background_tasks: BackgroundTasks = None,
+):
     """Normalize compute definitions to explicit param signatures and remove kwargs usages.
 
     For each node in the project with a computation definition:
@@ -886,6 +1011,7 @@ def normalize_compute(project_id: str, db: Session = Depends(get_db), current_us
                 db.add(Edge(id=eid, source=src, target=n.id, label=None, edge_type='dependency', rule_id=None, project_id=project_id))
 
     db.flush()
+    schedule_project_insights(db, project_id, current_user.id, background_tasks)
     return {"updated": total_updated}
 
 
@@ -903,7 +1029,12 @@ def _extract_params_from_compute(code: str) -> list[str]:
 
 
 @router.post("/{project_id}/rebuild-edges", response_model=dict)
-def rebuild_edges(project_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def rebuild_edges(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    background_tasks: BackgroundTasks = None,
+):
     """Rebuild dependency edges for all nodes from their compute() param lists."""
     # Editor access required
     _get_project_with_access(db, project_id, current_user, required_role="editor")
@@ -945,6 +1076,7 @@ def rebuild_edges(project_id: str, db: Session = Depends(get_db), current_user: 
                     db.add(Edge(id=eid, source=src, target=n.id, label=None, edge_type='dependency', rule_id=None, project_id=project_id))
                     created += 1
     db.flush()
+    schedule_project_insights(db, project_id, current_user.id, background_tasks)
     return {"edges_created": created, "edges_deleted": deleted}
 def _normalize_identifier(value: str | None) -> str:
     if not value:

@@ -12,6 +12,9 @@ from app.api.providers import router as providers_router
 from app.api.scenarios import router as scenarios_router
 from app.api.auth import router as auth_router
 from app.api.ai import router as ai_router
+from app.api.export import router as export_router
+from app.api.suggestions import router as suggestions_router
+from app.api.notifications import router as notifications_router
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
 from app.core.db import SessionLocal, Base, engine
@@ -55,6 +58,9 @@ app.include_router(providers_router)
 app.include_router(scenarios_router)
 app.include_router(composites_router)
 app.include_router(ai_router)
+app.include_router(export_router)
+app.include_router(suggestions_router)
+app.include_router(notifications_router)
 app.include_router(viewer_router)
 
 
@@ -152,6 +158,7 @@ async def startup_event():
             db.close()
     except Exception as e:
         logger.warning("Could not ensure default project", error=str(e))
+
 
 
 @app.on_event("shutdown")

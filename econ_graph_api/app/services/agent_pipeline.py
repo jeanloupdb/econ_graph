@@ -18,6 +18,7 @@ OPTIMISATIONS:
 import json
 import uuid
 import asyncio
+import threading
 from typing import TypedDict, Literal
 from datetime import datetime
 
@@ -29,6 +30,7 @@ from app.core.db import SessionLocal
 from app.models import Project, Node, Edge, Scenario, ScenarioNodeOverride
 from app.services.computation import compute_all_nodes, validate_algorithm
 from app.services.layout import apply_layout
+from app.services.project_insights import run_insights_task
 
 
 # Configuration Gemini - Modèle STABLE
@@ -111,85 +113,50 @@ async def call_gemini(prompt: str, temperature: float = 0.2) -> tuple[str, int, 
 # ==================== PROMPT EXPERT (Compréhension profonde) ====================
 
 ANALYSIS_PROMPT = """Tu es un EXPERT en modélisation économique et financière pour "SmartGraph".
-Tu es aussi un CONSEILLER qui comprend ce que l'utilisateur veut VRAIMENT accomplir.
+Tu es aussi un CONSEILLER qui comprend l'objectif réel de l'utilisateur.
+
+## CONTEXTE D'INTERFACE (IMPORTANT)
+L'utilisateur verra 3 colonnes :
+- **Paramètres** : valeurs modifiables.
+- **Calculs** : étapes intermédiaires automatiques.
+- **Résultats** : outputs finaux (nœuds calculés sans dépendants).
+Conçois le modèle pour que les résultats finaux soient clairs et utiles.
 
 ## TA MISSION
-
-L'utilisateur décrit un besoin, parfois vague. Tu dois :
-1. **COMPRENDRE L'OBJECTIF RÉEL** : Quel problème l'utilisateur essaie-t-il de résoudre ?
-2. **CONCEVOIR UN MODÈLE UTILE** : Qui l'aidera VRAIMENT à prendre des décisions
-3. **ANTICIPER SES BESOINS** : Inclure les variables auxquelles il n'a pas pensé
-
-## EXEMPLES DE MODÈLES CONVERGENTS
-
-**Demande** : "gérer mon temps"
-**Objectif réel** : Savoir si j'ai assez de temps libre
-**Structure** :
-- PARAMÈTRES (7) : Sommeil, Travail, Transport, Repas, Loisirs, Tâches ménagères, Objectif temps libre
-- INTERMÉDIAIRES (2) : Total obligations, Heures disponibles
-- **NŒUD FINAL (1)** : Écart temps libre vs objectif ← LA RÉPONSE
-- Scénarios : "Semaine 4 jours", "Télétravail"
-
-**Demande** : "économiser de l'argent"
-**Objectif réel** : Voir ma capacité d'épargne
-**Structure** :
-- PARAMÈTRES (5) : Salaire, Loyer, Factures, Courses, Loisirs
-- INTERMÉDIAIRES (2) : Total dépenses fixes, Total dépenses
-- **NŒUD FINAL (1)** : Capacité d'épargne mensuelle ← LA RÉPONSE
-- Scénarios : "Réduction loisirs 50%", "Augmentation salaire"
-
-**Demande** : "rentabilité de mon activité"
-**Objectif réel** : Connaître mon profit et ma marge
-**Structure** :
-- PARAMÈTRES (4) : Prix unitaire, Volume ventes, Coûts fixes, Coûts variables
-- INTERMÉDIAIRES (2) : Chiffre d'affaires, Coûts totaux
-- **NŒUDS FINAUX (2)** : Profit net, Marge en % ← LES RÉPONSES
-- Scénarios : "Croissance volume 20%", "Hausse prix 10%"
+1. **FIDÉLITÉ** : Si l'utilisateur liste des paramètres ou calculs → crée-les TOUS.
+2. **COMPRÉHENSION** : Déduis l'objectif réel (1-2 phrases).
+3. **COMPLÉTION** : Ajoute seulement les variables essentielles manquantes.
 
 ## TEXTE UTILISATEUR
-
 {user_prompt}
 
-## ÉTAPE 1 : ANALYSE (réfléchis avant de répondre)
+## CONTRAINTES STRICTES
+1. **Pas de listes d'objets** : agrégats uniquement.
+2. **Pas de séries temporelles** : une photo à l'instant T, calcule des ratios/sommes sur période si besoin.
+3. **Sorties numériques uniquement** : scores, pourcentages, décisions 0/1.
 
-Avant de créer le modèle, demande-toi :
-- Quel est le VRAI problème que l'utilisateur veut résoudre ?
-- Quelles DÉCISIONS ce modèle va-t-il l'aider à prendre ?
-- Quelles variables MANQUENT dans sa demande mais sont ESSENTIELLES ?
-- Le modèle sera-t-il ACTIONNABLE (peut-il modifier les paramètres facilement) ?
-
-## ÉTAPE 2 : CONCEPTION DU MODÈLE
-
-Crée un modèle COMPLET et UTILE avec :
-
-### PARAMÈTRES (ce que l'utilisateur peut modifier)
-- type: "parameter"
-- default_value: une valeur RÉALISTE et TYPIQUE
-- description: explication claire de ce que représente ce paramètre
-
-### CALCULS (les insights automatiques)
-- type: "computed"  
-- formula: expression Python (a + b, a * b / 100, etc.)
-- inputs: liste des slugs utilisés dans la formule
-- Les arguments de la formule DOIVENT correspondre aux slugs des inputs
-
-### SCÉNARIOS (pour explorer les possibilités)
-- Au moins 2-3 scénarios pertinents
-- Chaque scénario = set d'overrides réalistes
+## CONCEPTION DU MODÈLE
+- **Paramètres** (type="parameter") : valeurs réalistes, actionnables, décrites clairement.
+- **Calculs** (type="computed") : formules Python simples, inputs cohérents.
+- **Résultats** : prévois 2-5 nœuds calculés finaux (sans dépendants).
+- **Scénarios** : 2-3 scénarios pertinents avec overrides réalistes.
 
 ## RÈGLES TECHNIQUES
+1. Slugs en snake_case, uniques.
+2. Pourcentages : unit="%" et valeur=20 pour 20%. Formules : x / 100.
+3. Formules simples, pas de `None`/`null`.
+4. Pas d'auto-référence.
+5. Chaque nœud a une description pédagogique.
 
-1. SLUGS: snake_case, uniques (ex: "chiffre_affaires", "marge_nette")
-2. POURCENTAGES: unit="%" et valeur=20 pour 20%. Dans formules: x / 100
-3. FORMULES: Expressions simples. INTERDIT: return None/null
-4. COHÉRENCE: Les inputs d'un nœud doivent exister comme autres nœuds
-5. PAS D'AUTO-RÉFÉRENCE: Un nœud ne peut pas dépendre de lui-même
-6. DESCRIPTIONS: Chaque nœud DOIT avoir une description claire et pédagogique
+## SCORES (TOUJOURS INTERPRÉTABLES)
+Si tu crées un score :
+- Échelle explicite (/10, /100, %).
+- Description = guide d'interprétation (ex: 0-3=Faible, 4-6=Moyen, 7-10=Bon).
+- Normalise sur une échelle standard si possible.
 
 ## FORMAT DE SORTIE (JSON)
-
 {{
-  "user_intent": "Ce que l'utilisateur veut vraiment accomplir (1-2 phrases)",
+  "user_intent": "Objectif réel (1-2 phrases)",
   "project_name": "Nom clair et descriptif",
   "description": "Description du modèle et de son utilité",
   "entities": [
@@ -220,52 +187,60 @@ Crée un modèle COMPLET et UTILE avec :
   ]
 }}
 
-## RÈGLE D'OR : STRUCTURE EN ENTONNOIR
-
-⚠️ **PEU DE NŒUDS FINAUX = BON MODÈLE**
-
-Tu peux créer autant de nœuds intermédiaires que nécessaire, MAIS :
-- **1 à 3 nœuds finaux MAXIMUM** (les métriques clés qui répondent à la question)
-- Le graphe doit **CONVERGER** vers ces nœuds finaux
-- Les nœuds finaux sont ceux qui n'ont PAS d'autres nœuds qui en dépendent
-
-### Structure idéale :
-```
-[Paramètre 1]  [Paramètre 2]  [Paramètre 3]  [Paramètre 4]  ← Beaucoup d'entrées OK
-       \            |              |            /
-        \           |              |           /
-         [Calcul intermédiaire 1]  [Calcul intermédiaire 2]  ← Intermédiaires OK
-                    \                    /
-                     \                  /
-                      [MÉTRIQUE FINALE]  ← 1-3 SORTIES MAX
-```
-
-### Exemple MAUVAIS (trop de nœuds finaux) :
-Demande : "gérer mon temps"
-❌ Nœuds finaux multiples : Pourcentage Sommeil, Pourcentage Travail, Pourcentage Loisirs, Temps Libre, Total Heures...
-→ L'utilisateur ne sait pas où regarder !
-
-### Exemple BON (convergent) :
-Demande : "gérer mon temps"
-✅ Paramètres : Sommeil, Travail, Transport, Repas, Loisirs, Tâches (6 entrées OK)
-✅ Intermédiaires : Total Obligations, Total Heures
-✅ **1 SEUL nœud final** : "Temps Libre Disponible" ou "Écart vs Objectif"
-→ L'utilisateur sait exactement quelle métrique suivre
-
-### Question à te poser :
-"Quelle est LA métrique (ou les 2-3 métriques) qui répond directement à ce que l'utilisateur veut savoir ?"
-→ C'est ça ton/tes nœud(s) final(aux). Tout le reste doit y mener.
-
-## CRITÈRES DE QUALITÉ (vérifie avant de répondre)
-
-✓ **CONVERGENCE** : Y a-t-il 1-3 nœuds finaux maximum ?
-✓ **CLARTÉ** : L'utilisateur saura-t-il immédiatement quelle métrique regarder ?
-✓ **STRUCTURE** : Le graphe forme-t-il un entonnoir (beaucoup d'entrées → peu de sorties) ?
-✓ Les paramètres sont-ils ACTIONNABLES ?
-✓ Les scénarios sont-ils RÉALISTES et UTILES ?"""
+## CHECKLIST AVANT RÉPONSE
+✓ Tous les paramètres/calculs explicitement demandés sont présents.
+✓ Chaque paramètre est utilisé dans au moins un calcul.
+✓ Les résultats finaux sont clairs (nœuds calculés sans dépendants).
+✓ Les scénarios sont réalistes et utiles."""
 
 
 # ==================== AGENT ANALYSTE (UNIQUE APPEL LLM) ====================
+
+def break_cycles(entities: list[dict]) -> tuple[list[dict], list[str]]:
+    """
+    Détecte les cycles et supprime les inputs qui bouclent pour garantir un DAG.
+    Retourne (entities_corrigées, warnings).
+    """
+    warnings = []
+    
+    # Map slug -> entity
+    entity_map = {e['id']: e for e in entities}
+    
+    # État DFS : 0=Unvisited, 1=Visiting, 2=Visited
+    visit_state = {e['id']: 0 for e in entities}
+    
+    def dfs(u_id, path):
+        visit_state[u_id] = 1 # Visiting
+        
+        entity = entity_map.get(u_id)
+        if not entity or entity.get('type') != 'computed':
+            visit_state[u_id] = 2
+            return
+
+        # Copie pour pouvoir modifier safe
+        inputs = list(entity.get('inputs', []))
+        
+        for v_id in inputs:
+            if v_id not in entity_map:
+                continue 
+                
+            if visit_state.get(v_id, 0) == 1:
+                # CYCLE DÉTECTÉ ! v_id est en cours de visite => Back edge
+                warnings.append(f"🔄 Cycle rompu : {u_id} dépendait de {v_id} qui dépend de lui.")
+                # On retire v_id des inputs de u_id
+                if v_id in entity['inputs']:
+                    entity['inputs'].remove(v_id)
+            elif visit_state.get(v_id, 0) == 0:
+                dfs(v_id, path + [v_id])
+        
+        visit_state[u_id] = 2 # Visited
+
+    for e in entities:
+        if visit_state.get(e['id'], 0) == 0:
+            dfs(e['id'], [e['id']])
+            
+    return entities, warnings
+
 
 async def agent_analyste(state: PipelineState) -> PipelineState:
     """
@@ -293,14 +268,41 @@ async def agent_analyste(state: PipelineState) -> PipelineState:
         
         # Vérifier que chaque computed a des inputs valides
         entity_ids = {e['id'] for e in entities}
+        inputs_references = set()
+        
+        # 1. Collecter toutes les références
         for entity in entities:
             if entity.get('type') == 'computed':
                 inputs = entity.get('inputs', [])
                 for inp in inputs:
+                    inputs_references.add(inp)
+                    # Validation d'existence
                     if inp not in entity_ids:
-                        emit_log(state, "warning", f"⚠️ Input '{inp}' non trouvé pour {entity['id']}", "analyste")
+                        emit_log(state, "warning", f"⚠️ Input '{inp}' manquant pour {entity['id']}", "analyste")
                     if inp == entity['id']:
                         raise ValueError(f"Auto-référence détectée: {entity['id']}")
+
+        # 2. Filtrer les paramètres orphelins (Garbage Collector)
+        valid_entities = []
+        for entity in entities:
+            # Si c'est un paramètre et qu'il n'est JAMAIS utilisé comme input -> poubelle
+            if entity.get('type') == 'parameter' and entity['id'] not in inputs_references:
+                emit_log(state, "warning", f"🗑️ Suppression paramètre orphelin: {entity['label']} ({entity['id']})", "analyste")
+                continue
+            
+            valid_entities.append(entity)
+            
+        structure['entities'] = valid_entities
+        
+        if not valid_entities:
+            raise ValueError("Plus aucun nœud valide après nettoyage !")
+
+        # 3. Validation et cassage des cycles (DAG)
+        valid_entities, cycle_warnings = break_cycles(valid_entities)
+        for warning in cycle_warnings:
+             emit_log(state, "warning", warning, "analyste")
+             
+        structure['entities'] = valid_entities
 
         state["analyzed_structure"] = structure
         
@@ -530,6 +532,13 @@ async def executeur(state: PipelineState) -> PipelineState:
         db.commit()
         state["created_nodes"] = created_nodes
         emit_log(state, "success", f"✓ {len(created_nodes)} nœuds créés", "executeur")
+
+        if settings.INSIGHTS_ENABLED:
+            threading.Thread(
+                target=run_insights_task,
+                args=(project_id, state["user_id"], settings.INSIGHTS_AI_ENABLED),
+                daemon=True,
+            ).start()
 
         return state
 
@@ -808,7 +817,9 @@ async def run_agent_pipeline(prompt: str, user_id: str) -> tuple[str | None, lis
         "errors": [],
         "retry_count": 0,
         "logs": [],
-        "status": "initializing"
+        "status": "initializing",
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
     }
 
     final_state = None

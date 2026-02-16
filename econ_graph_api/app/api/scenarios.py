@@ -2,7 +2,7 @@
 API endpoints for scenario management.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -19,6 +19,7 @@ from app.schemas.scenario import (
 from app.repositories import scenario_repo
 from app.services import scenario_cache
 from app.services.computation import execute_algorithm
+from app.api.insights_trigger import schedule_project_insights
 
 router = APIRouter(prefix="/api", tags=["scenarios"])
 
@@ -37,10 +38,12 @@ def list_scenarios(
 def create_scenario(
     project_id: str,
     data: ScenarioCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None
 ):
     """Create a new scenario for a project."""
     scenario = scenario_repo.create_scenario(db, project_id, data)
+    schedule_project_insights(db, project_id, None, background_tasks)
     return scenario
 
 
@@ -60,36 +63,45 @@ def get_scenario(
 def update_scenario(
     scenario_id: str,
     data: ScenarioUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None
 ):
     """Update a scenario's name or color."""
     scenario = scenario_repo.update_scenario(db, scenario_id, data)
     if not scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
+    schedule_project_insights(db, scenario.project_id, None, background_tasks)
     return scenario
 
 
 @router.delete("/scenarios/{scenario_id}", status_code=204)
 def delete_scenario(
     scenario_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None
 ):
     """Delete a scenario and all its overrides."""
+    scenario = scenario_repo.get_scenario(db, scenario_id)
+    if not scenario:
+        raise HTTPException(status_code=404, detail="Scenario not found")
     success = scenario_repo.delete_scenario(db, scenario_id)
     if not success:
         raise HTTPException(status_code=404, detail="Scenario not found")
+    schedule_project_insights(db, scenario.project_id, None, background_tasks)
     return None
 
 
 @router.post("/scenarios/{scenario_id}/duplicate", response_model=ScenarioResponse, status_code=201)
 def duplicate_scenario(
     scenario_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None
 ):
     """Duplicate a scenario and all its overrides."""
     new_scenario = scenario_repo.duplicate_scenario(db, scenario_id)
     if not new_scenario:
         raise HTTPException(status_code=404, detail="Scenario not found")
+    schedule_project_insights(db, new_scenario.project_id, None, background_tasks)
     return new_scenario
 
 
@@ -107,7 +119,8 @@ def get_overrides(
 def update_overrides(
     scenario_id: str,
     data: OverrideBatchUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None
 ):
     """
     Batch update node overrides for a scenario.
@@ -159,6 +172,7 @@ def update_overrides(
             dirty_targets,
         )
 
+    schedule_project_insights(db, scenario.project_id, None, background_tasks)
     return scenario_repo.get_overrides(db, scenario_id)
 
 

@@ -23,13 +23,26 @@ class Settings(BaseSettings):
     ENABLE_STRUCTURED_LOGGING: bool = True
     FORCE_FULL_COMPUTE_ALL: bool = False
 
+    # Insights / notifications
+    INSIGHTS_ENABLED: bool = True
+    INSIGHTS_AI_ENABLED: bool = True
+    INSIGHTS_INTERVAL_MINUTES: int = 30
+    INSIGHTS_MAX_PER_PROJECT: int = 3
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @property
     def db_url(self) -> str:
+        if self.DATABASE_URL:
+            url = self.DATABASE_URL.strip()
+            if url.startswith("postgres://"):
+                url = "postgresql://" + url[len("postgres://"):]
+            if url.startswith("postgresql://"):
+                return "postgresql+psycopg://" + url[len("postgresql://"):]
+            return url
         return (
-            self.DATABASE_URL
-            or f"postgresql+psycopg://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+            f"postgresql+psycopg://{self.DB_USER}:{self.DB_PASSWORD}"
+            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
         )
 
 

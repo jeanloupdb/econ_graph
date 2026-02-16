@@ -16,6 +16,7 @@ simpleeval==0.9.13
 RestrictedPython==7.1
 google-generativeai==0.8.3
 pypdf==5.1.0
+openpyxl==3.1.5
 
 # Multi-agent orchestration
 langgraph==0.2.50

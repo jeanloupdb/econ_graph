@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.db import get_db
@@ -10,6 +10,7 @@ from app.schemas.composite import CompositeGraphData
 from pydantic import ValidationError
 from app.repositories import node_repo
 from app.repositories.edge_repo import EdgeRepository
+from app.api.insights_trigger import schedule_project_insights
 import re
 
 router = APIRouter(prefix="/nodes", tags=["nodes"])
@@ -250,7 +251,12 @@ def get_node(node_id: str, project: str | None = Query(default=None), db: Sessio
 
 
 @router.post("", response_model=NodeOut, status_code=201)
-def create_node(payload: NodeCreate, project: str | None = Query(default=None), db: Session = Depends(get_db)):
+def create_node(
+    payload: NodeCreate,
+    project: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None
+):
     """Create a new node."""
     target_project = project or getattr(payload, 'project_id', None) or 'default'
     slug = (payload.slug or '').strip()
@@ -290,11 +296,18 @@ def create_node(payload: NodeCreate, project: str | None = Query(default=None), 
         if params:
             sync_edges_for_node(db, target_project, n.id, params)
     roots = _collect_composite_roots(db, [n]) if n.composite_id else {}
+    schedule_project_insights(db, target_project, None, background_tasks)
     return node_to_dict(n, roots.get(n.composite_id))
 
 
 @router.patch("/{node_id}", response_model=NodeOut)
-def update_node(node_id: str, payload: NodeUpdate, project: str | None = Query(default=None), db: Session = Depends(get_db)):
+def update_node(
+    node_id: str,
+    payload: NodeUpdate,
+    project: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None
+):
     """Update an existing node."""
     q = db.query(Node).filter(Node.id == node_id)
     if project:
@@ -343,11 +356,16 @@ def update_node(node_id: str, payload: NodeUpdate, project: str | None = Query(d
         # Always sync, passing empty params if no computation (clears edges)
         sync_edges_for_node(db, project or n.project_id, n.id, params)
     roots = _collect_composite_roots(db, [n]) if n.composite_id else {}
+    schedule_project_insights(db, n.project_id, None, background_tasks)
     return node_to_dict(n, roots.get(n.composite_id))
 
 
 @router.delete("/{node_id}", status_code=204)
-def delete_node(node_id: str, db: Session = Depends(get_db)):
+def delete_node(
+    node_id: str,
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None
+):
     """Delete a node."""
     n = db.query(Node).get(node_id)
     if not n:
@@ -355,6 +373,7 @@ def delete_node(node_id: str, db: Session = Depends(get_db)):
 
     db.delete(n)
     db.flush()
+    schedule_project_insights(db, n.project_id, None, background_tasks)
     return
 
 

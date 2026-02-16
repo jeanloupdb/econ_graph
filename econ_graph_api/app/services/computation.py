@@ -670,6 +670,72 @@ def _expand_dependents(
     return visited
 
 
+def _sanitize_algorithm(algorithm: str) -> str:
+    """
+    Fix common LLM-generated formula issues before compilation.
+    - Remove backticks around variable names (`var` → var)
+    - Replace ^ with ** for exponentiation
+    - Normalize body identifiers to match declared parameter names
+      (e.g., Revenu_Initial → revenu_initial if that's the param name)
+    """
+    import re as _re
+    import unicodedata as _ud
+
+    # 1. Remove backticks around identifiers: `some_var` → some_var
+    sanitized = _re.sub(r'`([a-zA-Z_][a-zA-Z0-9_]*)`', r'\1', algorithm)
+
+    # 2. Replace ^ with ** for exponentiation
+    sanitized = sanitized.replace(' ^ ', ' ** ')
+    sanitized = sanitized.replace(')^', ')**')
+    sanitized = sanitized.replace('^(', '**(')
+    sanitized = _re.sub(r'(\w)\^(\w)', r'\1**\2', sanitized)
+
+    # 3. Normalize body identifiers to match declared param names
+    # Extract declared parameter names from "def compute(a, b, c):"
+    sig_match = _re.search(r'def\s+compute\s*\(([^)]*)\)\s*:', sanitized)
+    if sig_match:
+        params_str = sig_match.group(1).strip()
+        if params_str:
+            declared_params = [p.strip() for p in params_str.split(',') if p.strip()]
+            # Build a lookup: normalized form → declared param name
+            def _norm(s: str) -> str:
+                s = ''.join(c for c in _ud.normalize('NFKD', s) if not _ud.combining(c))
+                return _re.sub(r'[^a-z0-9]', '_', s.lower()).strip('_')
+
+            norm_to_param = {_norm(p): p for p in declared_params}
+
+            # Find the body (everything after the signature line)
+            sig_end = sig_match.end()
+            header = sanitized[:sig_end]
+            body = sanitized[sig_end:]
+
+            # Find all identifiers in body (including accented chars like é, è, ê)
+            body_tokens = set(_re.findall(r'(?<!\w)(\w+)(?!\w)', body))
+            reserved = {'return', 'if', 'else', 'elif', 'for', 'in', 'and', 'or', 'not',
+                        'True', 'False', 'None', 'sum', 'min', 'max', 'abs', 'round',
+                        'len', 'int', 'float', 'pow', 'sqrt', 'exp', 'log', 'math',
+                        'compute', 'def'}
+
+            for token in body_tokens:
+                if token in declared_params or token in reserved:
+                    continue
+                if token.isdigit():
+                    continue
+                # Check if this token's normalized form matches a declared param
+                token_norm = _norm(token)
+                if token_norm in norm_to_param:
+                    correct_param = norm_to_param[token_norm]
+                    if token != correct_param:
+                        body = _re.sub(
+                            r'(?<!\w)' + _re.escape(token) + r'(?!\w)',
+                            correct_param, body,
+                        )
+
+            sanitized = header + body
+
+    return sanitized
+
+
 def execute_algorithm(algorithm: str, variables: Dict[str, float], timeout: int = 5) -> float:
     """
     Safely execute a Python algorithm with given variable values.
@@ -687,6 +753,9 @@ def execute_algorithm(algorithm: str, variables: Dict[str, float], timeout: int 
         TimeoutError: If execution exceeds timeout
     """
     try:
+        # Sanitize common LLM artifacts before compilation
+        algorithm = _sanitize_algorithm(algorithm)
+
         # Compile the algorithm with RestrictedPython
         try:
             byte_code = compile_restricted(algorithm, '<string>', 'exec')
@@ -1321,6 +1390,9 @@ def validate_algorithm(algorithm: str) -> Optional[str]:
         Error message if invalid, None if valid
     """
     try:
+        # Sanitize common LLM artifacts before validation
+        algorithm = _sanitize_algorithm(algorithm)
+
         # Try to compile the algorithm
         byte_code = compile_restricted(algorithm, '<string>', 'exec')
 

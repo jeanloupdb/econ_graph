@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import String, DateTime, Boolean
+from sqlalchemy.dialects.postgresql import JSONB
 from datetime import datetime
 from app.core.db import Base
 
@@ -16,6 +17,13 @@ class User(Base):
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Wizard State - User's persistent thinking space
+    wizard_state: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    
+    # Smart Profile - User's profile for personalized AI suggestions
+    # Structure: { profession, interests[], concrete_example, completed, created_at }
+    smart_profile: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # Relationships (will be added later)
     # projects = relationship("Project", back_populates="owner")

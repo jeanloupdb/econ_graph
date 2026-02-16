@@ -1,13 +1,15 @@
 """
 Authentication endpoints for user registration, login, and profile management.
 """
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from app.core.db import get_db
 from app.core.security import verify_password, get_password_hash, create_access_token
 from app.core.deps import get_current_user, get_current_active_user
 from app.models.user import User
-from app.schemas.auth import UserCreate, UserLogin, UserResponse, Token
+from app.schemas.auth import UserCreate, UserLogin, UserResponse, Token, UserWizardStateUpdate, SmartProfileUpdate, UserSearchResult
 import uuid
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -169,3 +171,92 @@ async def update_current_user(
     db.refresh(current_user)
 
     return current_user
+
+
+@router.patch("/me/wizard_state", response_model=UserResponse)
+async def update_wizard_state(
+    update_data: UserWizardStateUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update the user's wizard/reflection state.
+    """
+    # Simply replace the JSONB content
+    current_user.wizard_state = update_data.wizard_state
+    
+    # We don't necessarily update 'updated_at' for this, or maybe we do?
+    # Let's say yes, it's user activity.
+    current_user.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(current_user)
+    
+    return current_user
+
+
+@router.get("/me/smart_profile")
+async def get_smart_profile(
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get the user's smart profile for personalized AI suggestions.
+    Returns null if profile not yet completed.
+    """
+    return {"smart_profile": current_user.smart_profile}
+
+
+@router.post("/me/smart_profile", response_model=UserResponse)
+async def update_smart_profile(
+    update_data: SmartProfileUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Create or update the user's smart profile.
+    This profile is used to personalize AI suggestions in the wizard.
+    """
+    # Build the profile object with all 4 dimensions
+    profile_data = {
+        "profession": update_data.profession,  # Now a list (multi-select)
+        "interests": update_data.interests,
+        "level": update_data.level,
+        "tools": update_data.tools,
+        "completed": True,
+        "created_at": datetime.utcnow().isoformat()
+    }
+    
+    current_user.smart_profile = profile_data
+    current_user.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(current_user)
+    
+    return current_user
+
+
+@router.get("/search", response_model=list[UserSearchResult])
+async def search_users(
+    q: str,
+    limit: int = 5,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Search users by username or email.
+    """
+    if not q or len(q) < 2:
+        return []
+        
+    query = db.query(User).filter(
+        or_(
+            User.username.ilike(f"%{q}%"),
+            User.email.ilike(f"%{q}%"),
+            User.full_name.ilike(f"%{q}%")
+        )
+    ).limit(limit)
+    
+    results = query.all()
+    # Remove self from results
+    return [u for u in results if u.id != current_user.id]
+

@@ -1,30 +1,44 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Literal, List
+from typing import Optional, Literal, List, Any, Dict
 from datetime import datetime
 
 
 class ProjectCreate(BaseModel):
   id: str = Field(..., min_length=1, max_length=64)
   name: str = Field(..., min_length=1, max_length=200)
+  status: Literal["draft", "completed"] = "draft"
+  wizard_state: Optional[Dict[str, Any]] = None
   generation_prompt: Optional[str] = None
   description: Optional[str] = None
 
 
 class ProjectUpdate(BaseModel):
   name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+  status: Optional[Literal["draft", "completed"]] = None
+  wizard_state: Optional[Dict[str, Any]] = None
   description: Optional[str] = None
+
+
+class ProjectOwnerOut(BaseModel):
+  id: str
+  username: str
+  email: str
 
 
 class ProjectOut(BaseModel):
   id: str
   name: str
+  status: str = "completed"  # Default for backward compat
   created_at: datetime
   updated_at: datetime
   public_view_token: Optional[str] = None
   user_id: Optional[str] = None  # owner_id
   user_role: Optional[str] = None  # "owner" | "editor" | "viewer"
+  collaborator_count: int = 0
+  wizard_state: Optional[Dict[str, Any]] = None
   generation_prompt: Optional[str] = None
   description: Optional[str] = None
+  owner: Optional[ProjectOwnerOut] = None
 
   class Config:
     from_attributes = True
