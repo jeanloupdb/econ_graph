@@ -183,6 +183,16 @@ function GraphCanvasInner({ readOnly }: { readOnly?: boolean }) {
             )
           );
 
+    const hasPersistedPositions = nodesData.some(
+      (n) => (n as any).pos_x != null && (n as any).pos_y != null
+    );
+    if (nodePositions.size === 0 && !hasPersistedPositions) {
+      const autoPositions = computeHierarchicalPositions(nodesData, derivedEdges);
+      if (autoPositions.length > 0) {
+        setNodePositions(autoPositions as any);
+      }
+    }
+
     const nodes: ReactFlowNode[] = nodesData.map((node, index) => {
       const persisted =
         (node as any).pos_x != null && (node as any).pos_y != null

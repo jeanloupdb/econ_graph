@@ -300,26 +300,47 @@ function useScenarioAutoLoader() {
 function useProjectAutoComputer() {
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const graphActions = useGraphActions();
+  const { nodes, isLoading } = useGraphData();
   const computedRef = useRef<string | null>(null);
+  const computingRef = useRef(false);
 
   useEffect(() => {
-    if (!currentProjectId) return;
-    if (computedRef.current === currentProjectId) return;
+    if (!currentProjectId || isLoading) return;
+    if (computedRef.current === currentProjectId || computingRef.current) return;
+
+    if (!nodes.length) {
+      computedRef.current = currentProjectId;
+      return;
+    }
+
+    const needsCompute = nodes.some((node) => {
+      const isComputable = !!node.computation_definition || !!node.composite_id;
+      if (!isComputable) return false;
+      return node.value_computed == null && !node.computation_error;
+    });
+
+    if (!needsCompute) {
+      computedRef.current = currentProjectId;
+      return;
+    }
 
     const compute = async () => {
       if (graphActions.computeProject) {
         try {
+          computingRef.current = true;
           await graphActions.computeProject();
-          computedRef.current = currentProjectId;
         } catch (e) {
           console.error("Auto-compute failed", e);
+        } finally {
+          computingRef.current = false;
         }
       }
     };
 
+    computedRef.current = currentProjectId;
     const timer = setTimeout(compute, 500);
     return () => clearTimeout(timer);
-  }, [currentProjectId, graphActions]);
+  }, [currentProjectId, graphActions, isLoading, nodes]);
 }
 
 // ============================================================================
@@ -351,7 +372,6 @@ export function GraphPageOrchestrator() {
   // This component doesn't render anything
   return null;
 }
-
 
 
 

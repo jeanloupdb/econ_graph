@@ -19,15 +19,14 @@ interface GraphThemeContextValue {
 
 const GraphThemeContext = createContext<GraphThemeContextValue | null>(null);
 
-// Minimal theme colors - only for main containers
-// Using warmer, softer tones that complement the dark nodes better
+// Light mode colors for graph page containers
 export const GRAPH_LIGHT_COLORS = {
-  pageBg: "#c8ccd4", // Darker blue-gray for better harmony with dark nodes
-  canvasBg: "#b8bcc5", // Darker blue-gray canvas - much better contrast with dark nodes
-  panelBg: "#e8e9ed", // Lighter panels with slight warmth
-  panelBorder: "#a1a1aa", // zinc-400 - visible borders
-  edgeColor: "#52525b", // zinc-600 - even darker edges for visibility
-  gridColor: "#fff", // Darker grid that blends with darker canvas
+  pageBg: "#f0f0f5",    // soft blue-gray page background
+  canvasBg: "#e8e8f0",  // canvas slightly darker than page
+  panelBg: "#ffffff",   // pure white panels
+  panelBorder: "#e2e2ea", // subtle border
+  edgeColor: "#6366f1",  // indigo edges - visible on light
+  gridColor: "#d1d1db",  // soft grid dots
 };
 
 export function GraphThemeProvider({
@@ -35,7 +34,7 @@ export function GraphThemeProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [graphTheme, setGraphThemeState] = useState<GraphTheme>("dark");
+  const [graphTheme, setGraphThemeState] = useState<GraphTheme>("light");
 
   useEffect(() => {
     const saved = sessionStorage.getItem(
@@ -75,10 +74,10 @@ export function useGraphTheme(): GraphThemeContextValue {
 
   if (context === null) {
     return {
-      graphTheme: "dark",
+      graphTheme: "light",
       setGraphTheme: () => {},
       toggleGraphTheme: () => {},
-      isLightMode: false,
+      isLightMode: true,
     };
   }
 

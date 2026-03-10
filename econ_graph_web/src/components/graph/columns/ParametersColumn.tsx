@@ -1,14 +1,16 @@
 
+import { AiActionableArea } from "@/components/graph/common/AiActionableArea";
 import { DiffIndicator } from "@/components/graph/common/DiffIndicator";
 import { InlineNodeDetail } from "@/components/graph/panels/InlineNodeDetail";
 import { Input } from "@/components/ui/input";
 import type { Node } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { formatNumber } from "@/utils/format";
-import { ChevronDown, ChevronRight, ChevronUp, Circle, GitCompare, Pencil, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, Circle, GitCompare, Loader2, Pencil, Plus, X } from "lucide-react";
 import { RefObject, useEffect, useRef, useState } from "react";
 
 interface ParametersColumnProps {
+  isLoading?: boolean;
   isLightMode: boolean;
   settings: Node[];
   highlightedNodeIds: Set<string>;
@@ -25,16 +27,16 @@ interface ParametersColumnProps {
   comparisonEnabled: boolean;
   setComparisonMode: (v: boolean) => void;
   scenariosContainerRef: RefObject<HTMLDivElement | null>;
-  
+
   // Selection
   selectedCenterNodeId: string | null;
   setSelectedCenterNodeId: (id: string | null) => void;
   clearResultSelection: () => void;
   clearCenterSelection: () => void;
-  
+
   // Hover
   setHoveredNodeId: (id: string | null) => void;
-  
+
   // Editing
   editingParamId: string | null;
   setEditingParamId: (id: string | null) => void;
@@ -43,7 +45,7 @@ interface ParametersColumnProps {
   handleStartEdit: (node: Node) => void;
   handleSaveEdit: () => void;
   inputRef: RefObject<HTMLInputElement | null>;
-  
+
   // Data access
   nodeById: Map<string, Node>;
   getNodeValues: (id: string) => { baseline: number | null; scenario: number | null; diff: number | null };
@@ -93,8 +95,10 @@ export function ParametersColumn({
   isScenarioActive,
   nodes,
   flashHighlightId,
-  navigateToDependency
-}: ParametersColumnProps) {
+  navigateToDependency,
+  isLoading,
+  compact = false,
+}: ParametersColumnProps & { compact?: boolean }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [scrollHint, setScrollHint] = useState<{ direction: 'up' | 'down'; label?: string } | null>(null);
 
@@ -106,7 +110,7 @@ export function ParametersColumn({
 
       // Find first highlighted node that belongs to THIS column
       const targetId = settings.find(n => highlightedNodeIds.has(n.id))?.id;
-      
+
       if (!targetId) {
         setScrollHint(null);
         return;
@@ -117,7 +121,7 @@ export function ParametersColumn({
 
       const containerRect = container.getBoundingClientRect();
       const elementRect = element.getBoundingClientRect();
-      
+
       // Get label for current target
       const node = nodeById.get(targetId);
       const label = node?.label || node?.slug;
@@ -134,7 +138,7 @@ export function ParametersColumn({
 
     // Check on highlight change and scroll
     checkScroll();
-    
+
     const container = scrollContainerRef.current;
     if (container) {
       container.addEventListener('scroll', checkScroll);
@@ -150,21 +154,28 @@ export function ParametersColumn({
       <>
       <div
         className={cn(
-          "flex-1 flex flex-col overflow-hidden rounded-2xl shadow-lg relative",
-          isLightMode
-            ? "bg-white border border-zinc-300 shadow-zinc-300/50"
-            : "bg-zinc-900 border border-zinc-700 shadow-black/30"
+          "flex flex-col relative",
+          compact ? "overflow-visible min-h-full" : "flex-1 overflow-hidden rounded-2xl shadow-sm",
+          compact
+            ? "bg-white"
+            : "bg-white border border-zinc-200 shadow-zinc-200/60"
         )}
         onClick={() => { clearResultSelection(); clearCenterSelection(); }}
       >
+        {/* Loading Overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/70 backdrop-blur-sm animate-in fade-in duration-300">
+            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+            <span className="sr-only">Chargement...</span>
+          </div>
+        )}
+
         {/* Scroll Indicators - Floating over the list */}
         {scrollHint && !selectedNodeIsParam && (
             <div className={cn(
                 "absolute left-0 right-0 z-20 flex items-center justify-center pointer-events-none py-1.5 backdrop-blur-sm transition-all animate-in fade-in duration-300",
-                scrollHint.direction === 'up' ? "top-[88px] border-b shadow-sm" : "bottom-0 border-t shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.1)]",
-                isLightMode 
-                  ? "bg-blue-50/95 text-blue-700 border-blue-100/50" 
-                  : "bg-zinc-900/95 text-blue-400 border-blue-900/30"
+                scrollHint.direction === 'up' ? "top-[88px] border-b shadow-sm" : "bottom-0 border-t shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.08)]",
+                "bg-blue-50/95 text-blue-700 border-blue-100/70"
             )}>
                 <div className="flex items-center gap-2 text-xs font-medium tracking-wide">
                     {scrollHint.direction === 'up' && <ChevronUp className="h-3.5 w-3.5 animate-bounce" />}
@@ -205,23 +216,30 @@ export function ParametersColumn({
           <>
             {/* Header - Fixed height for alignment */}
             <div className={cn(
-              "shrink-0 h-[88px] border-b flex flex-col justify-center relative z-10",
-              isLightMode ? "bg-white border-zinc-200" : "bg-zinc-900 border-zinc-800"
+              "shrink-0 border-b flex flex-col justify-center relative z-10 group/header bg-white border-zinc-200",
+              compact ? "py-3" : "h-[88px]",
             )} onClick={(e) => e.stopPropagation()}>
-              {/* Title - centered */}
-              <div className="flex items-center justify-center">
-                <span className={cn(
-                  "text-lg font-semibold flex items-center gap-2",
-                  isLightMode ? "text-blue-600" : "text-blue-400"
-                )}>
-                  <Circle className="h-4 w-4 fill-current" />
-                  Paramètres
-                </span>
-                <span className={cn("text-sm ml-2", isLightMode ? "text-zinc-400" : "text-zinc-500")}>
+              {/* Title row with AI button */}
+              <div className="flex items-center justify-center gap-2">
+                <AiActionableArea
+                    isLightMode={isLightMode}
+                    className="rounded-lg p-1 -m-1"
+                    context={{
+                      label: "Paramètres",
+                      type: "parameter",
+                      target: { kind: "section", id: "parameters" },
+                    }}
+                >
+                  <span className="text-lg font-semibold flex items-center gap-2 text-zinc-700">
+                    <Circle className="h-4 w-4 fill-current text-blue-500" />
+                    Paramètres
+                  </span>
+                </AiActionableArea>
+                <span className="text-sm text-zinc-400">
                   ({settings.length})
                 </span>
               </div>
-              
+
               {/* Scenario row - no separator */}
               <div className="px-4 mt-2 flex items-center justify-center">
                 {creatingScenario ? (
@@ -230,12 +248,7 @@ export function ParametersColumn({
                       value={newScenarioName}
                       onChange={(e) => setNewScenarioName(e.target.value)}
                       placeholder="Nom du scénario..."
-                      className={cn(
-                        "h-7 text-xs flex-1 min-w-0",
-                        isLightMode 
-                          ? "bg-white text-zinc-900 border-zinc-200 placeholder:text-zinc-400" 
-                          : "bg-zinc-900 text-white border-zinc-700 placeholder:text-zinc-500 focus-visible:ring-blue-500"
-                      )}
+                      className="h-7 text-xs flex-1 min-w-0 bg-white text-zinc-900 border-zinc-300 placeholder:text-zinc-400"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') handleCreateScenario();
                         if (e.key === 'Escape') setCreatingScenario(false);
@@ -244,27 +257,21 @@ export function ParametersColumn({
                     />
                     <button
                       onClick={handleCreateScenario}
-                      className={cn(
-                        "px-2.5 py-1 rounded text-xs font-medium shrink-0",
-                        isLightMode ? "bg-blue-500 text-white" : "bg-blue-600 text-white"
-                      )}
+                      className="px-2.5 py-1 rounded text-xs font-medium shrink-0 bg-blue-500 text-white hover:bg-blue-600 transition-colors"
                     >
                       Créer
                     </button>
                     <button
                       onClick={() => setCreatingScenario(false)}
-                      className={cn(
-                        "p-1 rounded transition-colors shrink-0",
-                        isLightMode ? "hover:bg-zinc-200 text-zinc-500" : "hover:bg-zinc-700 text-zinc-500"
-                      )}
+                      className="p-1 rounded transition-colors shrink-0 hover:bg-zinc-100 text-zinc-500"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 ) : (
-                  <div 
+                  <div
                     ref={scenariosContainerRef}
-                    className="flex gap-1.5 items-center overflow-x-auto max-w-full"
+                    className="flex gap-1.5 items-center overflow-x-auto max-w-full graph-light-scrollbar"
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                   >
                     {/* Valeurs de base */}
@@ -273,13 +280,13 @@ export function ParametersColumn({
                       className={cn(
                         "px-2.5 py-1 rounded-full text-xs font-medium transition-colors shrink-0",
                         !activeScenarioId
-                          ? (isLightMode ? "bg-zinc-900 text-white" : "bg-white text-zinc-900")
-                          : (isLightMode ? "bg-zinc-200 text-zinc-600 hover:bg-zinc-300" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700")
+                          ? "bg-zinc-900 text-white"
+                          : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
                       )}
                     >
                       Valeurs de base
                     </button>
-                    
+
                     {/* Existing scenarios */}
                     {[...scenarios]
                       .sort((a, b) => {
@@ -288,13 +295,13 @@ export function ParametersColumn({
                         return 0;
                       })
                       .map(s => (
-                      <div 
+                      <div
                         key={s.id}
                         className={cn(
                           "flex items-center gap-0.5 rounded-full transition-colors shrink-0 group/scenario",
                           activeScenarioId === s.id
-                            ? (isLightMode ? "bg-blue-500" : "bg-blue-600")
-                            : (isLightMode ? "bg-zinc-200 hover:bg-zinc-300" : "bg-zinc-800 hover:bg-zinc-700")
+                            ? "bg-blue-500"
+                            : "bg-zinc-100 hover:bg-zinc-200"
                         )}
                       >
                         <button
@@ -303,50 +310,45 @@ export function ParametersColumn({
                             "pl-2.5 pr-1 py-1 text-xs font-medium shrink-0",
                             activeScenarioId === s.id
                               ? "text-white"
-                              : (isLightMode ? "text-zinc-600" : "text-zinc-400")
+                              : "text-zinc-600"
                           )}
                         >
                           {s.name}
                         </button>
                         <button
-                          onClick={(e) => { 
-                            e.stopPropagation(); 
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setScenarioToDelete({ id: s.id, name: s.name });
                           }}
                           className={cn(
                             "pr-1.5 py-1 opacity-0 group-hover/scenario:opacity-100 transition-opacity",
                             activeScenarioId === s.id
                               ? "text-white/70 hover:text-white"
-                              : (isLightMode ? "text-zinc-400 hover:text-zinc-600" : "text-zinc-500 hover:text-zinc-300")
+                              : "text-zinc-400 hover:text-zinc-600"
                           )}
                         >
                           <X className="h-3 w-3" />
                         </button>
                       </div>
                     ))}
-                    
+
                     {/* Add scenario button */}
                     <button
                       onClick={(e) => { e.stopPropagation(); setCreatingScenario(true); }}
-                      className={cn(
-                        "px-2.5 py-1 rounded-full text-xs font-medium transition-colors shrink-0 flex items-center gap-1",
-                        isLightMode 
-                          ? "border border-dashed border-zinc-300 text-zinc-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50" 
-                          : "border border-dashed border-zinc-700 text-zinc-500 hover:border-blue-500 hover:text-blue-400 hover:bg-blue-500/10"
-                      )}
+                      className="px-2.5 py-1 rounded-full text-xs font-medium transition-colors shrink-0 flex items-center gap-1 border border-zinc-200 text-zinc-500 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50"
                     >
                       <Plus className="h-3 w-3" />
                       Ajouter Scénario
                     </button>
-                    
+
                     {/* Compare toggle */}
                     <button
                       onClick={(e) => { e.stopPropagation(); setComparisonMode(!comparisonEnabled); }}
                       className={cn(
                         "p-1.5 rounded-full transition-colors shrink-0",
-                        comparisonEnabled 
-                          ? (isLightMode ? "bg-blue-100 text-blue-600" : "bg-blue-500/20 text-blue-400")
-                          : (isLightMode ? "text-zinc-400 hover:bg-zinc-200" : "text-zinc-500 hover:bg-zinc-800")
+                        comparisonEnabled
+                          ? "bg-blue-100 text-blue-600"
+                          : "text-zinc-400 hover:bg-zinc-100"
                       )}
                       title="Comparer les scénarios"
                     >
@@ -358,9 +360,9 @@ export function ParametersColumn({
             </div>
 
             {/* Parameters list */}
-            <div 
+            <div
               ref={scrollContainerRef}
-              className="flex-1 overflow-y-auto p-2 flex flex-col"
+              className={cn("p-5 flex flex-col graph-light-scrollbar", !compact && "flex-1 overflow-y-auto", compact && "pb-24")}
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               <div className="space-y-0.5">
@@ -378,77 +380,77 @@ export function ParametersColumn({
                     id={`node-param-${node.id}`}
                     onClick={(e) => { e.stopPropagation(); setSelectedCenterNodeId(node.id); clearResultSelection(); }}
                     className={cn(
-                      "group rounded-lg transition-all duration-500 cursor-pointer",
-                      isLightMode ? "hover:bg-zinc-50" : "hover:bg-zinc-800/50",
+                      "group rounded-lg transition-all duration-500 cursor-pointer hover:bg-zinc-50",
                       isFaded && "opacity-30",
                       // Soft Flash Highlight
-                      isFlashHighlight 
-                        ? (isLightMode ? "bg-blue-100 ring-1 ring-blue-300" : "bg-blue-500/20 ring-1 ring-blue-500/50")
-                        : (isHighlighted && (isLightMode ? "bg-blue-50 ring-1 ring-blue-300" : "bg-blue-500/10 ring-1 ring-blue-500/30"))
+                      isFlashHighlight
+                        ? "bg-blue-100 ring-1 ring-blue-300"
+                        : (isHighlighted && "bg-blue-50 ring-1 ring-blue-200")
                     )}
                   >
                     {isEditing ? (
                       <div className="flex items-center gap-2 p-3" onClick={(e) => e.stopPropagation()}>
-                        <span className={cn("text-sm flex-1", isLightMode ? "text-zinc-700" : "text-zinc-300")}>
+                        <span className="text-sm flex-1 text-zinc-700">
                           {node.label}
                         </span>
                         <Input
                           ref={inputRef}
                           value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === "" || val === "-" || /^-?\d*\.?\d*([eE][+-]?\d*)?$/.test(val)) {
+                              setEditValue(val);
+                            }
+                          }}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') handleSaveEdit();
                             if (e.key === 'Escape') setEditingParamId(null);
                           }}
                           onBlur={handleSaveEdit}
-                          className={cn(
-                            "h-8 w-28 text-sm font-mono",
-                            isLightMode 
-                              ? "bg-white text-zinc-900 border-zinc-200" 
-                              : "bg-zinc-900 text-white border-zinc-700 focus-visible:ring-blue-500"
-                          )}
+                          className="h-8 w-28 text-sm font-mono bg-white text-zinc-900 border-zinc-300"
                         />
                       </div>
                     ) : (
-                      <div className="flex items-center justify-between p-3">
-                        <span className={cn(
-                          "text-sm font-medium",
-                          isLightMode ? "text-zinc-800" : "text-zinc-200"
-                        )}>
-                          {node.label || node.slug}
-                        </span>
-                        {/* Editable value container */}
-                        <div 
-                          className={cn(
-                            "flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all cursor-text group/value",
-                            isLightMode 
-                              ? "border-dashed border-zinc-300 hover:border-blue-400 hover:bg-blue-50/50" 
-                              : "border-dashed border-zinc-700 hover:border-blue-500 hover:bg-blue-500/10"
-                          )}
-                          onClick={(e) => { e.stopPropagation(); handleStartEdit(node); }}
-                          title="Cliquez pour modifier"
-                        >
-                          <span className={cn(
-                            "text-sm font-mono font-semibold tabular-nums",
-                            diff && Math.abs(diff) > 1e-9
-                              ? (diff > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")
-                              : (isLightMode ? "text-zinc-900" : "text-white")
-                          )}
-                          >
-                            {formatNumber(displayValue)}
-                          </span>
-                          {node.unit && (
-                            <span className={cn("text-xs", isLightMode ? "text-zinc-400" : "text-zinc-500")}>
-                              {node.unit}
+                      <AiActionableArea
+                          isLightMode={isLightMode}
+                          className="rounded-lg"
+                          context={{
+                            label: node.label || node.slug,
+                            type: "parameter",
+                            target: { kind: "node", id: node.id },
+                          }}
+                      >
+                        <div className="flex items-center justify-between p-3">
+                            <span className="text-sm font-medium text-zinc-800">
+                            {node.label || node.slug}
                             </span>
-                          )}
-                          <Pencil className={cn(
-                            "h-3 w-3 transition-opacity",
-                            isLightMode ? "text-zinc-400 opacity-0 group-hover/value:opacity-100" : "text-zinc-500 opacity-0 group-hover/value:opacity-100"
-                          )} />
-                          <DiffIndicator diff={diff} baseline={baseline} isScenarioActive={isScenarioActive} />
+                            <div className="flex items-center gap-2">
+                            {/* Editable value container */}
+                            <div
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all cursor-text group/value border-zinc-200 hover:border-blue-400 hover:bg-blue-50/50"
+                                onClick={(e) => { e.stopPropagation(); handleStartEdit(node); }}
+                                title="Cliquez pour modifier"
+                            >
+                                <span className={cn(
+                                "text-sm font-mono font-semibold tabular-nums",
+                                diff && Math.abs(diff) > 1e-9
+                                    ? (diff > 0 ? "text-green-600" : "text-red-600")
+                                    : "text-zinc-900"
+                                )}
+                                >
+                                {formatNumber(displayValue)}
+                                </span>
+                                {node.unit && (
+                                <span className="text-xs text-zinc-400">
+                                    {node.unit}
+                                </span>
+                                )}
+                                <Pencil className="h-3 w-3 transition-opacity text-zinc-400 opacity-0 group-hover/value:opacity-100" />
+                                <DiffIndicator diff={diff} baseline={baseline} isScenarioActive={isScenarioActive} />
+                            </div>
+                            </div>
                         </div>
-                      </div>
+                      </AiActionableArea>
                     )}
                   </div>
                 );
@@ -459,17 +461,16 @@ export function ParametersColumn({
         )}
       </div>
 
-      {/* Chevron separator 1 */}
+      {/* Chevron separator 1 — hidden on mobile */}
+      {!compact && (
       <div className="flex flex-col pt-[88px]">
         <div className="flex-1 flex items-center justify-center px-1">
-          <div className={cn(
-            "w-8 h-8 rounded-full flex items-center justify-center",
-            isLightMode ? "bg-zinc-200 text-zinc-500" : "bg-zinc-800 text-zinc-400"
-          )}>
+          <div className="w-8 h-8 rounded-full flex items-center justify-center bg-zinc-200 text-zinc-500">
             <ChevronRight className="h-5 w-5" />
           </div>
         </div>
       </div>
+      )}
     </>
   );
 }

@@ -91,7 +91,7 @@ export function BottomToolbar() {
           className={cn(
             "flex items-center gap-1.5 px-3 py-2 backdrop-blur-xl border rounded-2xl",
             isLightMode
-              ? "bg-white/90 border-zinc-400 shadow-lg"
+              ? "bg-white border-zinc-200 shadow-sm"
               : "bg-zinc-900/95 border-white/[0.08] shadow-2xl"
           )}
         >
@@ -131,7 +131,7 @@ export function BottomToolbar() {
             <div
               className={cn(
                 "h-6 w-px mx-1",
-                isLightMode ? "bg-zinc-500" : "bg-white/[0.08]"
+                isLightMode ? "bg-zinc-200" : "bg-white/[0.08]"
               )}
             />
           )}

@@ -1,6 +1,7 @@
 
-import { FormulaSection } from "@/components/graph/FormulaSection"; // Check path
+import { AiActionableArea } from "@/components/graph/common/AiActionableArea";
 import { DiffIndicator } from "@/components/graph/common/DiffIndicator";
+import { FormulaSection } from "@/components/graph/FormulaSection"; // Check path
 import type { Node } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { formatNumber } from "@/utils/format";
@@ -79,6 +80,7 @@ export const InlineNodeDetail = ({
     const { parents, children } = getNodeDependencies(nodeId);
     const currentNodeType = getNodeType?.(nodeId);
     const isParameter = currentNodeType === 'parameter';
+    const nodeLabel = node.label || node.slug;
 
     // Wrapper for hover to detect if target is in hidden column
     const handleVariableHover = (id: string | null) => {
@@ -138,7 +140,7 @@ export const InlineNodeDetail = ({
         {/* Header - same height as list header */}
         <div className={cn(
           "shrink-0 h-[88px] border-b flex flex-col justify-center px-4 relative z-10",
-          isLightMode ? "bg-white border-zinc-200" : "bg-zinc-900 border-zinc-800"
+          isLightMode ? "bg-white border-zinc-100" : "bg-zinc-900 border-zinc-800"
         )}>
           <div className="relative flex items-center justify-center w-full h-full">
              {/* Back button styled like chevrons - Absolute Left */}
@@ -155,7 +157,7 @@ export const InlineNodeDetail = ({
                 className={cn(
                   "h-8 rounded-full flex items-center justify-center transition-all duration-150 active:scale-95 shrink-0 shadow-sm ring-1 ring-inset",
                   isLightMode
-                    ? "bg-zinc-100 text-zinc-600 ring-zinc-200 hover:bg-zinc-200 hover:text-zinc-800 hover:ring-zinc-300 hover:shadow-md"
+                    ? "bg-white text-zinc-600 ring-zinc-200 hover:bg-zinc-50 hover:text-zinc-800 hover:ring-zinc-300 hover:shadow-md"
                     : "bg-zinc-800 text-zinc-400 ring-zinc-700 hover:bg-zinc-700 hover:text-zinc-200 hover:ring-zinc-600 hover:shadow-md",
                   backButtonHint ? "pl-2 pr-3 gap-1.5" : "w-8"
                 )}
@@ -181,7 +183,7 @@ export const InlineNodeDetail = ({
                 {node.label || node.slug}
               </h3>
               {node.unit && (
-                <span className={cn("text-xs", isLightMode ? "text-zinc-400" : "text-zinc-500")}>
+                <span className={cn("text-xs", isLightMode ? "text-zinc-500" : "text-zinc-500")}>
                   {node.unit}
                 </span>
               )}
@@ -191,7 +193,7 @@ export const InlineNodeDetail = ({
         
         {/* Content */}
         <div 
-          className="flex-1 overflow-y-auto px-4 min-h-0"
+          className="flex-1 overflow-y-auto px-5 min-h-0"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           <div className="pt-2"> 
@@ -210,58 +212,73 @@ export const InlineNodeDetail = ({
                         onBlur={onSaveEdit}
                         className={cn(
                           "h-10 text-xl font-mono",
-                          isLightMode 
-                            ? "bg-white text-zinc-900 border-zinc-200" 
+                          isLightMode
+                            ? "bg-white text-zinc-900 border-zinc-300"
                             : "bg-zinc-900 text-white border-zinc-700 focus-visible:ring-blue-500"
                         )}
                         autoFocus
                     />
                 </div>
             ) : (
-                <div className="flex items-baseline gap-2 flex-wrap group/value">
-                  <div 
-                    className={cn(
-                        "flex items-baseline gap-2 transition-all rounded-md px-1 -ml-1",
-                         isParameter && onStartEdit ? (
-                            isLightMode 
-                             ? "hover:bg-zinc-100 cursor-pointer" 
-                             : "hover:bg-zinc-800 cursor-pointer"
-                         ) : ""
-                    )}
-                    onClick={(e) => {
-                        if (isParameter && onStartEdit) {
-                            e.stopPropagation();
-                            onStartEdit(node);
-                        }
-                    }}
-                   >
-                      <span className={cn(
-                        "text-3xl font-mono font-bold tabular-nums",
-                        diff && Math.abs(diff) > 1e-9
-                          ? (diff > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")
-                          : colorClasses[colorScheme]
-                      )}>
-                        {typeof resolvedDisplayValue === 'number' ? formatNumber(resolvedDisplayValue) : resolvedDisplayValue}
-                      </span>
-                      {isParameter && onStartEdit && (
-                          <Pencil className={cn(
-                            "h-4 w-4 transition-opacity",
-                            isLightMode ? "text-zinc-400 opacity-0 group-hover/value:opacity-100" : "text-zinc-500 opacity-0 group-hover/value:opacity-100"
-                          )} />
-                      )}
+                  <div className="flex-1">
+                    {/* AI Actionable Area for Value */}
+                    <AiActionableArea
+                        isLightMode={isLightMode}
+                        className="rounded-lg p-2 -m-2 mt-0 hover:bg-transparent" // Negative margins to expand hit area without moving layout
+                        context={{
+                          label: `Valeur — ${nodeLabel}`,
+                          type: currentNodeType || "calculation",
+                          target: { kind: "node-field", id: node.id, field: "value" },
+                        }}
+                    >
+                        <div className="flex items-baseline gap-2 flex-wrap group/value">
+                            <div
+                            id={`value-container-${node.id}`}
+                            className={cn(
+                                "flex items-baseline gap-2 transition-all duration-300 rounded-md py-1",
+                                isParameter && onStartEdit ? (
+                                    isLightMode
+                                    ? "hover:bg-zinc-50 cursor-pointer px-2 -ml-2"
+                                    : "hover:bg-zinc-800 cursor-pointer px-2 -ml-2"
+                                ) : "px-0"
+                            )}
+                            onClick={(e) => {
+                                if (isParameter && onStartEdit) {
+                                    e.stopPropagation();
+                                    onStartEdit(node);
+                                }
+                            }}
+                            >
+                                <span className={cn(
+                                "text-3xl font-mono font-bold tabular-nums",
+                                diff && Math.abs(diff) > 1e-9
+                                    ? (diff > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")
+                                    : colorClasses[colorScheme]
+                                )}>
+                                {typeof resolvedDisplayValue === 'number' ? formatNumber(resolvedDisplayValue) : resolvedDisplayValue}
+                                </span>
+                                {isParameter && onStartEdit && (
+                                    <Pencil className={cn(
+                                    "h-4 w-4 transition-opacity",
+                                    isLightMode ? "text-zinc-400 opacity-0 group-hover/value:opacity-100" : "text-zinc-500 opacity-0 group-hover/value:opacity-100"
+                                    )} />
+                                )}
+                            </div>
+
+                            {node.unit && (
+                            <span className={cn("text-sm", isLightMode ? "text-zinc-500" : "text-zinc-500")}>
+                                {node.unit}
+                            </span>
+                            )}
+                            <DiffIndicator diff={diff} baseline={baseline} isScenarioActive={!!isScenarioActive} />
+                        </div>
+                    </AiActionableArea>
                   </div>
-                  
-                  {node.unit && (
-                    <span className={cn("text-sm", isLightMode ? "text-zinc-400" : "text-zinc-500")}>
-                      {node.unit}
-                    </span>
-                  )}
-                  <DiffIndicator diff={diff} baseline={baseline} isScenarioActive={!!isScenarioActive} />
-                </div>
+
             )}
             
             {isScenarioActive && baseline !== null && !isEditing && (
-              <div className={cn("text-xs mt-2", isLightMode ? "text-zinc-400" : "text-zinc-500")}>
+              <div className={cn("text-xs mt-2", isLightMode ? "text-zinc-500" : "text-zinc-500")}>
                 Valeur de base: {formatNumber(baseline)}
               </div>
             )}
@@ -269,16 +286,28 @@ export const InlineNodeDetail = ({
 
           {/* Notes - emphasized */}
           {node.notes && (
-            <div className={cn(
-              "py-4 px-4 rounded-xl mb-4",
-              isLightMode ? "bg-zinc-100" : "bg-zinc-800/50"
-            )}>
-              <p className={cn(
-                "text-sm leading-relaxed",
-                isLightMode ? "text-zinc-700" : "text-zinc-300"
-              )}>
-                {node.notes}
-              </p>
+            <div className="mb-4">
+               <AiActionableArea
+                  isLightMode={isLightMode}
+                  className="rounded-xl"
+                  context={{
+                    label: `Notes — ${nodeLabel}`,
+                    type: currentNodeType || "calculation",
+                    target: { kind: "node-field", id: node.id, field: "notes" },
+                  }}
+               >
+                <div className={cn(
+                "py-4 px-4 rounded-xl group/notes",
+                isLightMode ? "bg-zinc-50 border border-zinc-200" : "bg-zinc-800/50"
+                )}>
+                    <p className={cn(
+                        "text-sm leading-relaxed",
+                        isLightMode ? "text-zinc-700" : "text-zinc-300"
+                    )}>
+                        {node.notes}
+                    </p>
+                </div>
+               </AiActionableArea>
             </div>
           )}
 
@@ -290,10 +319,18 @@ export const InlineNodeDetail = ({
                     isLightMode={isLightMode || false}
                     nodes={nodes}
                     isScenarioActive={!!isScenarioActive}
+                    context={{
+                      label: `Formule — ${nodeLabel}`,
+                      type: currentNodeType || "calculation",
+                      target: { kind: "node-field", id: node.id, field: "formula" },
+                    }}
                     getNodeValues={getNodeValues}
                     onVariableClick={handleVariableClick}
                     onVariableHover={handleVariableHover}
                     getNodeType={getNodeType}
+                    selectedNode={node}
+                    selectedNodeValue={resolvedDisplayValue}
+                    nodeUnit={node.unit}
                 />
             </div>
           )}
@@ -303,7 +340,7 @@ export const InlineNodeDetail = ({
             <div className="py-4">
               {children.length > 0 && (
                 <div>
-                  <div className={cn("text-xs mb-1.5", isLightMode ? "text-zinc-400" : "text-zinc-600")}>
+                  <div className={cn("text-xs mb-1.5", isLightMode ? "text-zinc-500" : "text-zinc-600")}>
                     Utilisé par
                   </div>
                   <div className="flex flex-wrap gap-1">
@@ -315,7 +352,7 @@ export const InlineNodeDetail = ({
                         onMouseLeave={() => handleVariableHover(null)}
                         className={cn(
                           "px-2 py-0.5 rounded text-xs transition-colors",
-                          isLightMode ? "bg-zinc-100 text-zinc-700 hover:bg-zinc-200" : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                          isLightMode ? "bg-zinc-50 border border-zinc-200 text-zinc-700 hover:bg-zinc-100" : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
                         )}
                       >
                         {c.label || c.slug}

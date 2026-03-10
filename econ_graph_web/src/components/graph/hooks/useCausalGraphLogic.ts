@@ -26,6 +26,8 @@ export function useCausalGraphLogic() {
   const setSelectedNodeId = useUIStore((s) => s.setSelectedNodeId);
   const setInspectorOpen = useUIStore((s) => s.setInspectorOpen);
   const setIsComputing = useUIStore((s) => s.setIsComputing);
+  const isComputing = useUIStore((s) => s.isComputing);
+  const aiFocusTarget = useUIStore((s) => s.aiFocusTarget);
   
   // Scenario state
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
@@ -60,6 +62,7 @@ export function useCausalGraphLogic() {
   // Refs
   const inputRef = useRef<HTMLInputElement>(null);
   const scenariosContainerRef = useRef<HTMLDivElement>(null);
+  const fetchingScenarioRef = useRef<string | null>(null);
 
   // Scroll to start of scenarios list when active scenario changes
   useEffect(() => {
@@ -67,6 +70,33 @@ export function useCausalGraphLogic() {
       scenariosContainerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
     }
   }, [activeScenarioId]);
+
+  // Auto-load scenario values when activeScenarioId changes (e.g., from notification)
+  // Only trigger if scenario values haven't been loaded yet for this scenario
+  useEffect(() => {
+    if (activeScenarioId && scenarioValuesScenarioId !== activeScenarioId && currentProjectId) {
+      // Skip if already fetching this scenario to prevent double requests
+      if (fetchingScenarioRef.current === activeScenarioId) return;
+
+      fetchingScenarioRef.current = activeScenarioId;
+      setIsComputing(true);
+      computeWithScenario
+        .mutateAsync({
+          projectId: currentProjectId,
+          scenarioId: activeScenarioId,
+        })
+        .then((result) => {
+          setScenarioComputedValues(activeScenarioId, result.results);
+        })
+        .catch((e) => {
+          console.error("Failed to load scenario values", e);
+        })
+        .finally(() => {
+          fetchingScenarioRef.current = null;
+          setIsComputing(false);
+        });
+    }
+  }, [activeScenarioId, scenarioValuesScenarioId, currentProjectId, computeWithScenario, setScenarioComputedValues, setIsComputing]);
 
   // Focus input when editing starts
    useEffect(() => {
@@ -200,6 +230,26 @@ export function useCausalGraphLogic() {
     if (results.some(n => n.id === nodeId)) return 'result';
     return null;
   }, [settings, intermediates, results]);
+
+  useEffect(() => {
+    if (!aiFocusTarget) return;
+    const { target } = aiFocusTarget;
+    if (target.kind !== "node" && target.kind !== "node-field") return;
+    const nodeId = target.id;
+    const nodeType = getNodeType(nodeId);
+    if (!nodeType) return;
+
+    if (nodeType === "result") {
+      if (viewFullResultDetailId !== nodeId) {
+        setViewFullResultDetailId(nodeId);
+      }
+      return;
+    }
+
+    if (selectedCenterNodeId !== nodeId) {
+      setSelectedCenterNodeId(nodeId);
+    }
+  }, [aiFocusTarget, getNodeType, selectedCenterNodeId, setSelectedCenterNodeId, setViewFullResultDetailId, viewFullResultDetailId]);
 
   // Actions
   const clearResultSelection = useCallback(() => setSelectedResultId(null), []);
@@ -343,6 +393,18 @@ export function useCausalGraphLogic() {
     }
   }, [getNodeType]);
 
+  // Listen for global navigation requests (e.g. from AI chat tag clicks)
+  const pendingNavigationNodeId = useUIStore((s) => s.pendingNavigationNodeId);
+  const requestNodeNavigation = useUIStore((s) => s.requestNodeNavigation);
+
+  useEffect(() => {
+    if (!pendingNavigationNodeId) return;
+    // Clear the request immediately to avoid re-triggering
+    requestNodeNavigation(null);
+    // Use the same scroll + flash as "dépend de" clicks
+    navigateToDependency(pendingNavigationNodeId);
+  }, [pendingNavigationNodeId, navigateToDependency, requestNodeNavigation]);
+
   return {
     nodes,
     isLightMode,
@@ -403,5 +465,6 @@ export function useCausalGraphLogic() {
     // Computed props - hover doesn't trigger fading, only selection does
     hasActiveInteraction: selectedResultId !== null,
     isScenarioActive: !!(activeScenarioId && scenarioValuesScenarioId === activeScenarioId),
+    isLoading: isComputing,
   };
 }

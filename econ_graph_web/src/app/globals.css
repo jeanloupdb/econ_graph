@@ -118,12 +118,14 @@
 }
 
 @keyframes bounce-subtle {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-5px);
-  }
+  0% { transform: translateY(0); }
+  12% { transform: translateY(-6px); }
+  24% { transform: translateY(0); }
+  36% { transform: translateY(-4px); }
+  48% { transform: translateY(0); }
+  60% { transform: translateY(-2px); }
+  72% { transform: translateY(0); }
+  100% { transform: translateY(0); }
 }
 
 @keyframes blink {
@@ -236,6 +238,22 @@
   animation: pulse-subtle 4s ease-in-out infinite;
 }
 
+/* Notification transient chip: progress bar shrinks */
+@keyframes shrink {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+.animate-shrink-8s {
+  animation: shrink 8s linear forwards;
+}
+
+/* AI button hover bounce */
+.ai-bounce-on-hover:hover .ai-bounce-target {
+  animation: bounce-subtle 0.9s linear 1;
+}
+
+
 .ai-border-light-shell {
   position: relative;
   width: 100%;
@@ -272,46 +290,47 @@
 
 @layer base {
   * {
-    @apply border-zinc-200 dark:border-zinc-800;
+    @apply border-zinc-200;
   }
   body {
-    @apply bg-white dark:bg-zinc-950;
+    @apply bg-[#f5f5f7] text-[#111114];
   }
 }
 
 :root {
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  /* Light palette — crisp, airy, high contrast */
+  --background: oklch(0.975 0.002 270);   /* #f5f5f7 */
+  --foreground: oklch(0.12 0.005 270);    /* #111114 */
+  --card: oklch(1 0 0);                   /* white */
+  --card-foreground: oklch(0.12 0.005 270);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --popover-foreground: oklch(0.12 0.005 270);
+  --primary: oklch(0.45 0.18 264);        /* blue-600 #2563eb */
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.955 0.003 270);    /* #f0f0f3 */
+  --secondary-foreground: oklch(0.35 0.008 270);
+  --muted: oklch(0.955 0.003 270);
+  --muted-foreground: oklch(0.48 0.01 270); /* #555565 */
+  --accent: oklch(0.94 0.005 270);
+  --accent-foreground: oklch(0.25 0.008 270);
+  --destructive: oklch(0.55 0.22 27);     /* red-600 */
+  --border: oklch(0.9 0.005 270);         /* #e2e2ea */
+  --input: oklch(0.93 0.004 270);
+  --ring: oklch(0.45 0.18 264);           /* blue-600 focus ring */
+  --chart-1: oklch(0.55 0.22 264);        /* blue */
+  --chart-2: oklch(0.55 0.18 162);        /* emerald */
+  --chart-3: oklch(0.55 0.22 293);        /* violet */
+  --chart-4: oklch(0.65 0.18 84);         /* amber */
+  --chart-5: oklch(0.55 0.22 27);         /* red */
+  --sidebar: oklch(0.958 0.003 270);      /* #f0f0f3 */
+  --sidebar-foreground: oklch(0.12 0.005 270);
+  --sidebar-primary: oklch(0.45 0.18 264);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.93 0.005 270);
+  --sidebar-accent-foreground: oklch(0.25 0.008 270);
+  --sidebar-border: oklch(0.9 0.005 270);
+  --sidebar-ring: oklch(0.45 0.18 264);
 }
 
 .dark {
@@ -357,16 +376,12 @@
   }
 }
 
-/* Force dark theme for Radix Portals (Popovers, Dropdowns) */
-.dark [data-radix-popper-content-wrapper] {
-  --popover-bg: rgb(39 39 42); /* zinc-800 */
-  --popover-fg: rgb(250 250 250); /* zinc-50 */
-}
-
-.dark [data-radix-popper-content-wrapper] > div {
-  background-color: var(--popover-bg) !important;
-  color: var(--popover-fg) !important;
-  border-color: rgb(82 82 91) !important; /* zinc-600 */
+/* Light mode Radix Portals (Popovers, Dropdowns) */
+[data-radix-popper-content-wrapper] > div {
+  background-color: rgb(255 255 255) !important;
+  color: rgb(17 17 20) !important;
+  border-color: rgb(226 226 234) !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.06) !important;
 }
 
 @layer utilities {
@@ -388,6 +403,33 @@
   .custom-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
+  }
+
+  /* Discrete sidebar scrollbar - shows on hover */
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 4px;
+  }
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 4px;
+    transition: background 0.2s ease;
+  }
+  .sidebar-scroll:hover::-webkit-scrollbar-thumb {
+    background: rgba(100, 100, 120, 0.25);
+  }
+  .sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 100, 120, 0.4);
+  }
+  /* Firefox */
+  .sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .sidebar-scroll:hover {
+    scrollbar-color: rgba(100, 100, 120, 0.25) transparent;
   }
   
   /* Graph light mode scrollbars - more visible */
@@ -413,7 +455,11 @@
     scrollbar-color: rgba(82, 82, 91, 0.5) rgba(0, 0, 0, 0.05);
   }
   
-  /* Force dark theme for all inputs - prevent browser defaults */
+  /* Hidden scrollbar utility */
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* Light mode inputs — clean, visible */
   input[type="text"],
   input[type="email"],
   input[type="password"],
@@ -421,42 +467,11 @@
   input[type="tel"],
   input[type="url"],
   input[type="search"] {
-    background-color: rgb(24 24 27) !important; /* zinc-900 */
-    color: rgb(255 255 255) !important; /* white */
-    -webkit-text-fill-color: rgb(255 255 255) !important;
+    background-color: rgb(255 255 255) !important;
+    color: rgb(17 17 20) !important;
+    -webkit-text-fill-color: rgb(17 17 20) !important;
   }
-  
-  input[type="text"]:valid,
-  input[type="email"]:valid,
-  input[type="password"]:valid,
-  input[type="number"]:valid,
-  input[type="tel"]:valid,
-  input[type="url"]:valid,
-  input[type="search"]:valid,
-  input[type="text"]:invalid,
-  input[type="email"]:invalid,
-  input[type="password"]:invalid,
-  input[type="number"]:invalid,
-  input[type="tel"]:invalid,
-  input[type="url"]:invalid,
-  input[type="search"]:invalid {
-    background-color: rgb(24 24 27) !important; /* zinc-900 */
-    color: rgb(255 255 255) !important; /* white */
-    -webkit-text-fill-color: rgb(255 255 255) !important;
-  }
-  
-  input[type="text"]:focus,
-  input[type="email"]:focus,
-  input[type="password"]:focus,
-  input[type="number"]:focus,
-  input[type="tel"]:focus,
-  input[type="url"]:focus,
-  input[type="search"]:focus {
-    background-color: rgb(24 24 27) !important; /* zinc-900 */
-    color: rgb(255 255 255) !important; /* white */
-    -webkit-text-fill-color: rgb(255 255 255) !important;
-  }
-  
+
   /* Remove all browser default outlines and shadows */
   input,
   input:focus,
@@ -486,4 +501,3 @@
     -moz-appearance: textfield;
   }
 }
-

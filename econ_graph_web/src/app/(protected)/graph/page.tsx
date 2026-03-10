@@ -6,12 +6,14 @@ import { TopbarMinimal } from "@/components/chrome/TopbarMinimal";
 import { CommandPalette } from "@/components/command/CommandPalette";
 import { BottomToolbar } from "@/components/graph/BottomToolbar";
 import { CausalStateView } from "@/components/graph/CausalStateView";
+import { FloatingAiHub } from "@/components/graph/FloatingAiHub";
 import { GraphCanvas } from "@/components/graph/GraphCanvas";
-import { ProjectChatPanel } from "@/components/graph/ProjectChatPanel";
 import { Inspector } from "@/components/panels/Inspector";
 import { LibraryPanel } from "@/components/panels/LibraryPanel";
 import { ScenarioPanel } from "@/components/panels/ScenarioPanel";
 import { ProjectGraphProvider } from "@/graph/providers/ProjectGraphProvider";
+import { generateDashboard } from "@/lib/api/dashboard";
+import { isDashboardV2 } from "@/types/dashboard";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
 import { useProjectStore } from "@/store/projectState";
 import { useUIStore } from "@/store/uiState";
@@ -19,7 +21,6 @@ import { useEffect, useRef } from "react";
 import { ReactFlowProvider } from "reactflow";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { AnimatePresence } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useState } from "react";
 import { toast } from "sonner";
@@ -47,17 +48,16 @@ function GraphPageContent() {
     (state) => state.setScenarioPanelOpen
   );
   const resetDetailPanels = useUIStore((state) => state.resetDetailPanels);
-  const aiAssistantOpen = useUIStore((s) => s.aiAssistantOpen);
-  const setAiAssistantOpen = useUIStore((s) => s.setAiAssistantOpen);
   const setViewMode = useUIStore((s) => s.setViewMode);
   const workspaceView = useUIStore((s) => s.workspaceView);
+  const setWorkspaceView = useUIStore((s) => s.setWorkspaceView);
   const setFloatingPanelOpen = useUIStore((s) => s.setFloatingPanelOpen);
+  const resetToBaseline = useScenarioStore((s) => s.resetToBaseline);
 
   const loadProjects = useProjectStore((s) => s.load);
   const projects = useProjectStore((s) => s.projects);
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const setCurrentProject = useProjectStore((s) => s.setCurrentProject);
-  const currentProject = projects.find((p) => p.id === currentProjectId);
 
   const searchParams = useSearchParams();
   const projectIdParam = searchParams.get("project");
@@ -67,8 +67,16 @@ function GraphPageContent() {
   // Reset to columns mode with sidebar open on page load
   useEffect(() => {
     setViewMode("columns");
+    setWorkspaceView("causal");
     setFloatingPanelOpen(true);
-  }, [setViewMode, setFloatingPanelOpen]);
+    resetToBaseline();
+  }, [
+    setViewMode,
+    setWorkspaceView,
+    setFloatingPanelOpen,
+    resetToBaseline,
+    currentProjectId,
+  ]);
 
   useEffect(() => {
     loadProjects();
@@ -92,6 +100,27 @@ function GraphPageContent() {
     resetDetailPanels();
   }, [currentProjectId, resetDetailPanels]);
 
+  // Auto-generate dashboard in background when a new project is loaded
+  useEffect(() => {
+    if (!currentProjectId) return;
+    const project = useProjectStore.getState().projects.find(p => p.id === currentProjectId);
+    if (!project || project.status !== 'completed') return;
+    if (project.dashboard_config && isDashboardV2(project.dashboard_config as any)) return;
+
+    generateDashboard(currentProjectId)
+      .then(config => {
+        useProjectStore.setState(state => ({
+          projects: state.projects.map(p =>
+            p.id === currentProjectId ? { ...p, dashboard_config: config as any } : p
+          ),
+        }));
+      })
+      .catch(() => {
+        // Silent failure — user can regenerate manually from the dashboard view
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProjectId]);
+
   const handleFitView = () => {
     console.log("Fit view triggered");
   };
@@ -114,24 +143,13 @@ function GraphPageContent() {
       {/* Global Command Palette (Ctrl+K) */}
       <CommandPalette />
 
+
       <div 
         className={`flex h-screen flex-col ${isLightMode ? '' : 'dark'}`}
         style={isLightMode ? { backgroundColor: GRAPH_LIGHT_COLORS.pageBg } : { backgroundColor: '#0a0a0b' }}
       >
         {/* Topbar - barre supérieure */}
         <TopbarMinimal />
-
-        {/* Project Chat Panel - overlay à gauche */}
-        <AnimatePresence>
-          {aiAssistantOpen && currentProjectId && currentProject && (
-            <ProjectChatPanel
-              projectId={currentProjectId}
-              projectName={currentProject.name}
-              generationPrompt={currentProject.generation_prompt}
-              onClose={() => setAiAssistantOpen(false)}
-            />
-          )}
-        </AnimatePresence>
 
         {/* Contenu principal - zone de travail */}
         <div className="flex-1 relative overflow-hidden flex flex-col">
@@ -147,7 +165,6 @@ function GraphPageContent() {
             </ReactFlowProvider>
           )}
 
-          {/* Collapsible Mode Panel - only visible in Expert mode */}
           {workspaceView === 'graph' && <CollapsibleModePanel />}
 
           {/* Inspector - overlay flottant à droite */}
@@ -157,6 +174,8 @@ function GraphPageContent() {
             setScenarioPanelOpen={setScenarioPanelOpen}
           />
         </div>
+
+        <FloatingAiHub hidePill />
       </div>
     </ProjectGraphProvider>
   );
@@ -362,6 +381,7 @@ function ScenarioAutoLoader() {
   const setScenarioComputedValues = useScenarioStore(
     (s) => s.setScenarioComputedValues
   );
+  const setIsComputing = useUIStore((s) => s.setIsComputing);
   const computeWithScenario = useComputeWithScenario();
   const loadedRef = useRef(false);
 
@@ -374,6 +394,7 @@ function ScenarioAutoLoader() {
 
     // Auto-load scenario values on page load
     (async () => {
+      setIsComputing(true);
       try {
         const result = await computeWithScenario.mutateAsync({
           projectId: currentProjectId,
@@ -382,6 +403,8 @@ function ScenarioAutoLoader() {
         setScenarioComputedValues(activeScenarioId, result.results);
       } catch (error) {
         console.error("Failed to auto-load scenario values:", error);
+      } finally {
+        setIsComputing(false);
       }
     })();
   }, [
@@ -396,29 +419,47 @@ function ScenarioAutoLoader() {
 
 function ProjectAutoComputer() {
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
+  const { nodes, isLoading } = useGraphData();
   const graphActions = useGraphActions();
   const computedRef = useRef<string | null>(null);
+  const computingRef = useRef(false);
 
   useEffect(() => {
-    if (!currentProjectId) return;
-    if (computedRef.current === currentProjectId) return;
+    if (!currentProjectId || isLoading) return;
+    if (computedRef.current === currentProjectId || computingRef.current) return;
 
+    if (!nodes.length) {
+      computedRef.current = currentProjectId;
+      return;
+    }
+
+    const needsCompute = nodes.some((node) => {
+      const isComputable = !!node.computation_definition || !!node.composite_id;
+      if (!isComputable) return false;
+      return node.value_computed == null && !node.computation_error;
+    });
+
+    if (!needsCompute) {
+      computedRef.current = currentProjectId;
+      return;
+    }
+
+    computedRef.current = currentProjectId;
     const compute = async () => {
-      if (graphActions.computeProject) {
-        try {
-          await graphActions.computeProject();
-          computedRef.current = currentProjectId;
-          // toast.success("Projet recalculé");
-        } catch (e) {
-          console.error("Auto-compute failed", e);
-        }
+      if (!graphActions.computeProject) return;
+      computingRef.current = true;
+      try {
+        await graphActions.computeProject();
+      } catch (e) {
+        console.error("Auto-compute failed", e);
+      } finally {
+        computingRef.current = false;
       }
     };
 
-    // Small delay to ensure everything is ready
-    const timer = setTimeout(compute, 500);
-    return () => clearTimeout(timer);
-  }, [currentProjectId, graphActions]);
+    const timer = window.setTimeout(compute, 400);
+    return () => window.clearTimeout(timer);
+  }, [currentProjectId, graphActions, isLoading, nodes]);
 
   return null;
 }
@@ -464,24 +505,55 @@ function FloatingInspectorWrapper({
   setScenarioPanelOpen: (open: boolean) => void;
 }) {
   const { isLightMode } = useGraphTheme();
-  
+  const setInspectorOpen = useUIStore((s) => s.setInspectorOpen);
+
   if (!inspectorOpen && !scenarioPanelOpen) return null;
 
+  const closeAll = () => {
+    setInspectorOpen(false);
+    setScenarioPanelOpen(false);
+  };
+
   return (
-    <div 
-      className={`absolute right-0 top-0 bottom-0 z-30 w-[320px] border-l overflow-hidden ${isLightMode ? '' : 'dark'}`}
-      style={isLightMode 
-        ? { backgroundColor: GRAPH_LIGHT_COLORS.panelBg, borderColor: GRAPH_LIGHT_COLORS.panelBorder }
-        : { backgroundColor: '#0a0a0b', borderColor: 'rgba(255,255,255,0.06)' }
-      }
-    >
-      {inspectorOpen && <Inspector />}
-      {scenarioPanelOpen && !inspectorOpen && (
-        <ScenarioPanel
-          isOpen={scenarioPanelOpen}
-          onClose={() => setScenarioPanelOpen(false)}
-        />
-      )}
-    </div>
+    <>
+      {/* Mobile backdrop */}
+      <div
+        className="fixed inset-0 z-40 bg-black/50 md:hidden"
+        onClick={closeAll}
+      />
+
+      {/* Panel — bottom sheet on mobile, right panel on desktop */}
+      <div
+        className={`
+          fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl overflow-hidden flex flex-col
+          md:absolute md:right-0 md:top-0 md:bottom-0 md:left-auto
+          md:rounded-none md:z-30
+          h-[80svh] md:h-auto md:w-[320px]
+          border-t md:border-t-0 md:border-l
+          ${isLightMode ? "" : "dark"}
+        `}
+        style={
+          isLightMode
+            ? { backgroundColor: GRAPH_LIGHT_COLORS.panelBg, borderColor: GRAPH_LIGHT_COLORS.panelBorder }
+            : { backgroundColor: "#0a0a0b", borderColor: "rgba(255,255,255,0.06)" }
+        }
+      >
+        {/* Drag handle (mobile only) */}
+        <div className="md:hidden flex justify-center pt-3 pb-2 shrink-0">
+          <div className={`w-10 h-1 rounded-full ${isLightMode ? "bg-zinc-300" : "bg-zinc-700"}`} />
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-hidden">
+          {inspectorOpen && <Inspector />}
+          {scenarioPanelOpen && !inspectorOpen && (
+            <ScenarioPanel
+              isOpen={scenarioPanelOpen}
+              onClose={() => setScenarioPanelOpen(false)}
+            />
+          )}
+        </div>
+      </div>
+    </>
   );
 }

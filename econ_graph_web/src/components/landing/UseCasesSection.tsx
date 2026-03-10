@@ -1,0 +1,210 @@
+"use client";
+
+import { cn } from "@/lib/utils";
+import { AnimatePresence, motion, useScroll, useTransform } from "framer-motion";
+import { ArrowRight, TrendingUp, AlertCircle, CheckCircle2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useCallback, useRef, useState } from "react";
+
+const USE_CASES = [
+  {
+    id: "bakery",
+    sector: "Boulangerie",
+    insight: "Arrêtez les Sandwichs.",
+    reason: "Votre marge est 3x inférieure à la moyenne de vos produits.",
+    data: [
+      { label: "Croissants", value: 38, status: "good" },
+      { label: "Baguettes", value: 42, status: "good" },
+      { label: "Sandwichs", value: 12, status: "bad" },
+    ],
+    prompt: "Analyse ma rentabilité : croissants, baguettes et sandwichs...",
+  },
+  {
+    id: "saas",
+    sector: "SaaS",
+    insight: "Baissez le Churn de 1%.",
+    reason: "Cela avance votre point mort de 4 mois et sauve 12k€ de MRR.",
+    data: [
+      { label: "Churn Actuel", value: 3.2, status: "bad" },
+      { label: "Cible", value: 2.2, status: "good" },
+    ],
+    prompt: "Calcule l'impact d'une baisse de 1% du churn sur mon MRR...",
+  },
+  {
+    id: "airbnb",
+    sector: "Immobilier",
+    insight: "Ciblez 72% d'occupation.",
+    reason: "En dessous, votre cash-flow net devient négatif après impôts.",
+    data: [
+      { label: "Pessimiste", value: -120, status: "bad", unit: "€" },
+      { label: "Cible 72%", value: 260, status: "good", unit: "€" },
+    ],
+    prompt: "A quel taux d'occupation mon Airbnb devient-il rentable ?",
+  },
+] as const;
+
+export function UseCasesSection() {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const router = useRouter();
+  const sectionRef = useRef(null);
+  const active = USE_CASES[activeIdx];
+
+  const { scrollYProgress } = useScroll({
+    target: sectionRef,
+    offset: ["start end", "end start"]
+  });
+
+  const y1 = useTransform(scrollYProgress, [0, 1], [0, -100]);
+  const y2 = useTransform(scrollYProgress, [0, 1], [0, -50]);
+
+  const handleTest = useCallback(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("sg_prefill_prompt", active.prompt);
+    }
+    router.push("/dashboard");
+  }, [active, router]);
+
+  return (
+    <section ref={sectionRef} className="relative py-40 overflow-hidden bg-[#f5f5f7] border-t border-zinc-100">
+      <div className="relative z-10 max-w-6xl mx-auto px-6">
+
+        {/* Header */}
+        <div className="flex flex-col items-center mb-24 text-center">
+          <motion.div style={{ y: y2 }} className="mb-4">
+            <span className="px-3 py-1 rounded-full bg-white border border-zinc-200 text-zinc-600 text-[12px] font-medium tracking-wide shadow-sm">
+              INSIGHTS IA
+            </span>
+          </motion.div>
+          <h2 className="text-4xl md:text-6xl font-bold text-zinc-900 tracking-tighter max-w-3xl">
+            Ne lisez plus des chiffres. <br/>
+            <span className="text-zinc-400">Prenez des décisions.</span>
+          </h2>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="flex justify-center gap-1 mb-16 p-1 bg-white border border-zinc-200 rounded-2xl w-fit mx-auto shadow-sm">
+          {USE_CASES.map((uc, i) => (
+            <button
+              key={uc.id}
+              onClick={() => setActiveIdx(i)}
+              className={cn(
+                "px-6 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 relative",
+                activeIdx === i ? "text-zinc-900" : "text-zinc-400 hover:text-zinc-700"
+              )}
+            >
+              <span className="relative z-10">{uc.sector}</span>
+              {activeIdx === i && (
+                <motion.div
+                  layoutId="caseTab"
+                  className="absolute inset-0 bg-zinc-100 rounded-xl shadow-sm"
+                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                />
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Decision Dashboard Visual */}
+        <motion.div
+          style={{ y: y1 }}
+          className="relative max-w-5xl mx-auto"
+        >
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center bg-white border border-zinc-200 rounded-[2.5rem] p-8 md:p-12 shadow-xl shadow-zinc-100">
+
+            {/* Action/Conclusion Side */}
+            <div className="space-y-8">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={active.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  className="space-y-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-10 h-10 rounded-full flex items-center justify-center",
+                      active.data.some(d => d.status === 'bad') ? "bg-red-50 text-red-500" : "bg-emerald-50 text-emerald-600"
+                    )}>
+                      <AlertCircle className="w-6 h-6" />
+                    </div>
+                    <span className="text-zinc-400 font-mono text-sm tracking-widest uppercase">Conclusion IA</span>
+                  </div>
+
+                  <h3 className="text-4xl md:text-5xl font-bold text-zinc-900 leading-[1.1]">
+                    {active.insight}
+                  </h3>
+                  <p className="text-xl text-zinc-500 leading-relaxed">
+                    {active.reason}
+                  </p>
+                </motion.div>
+              </AnimatePresence>
+
+              <div className="pt-8">
+                <button
+                  onClick={handleTest}
+                  className="group flex items-center gap-3 px-8 py-4 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-2xl shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  Générer ce modèle
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
+            </div>
+
+            {/* Visual Evidence Side */}
+            <div className="bg-zinc-50 rounded-3xl p-8 border border-zinc-100 space-y-8">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={active.id + "-viz"}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="space-y-6"
+                >
+                  {active.data.map((item, i) => (
+                    <div key={i} className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-zinc-600 font-medium">{item.label}</span>
+                        <span className={cn(
+                          "font-mono font-bold",
+                          item.status === 'good' ? "text-emerald-600" : "text-red-500"
+                        )}>
+                          {item.value}{item.unit || '%'}
+                        </span>
+                      </div>
+                      <div className="h-3 w-full bg-zinc-200 rounded-full overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${Math.min(100, item.value * (item.unit ? 0.1 : 1))}%` }}
+                          transition={{ duration: 1, delay: i * 0.1 }}
+                          className={cn(
+                            "h-full rounded-full",
+                            item.status === 'good' ? "bg-emerald-500" : "bg-red-400"
+                          )}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </motion.div>
+              </AnimatePresence>
+
+              <div className="pt-6 grid grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl bg-white border border-zinc-200 shadow-sm">
+                  <TrendingUp className="w-5 h-5 text-emerald-600 mb-2" />
+                  <div className="text-[10px] text-zinc-500 uppercase font-bold">Optimisation</div>
+                  <div className="text-sm text-zinc-700">Boost de marge +18%</div>
+                </div>
+                <div className="p-4 rounded-2xl bg-white border border-zinc-200 shadow-sm">
+                  <CheckCircle2 className="w-5 h-5 text-violet-600 mb-2" />
+                  <div className="text-[10px] text-zinc-500 uppercase font-bold">Confiance</div>
+                  <div className="text-sm text-zinc-700">Calcul certifié</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}

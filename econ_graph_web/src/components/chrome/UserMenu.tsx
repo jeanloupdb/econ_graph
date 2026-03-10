@@ -6,11 +6,11 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import { useGraphTheme } from "@/lib/context/GraphThemeContext";
 import { cn } from "@/lib/utils";
 import { useProjectStore } from "@/store/projectState";
-import { ChevronDown, LogOut, Share2, User } from "lucide-react";
+import { ChevronDown, Download, FileSpreadsheet, LogOut, Share2, User } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-export function UserMenu({ dropUp = false, forceDark = false }: { dropUp?: boolean; forceDark?: boolean }) {
+export function UserMenu({ dropUp = false, forceDark = false, compact = false, onExportExcel }: { dropUp?: boolean; forceDark?: boolean; compact?: boolean; onExportExcel?: () => void }) {
   const { isLightMode: globalIsLightMode } = useGraphTheme();
   const isLightMode = forceDark ? false : globalIsLightMode;
   const { user, logout } = useAuth();
@@ -62,14 +62,14 @@ export function UserMenu({ dropUp = false, forceDark = false }: { dropUp?: boole
           variant="ghost"
           size="sm"
           onClick={() => setIsOpen(!isOpen)}
-          className="group w-full flex items-center justify-start gap-3 px-2 py-6 hover:bg-zinc-800/50 transition-all rounded-lg"
+          className={cn("group w-full flex items-center justify-start gap-3 px-2 hover:bg-zinc-100 transition-all rounded-lg", compact ? "py-1.5" : "py-6")}
         >
           <div
             className={cn(
               "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-all",
               isLightMode
                 ? "bg-blue-100 border-blue-300 group-hover:border-blue-500"
-                : "bg-blue-950/30 border-blue-800/50 group-hover:border-blue-500/50"
+                : "bg-blue-100 border-blue-300 group-hover:border-blue-500"
             )}
           >
             <span
@@ -77,19 +77,20 @@ export function UserMenu({ dropUp = false, forceDark = false }: { dropUp?: boole
                 "text-xs font-semibold transition-colors",
                 isLightMode
                   ? "text-blue-700"
-                  : "text-blue-400"
+                  : "text-blue-700"
               )}
             >
               {user.username.charAt(0).toUpperCase()}
             </span>
           </div>
-          <div className="flex flex-col items-start min-w-0 flex-1">
+          {!compact && (
+            <div className="flex flex-col items-start min-w-0 flex-1">
               <span
                 className={cn(
                   "text-sm font-medium truncate w-full text-left transition-colors",
                   isLightMode
                     ? "text-zinc-900 group-hover:text-blue-700"
-                    : "text-zinc-300 group-hover:text-blue-300"
+                    : "text-zinc-900 group-hover:text-blue-700"
                 )}
               >
                 {user.username}
@@ -97,38 +98,42 @@ export function UserMenu({ dropUp = false, forceDark = false }: { dropUp?: boole
               <span className="text-[10px] text-zinc-500 truncate w-full text-left">
                   {user.email}
               </span>
-          </div>
+            </div>
+          )}
           
-          <ChevronDown
-            className={cn(
-              "h-4 w-4 shrink-0 transition-transform ml-auto",
-              isOpen ? "rotate-180" : "",
-              isLightMode ? "text-zinc-700" : "text-zinc-500"
-            )}
-          />
+          {!compact && (
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 shrink-0 transition-transform ml-auto",
+                isOpen ? "rotate-180" : "",
+                isLightMode ? "text-zinc-700" : "text-zinc-700"
+              )}
+            />
+          )}
         </Button>
 
         {isOpen && (
           <div
             className={cn(
-              "absolute left-0 right-0 rounded-lg border shadow-xl z-[100]",
+              "absolute rounded-lg border shadow-xl z-[100]",
+              compact ? "right-0 w-[220px]" : "left-0 right-0",
               dropUp ? "bottom-full mb-2" : "top-full mt-2",
               isLightMode
-                ? "bg-white border-zinc-300"
-                : "bg-zinc-950 border-zinc-800"
+                ? "bg-white border-zinc-200"
+                : "bg-white border-zinc-200"
             )}
           >
             {/* User Info (redundant if shown in button but good for mobile or compact view logic, though keeping here for now) */}
             <div
               className={cn(
                 "px-4 py-3 border-b",
-                isLightMode ? "border-zinc-200" : "border-zinc-800"
+                isLightMode ? "border-zinc-200" : "border-zinc-200"
               )}
             >
               <p
                 className={cn(
                   "text-sm font-medium",
-                  isLightMode ? "text-zinc-900" : "text-white"
+                  isLightMode ? "text-zinc-900" : "text-zinc-900"
                 )}
               >
                 {user.full_name || user.username}
@@ -136,7 +141,7 @@ export function UserMenu({ dropUp = false, forceDark = false }: { dropUp?: boole
               <p
                 className={cn(
                   "text-xs",
-                  isLightMode ? "text-zinc-600" : "text-zinc-400"
+                  isLightMode ? "text-zinc-600" : "text-zinc-600"
                 )}
               >
                 Pro Plan
@@ -154,7 +159,7 @@ export function UserMenu({ dropUp = false, forceDark = false }: { dropUp?: boole
                       "w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors",
                       isLightMode
                         ? "text-zinc-800 hover:text-violet-700 hover:bg-violet-50"
-                        : "text-zinc-300 hover:text-violet-300 hover:bg-violet-500/10"
+                        : "text-zinc-800 hover:text-violet-700 hover:bg-violet-50"
                     )}
                   >
                     <Share2 className="h-4 w-4" />
@@ -162,7 +167,30 @@ export function UserMenu({ dropUp = false, forceDark = false }: { dropUp?: boole
                   </button>
                   <div className={cn(
                     "my-2 mx-4 border-t",
-                    isLightMode ? "border-zinc-200" : "border-zinc-800"
+                    isLightMode ? "border-zinc-200" : "border-zinc-200"
+                  )} />
+                </>
+              )}
+
+              {/* Export Excel - only when handler provided (mobile) */}
+              {onExportExcel && (
+                <>
+                  <button
+                    onClick={() => { onExportExcel(); setIsOpen(false); }}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors",
+                      isLightMode
+                        ? "text-emerald-700 hover:bg-emerald-50"
+                        : "text-emerald-700 hover:bg-emerald-50"
+                    )}
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                    <span>Exporter Excel</span>
+                    <Download className="h-3.5 w-3.5 ml-auto" />
+                  </button>
+                  <div className={cn(
+                    "my-2 mx-4 border-t",
+                    isLightMode ? "border-zinc-200" : "border-zinc-200"
                   )} />
                 </>
               )}
@@ -173,11 +201,11 @@ export function UserMenu({ dropUp = false, forceDark = false }: { dropUp?: boole
                   "w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors",
                   isLightMode
                     ? "text-zinc-800 hover:text-blue-700 hover:bg-zinc-100"
-                    : "text-zinc-300 hover:text-blue-300 hover:bg-zinc-900"
+                    : "text-zinc-800 hover:text-blue-700 hover:bg-zinc-100"
                 )}
               >
                 <User className="h-4 w-4" />
-                <span>Profile</span>
+                <span>Profil</span>
               </button>
               <button
                 onClick={handleLogout}
@@ -185,7 +213,7 @@ export function UserMenu({ dropUp = false, forceDark = false }: { dropUp?: boole
                   "w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors",
                   isLightMode
                     ? "text-red-600 hover:text-red-700 hover:bg-zinc-100"
-                    : "text-red-400 hover:text-red-300 hover:bg-zinc-900"
+                    : "text-red-600 hover:text-red-700 hover:bg-zinc-100"
                 )}
               >
                 <LogOut className="h-4 w-4" />

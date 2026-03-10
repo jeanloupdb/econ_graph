@@ -272,17 +272,17 @@ export function CollapsibleModePanel() {
                         transition={{ duration: 0.15 }}
                         className="absolute top-full left-0 mt-3 w-64 z-50"
                       >
-                        <div className="relative bg-zinc-900 border border-zinc-700 rounded-xl p-4 shadow-2xl">
-                          <div className="absolute -top-2 left-6 w-4 h-4 bg-zinc-900 border-l border-t border-zinc-700 rotate-45" />
+                        <div className="relative bg-white border border-zinc-200 rounded-xl p-4 shadow-xl">
+                          <div className="absolute -top-2 left-6 w-4 h-4 bg-white border-l border-t border-zinc-200 rotate-45" />
                           <div className="relative">
-                            <p className="text-sm font-medium text-zinc-200 mb-2">Testez des hypothèses</p>
-                            <p className="text-sm text-zinc-400 mb-4">
+                            <p className="text-sm font-medium text-zinc-800 mb-2">Testez des hypothèses</p>
+                            <p className="text-sm text-zinc-500 mb-4">
                               Les scénarios vous permettent de modifier les paramètres pour voir comment les résultats changent.
                             </p>
-                            <p className="text-xs text-zinc-500 mb-4">Ex : &quot;Et si mon budget augmente de 20% ?&quot;</p>
+                            <p className="text-xs text-zinc-400 mb-4">Ex : &quot;Et si mon budget augmente de 20% ?&quot;</p>
                             <button
                               onClick={dismissScenarioOnboarding}
-                              className="w-full py-2 px-3 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 text-sm font-medium transition-colors"
+                              className="w-full py-2 px-3 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium transition-colors"
                             >
                               Compris
                             </button>
@@ -321,9 +321,7 @@ export function CollapsibleModePanel() {
         className={cn(
           "absolute left-4 top-4 z-20 px-2 py-1.5 backdrop-blur-xl rounded-xl border",
           "animate-in fade-in slide-in-from-top-2 duration-200",
-          isLightMode
-            ? "shadow-lg"
-            : "bg-zinc-900/90 border-white/[0.08] shadow-2xl"
+          "bg-white/90 shadow-lg"
         )}
         style={isLightMode
           ? { backgroundColor: `${GRAPH_LIGHT_COLORS.panelBg}f2`, borderColor: GRAPH_LIGHT_COLORS.panelBorder }
@@ -342,7 +340,7 @@ export function CollapsibleModePanel() {
         className={cn(
           "absolute left-0 top-0 bottom-0 z-30 w-[300px] flex flex-col border-r",
           "animate-in slide-in-from-left-4 duration-300 ease-out group",
-          !isLightMode && "bg-[#0a0a0b] border-white/[0.06]"
+          ""
         )}
         style={isLightMode 
           ? { backgroundColor: GRAPH_LIGHT_COLORS.panelBg, borderColor: GRAPH_LIGHT_COLORS.panelBorder }
@@ -413,17 +411,17 @@ export function CollapsibleModePanel() {
                             transition={{ duration: 0.15 }}
                             className="absolute left-full top-0 ml-3 w-64 z-50"
                           >
-                            <div className="relative bg-zinc-900 border border-zinc-700 rounded-xl p-4 shadow-2xl">
-                              <div className="absolute top-3 -left-2 w-4 h-4 bg-zinc-900 border-l border-b border-zinc-700 rotate-45" />
+                            <div className="relative bg-white border border-zinc-200 rounded-xl p-4 shadow-xl">
+                              <div className="absolute top-3 -left-2 w-4 h-4 bg-white border-l border-b border-zinc-200 rotate-45" />
                               <div className="relative">
-                                <p className="text-sm font-medium text-zinc-200 mb-2">Testez des hypothèses</p>
-                                <p className="text-sm text-zinc-400 mb-3">
+                                <p className="text-sm font-medium text-zinc-800 mb-2">Testez des hypothèses</p>
+                                <p className="text-sm text-zinc-500 mb-3">
                                   Les scénarios vous permettent de modifier les paramètres pour voir comment les résultats changent.
                                 </p>
-                                <p className="text-xs text-zinc-500 mb-4">Ex : &quot;Et si mon budget augmente de 20% ?&quot;</p>
+                                <p className="text-xs text-zinc-400 mb-4">Ex : &quot;Et si mon budget augmente de 20% ?&quot;</p>
                                 <button
                                   onClick={dismissScenarioOnboarding}
-                                  className="w-full py-2 px-3 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 text-sm font-medium transition-colors"
+                                  className="w-full py-2 px-3 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium transition-colors"
                                 >
                                   Compris
                                 </button>
