@@ -127,9 +127,9 @@ export default function RegisterPage() {
             transition={{ duration: 0.6 }}
             className="text-center mb-8"
           >
-            <Link href="/" className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full border-2 border-emerald-800 bg-zinc-900/90 backdrop-blur-md shadow-lg hover:border-emerald-600 transition-colors cursor-pointer">
+            <Link href="/" className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full border-2 border-violet-800 bg-zinc-900/90 backdrop-blur-md shadow-lg hover:border-violet-600 transition-colors cursor-pointer">
               <SmartGraphLogo size={24} />
-              <span className="text-sm font-bold text-emerald-400">
+              <span className="text-sm font-bold text-violet-400">
                 SmartGraph
               </span>
               <span className="text-xs px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 font-semibold flex items-center gap-1">
@@ -152,7 +152,7 @@ export default function RegisterPage() {
       </div>
 
       {/* Right side - Register form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-zinc-950 overflow-y-auto">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white overflow-y-auto">
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -163,16 +163,16 @@ export default function RegisterPage() {
           <Link href="/" className="lg:hidden flex items-center gap-3 mb-8 hover:opacity-80 transition-opacity">
             <SmartGraphLogo size={40} />
             <div>
-              <h2 className="text-lg font-bold text-white">SmartGraph</h2>
-              <p className="text-xs text-zinc-400">Workspace</p>
+              <h2 className="text-lg font-bold text-zinc-900">SmartGraph</h2>
+              <p className="text-xs text-zinc-500">Workspace</p>
             </div>
           </Link>
 
           <div className="mb-6">
-            <h1 className="text-3xl font-bold text-white mb-2">
+            <h1 className="text-3xl font-bold text-zinc-900 mb-2">
               Créez votre compte
             </h1>
-            <p className="text-zinc-400">
+            <p className="text-zinc-500">
               Commencez à construire vos modèles économiques
             </p>
           </div>
@@ -182,14 +182,14 @@ export default function RegisterPage() {
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="rounded-lg border border-red-900/50 bg-red-900/20 px-4 py-3"
+                className="rounded-lg border border-red-200 bg-red-50 px-4 py-3"
               >
-                <p className="text-sm font-medium text-red-400">{error}</p>
+                <p className="text-sm font-medium text-red-600">{error}</p>
               </motion.div>
             )}
 
             <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium text-zinc-300">
+              <label htmlFor="email" className="text-sm font-medium text-zinc-700">
                 Adresse email
               </label>
               <input
@@ -199,13 +199,13 @@ export default function RegisterPage() {
                 value={formData.email}
                 onChange={handleChange}
                 required
-                className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-white placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all invalid:border-zinc-800 valid:border-zinc-800 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all invalid:border-zinc-300 valid:border-zinc-300 focus-visible:outline-none"
                 placeholder="vous@exemple.com"
               />
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="username" className="text-sm font-medium text-zinc-300">
+              <label htmlFor="username" className="text-sm font-medium text-zinc-700">
                 Nom d'utilisateur
               </label>
               <input
@@ -216,13 +216,13 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 required
                 minLength={3}
-                className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-white placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all invalid:border-zinc-800 valid:border-zinc-800 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all invalid:border-zinc-300 valid:border-zinc-300 focus-visible:outline-none"
                 placeholder="votre-nom"
               />
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="fullName" className="text-sm font-medium text-zinc-300">
+              <label htmlFor="fullName" className="text-sm font-medium text-zinc-700">
                 Nom complet <span className="text-zinc-400 text-xs">(optionnel)</span>
               </label>
               <input
@@ -231,13 +231,13 @@ export default function RegisterPage() {
                 type="text"
                 value={formData.fullName}
                 onChange={handleChange}
-                className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-sm text-white placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all invalid:border-zinc-800 valid:border-zinc-800 focus-visible:outline-none"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all invalid:border-zinc-300 valid:border-zinc-300 focus-visible:outline-none"
                 placeholder="Jean Dupont"
               />
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium text-zinc-300">
+              <label htmlFor="password" className="text-sm font-medium text-zinc-700">
                 Mot de passe
               </label>
               <div className="relative">
@@ -249,13 +249,13 @@ export default function RegisterPage() {
                   onChange={handleChange}
                   required
                   minLength={8}
-                  className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2.5 pr-10 text-sm text-white placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all invalid:border-zinc-800 valid:border-zinc-800 focus-visible:outline-none"
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 pr-10 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all invalid:border-zinc-300 valid:border-zinc-300 focus-visible:outline-none"
                   placeholder="Au moins 8 caractères"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-300 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors"
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -266,7 +266,7 @@ export default function RegisterPage() {
               </div>
               {formData.password && (
                 <div className="flex items-center gap-2 text-xs">
-                  <div className="flex-1 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                  <div className="flex-1 h-1.5 rounded-full bg-zinc-200 overflow-hidden">
                     <div
                       className={`h-full transition-all duration-500 ${
                         passwordStrength === 'strong'
@@ -291,7 +291,7 @@ export default function RegisterPage() {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="confirmPassword" className="text-sm font-medium text-zinc-300">
+              <label htmlFor="confirmPassword" className="text-sm font-medium text-zinc-700">
                 Confirmer le mot de passe
               </label>
               <div className="relative">
@@ -302,13 +302,13 @@ export default function RegisterPage() {
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   required
-                  className="w-full rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2.5 pr-10 text-sm text-white placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all invalid:border-zinc-800 valid:border-zinc-800 focus-visible:outline-none"
+                  className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2.5 pr-10 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all invalid:border-zinc-300 valid:border-zinc-300 focus-visible:outline-none"
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-300 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors"
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -328,7 +328,7 @@ export default function RegisterPage() {
             <Button
               type="submit"
               disabled={isLoading}
-              className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg shadow-lg shadow-emerald-600/30 transition-all disabled:opacity-50 mt-2"
+              className="w-full h-11 bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-lg shadow-lg shadow-violet-600/20 transition-all disabled:opacity-50 mt-2"
             >
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -342,21 +342,21 @@ export default function RegisterPage() {
           </form>
 
           <div className="mt-6 text-center">
-            <p className="text-sm text-zinc-400">
+            <p className="text-sm text-zinc-500">
               Vous avez déjà un compte ?{' '}
               <Link
                 href="/login"
-                className="font-medium text-emerald-400 hover:text-emerald-300 transition-colors"
+                className="font-medium text-violet-600 hover:text-violet-700 transition-colors"
               >
                 Se connecter
               </Link>
             </p>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-zinc-800">
-            <p className="text-xs text-center text-zinc-400">
+          <div className="mt-8 pt-6 border-t border-zinc-200">
+            <p className="text-xs text-center text-zinc-500">
               En créant un compte, vous acceptez nos{' '}
-              <Link href="/terms" className="underline hover:text-zinc-300">
+              <Link href="/terms" className="underline hover:text-zinc-700">
                 conditions d'utilisation
               </Link>
             </p>
