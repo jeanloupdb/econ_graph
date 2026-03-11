@@ -5,6 +5,7 @@ import { HeroSection } from "./HeroSection";
 import { HowItWorksLinear } from "./HowItWorksLinear";
 import { LandingTopbar } from "./LandingTopbar";
 import { UseCasesSection } from "./UseCasesSection";
+import { DemoSection } from "./DemoSection";
 import { LandingBackground } from "./LandingBackground";
 import { ScrollProgress } from "./ScrollProgress";
 
@@ -17,8 +18,9 @@ export function LandingPage() {
       <div className="relative z-10 flex flex-col">
         <LandingTopbar />
         <HeroSection />
-        <UseCasesSection />
         <HowItWorksLinear />
+        <UseCasesSection />
+        <DemoSection />
         <Footer />
       </div>
     </main>

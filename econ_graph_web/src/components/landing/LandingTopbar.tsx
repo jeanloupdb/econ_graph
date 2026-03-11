@@ -31,7 +31,7 @@ export function LandingTopbar() {
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
           hasScrolled
             ? "bg-zinc-950/80 backdrop-blur-xl border-b border-white/[0.06]"
-            : "bg-transparent"
+            : "bg-white/80 backdrop-blur-sm border-b border-zinc-100"
         }`}
       >
         <div className="mx-auto max-w-6xl px-6">
@@ -42,13 +42,28 @@ export function LandingTopbar() {
               className="flex items-center gap-2 group"
             >
               <SmartGraphLogo size={24} />
-              <span className="text-[15px] font-medium text-zinc-200 tracking-[-0.01em]">
+              <span className={`text-[15px] font-medium tracking-[-0.01em] transition-colors duration-300 ${hasScrolled ? "text-zinc-200" : "text-zinc-900"}`}>
                 SmartGraph
               </span>
             </Link>
 
             {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center gap-1">
+              {/* Section anchors — visible when not logged in */}
+              {!user && (
+                <div className="flex items-center gap-1 mr-3">
+                  <a href="#methode">
+                    <button className={`px-3 py-1.5 font-medium text-[13px] transition-colors ${hasScrolled ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-500 hover:text-zinc-900"}`}>
+                      Comment ça marche
+                    </button>
+                  </a>
+                  <a href="#cas">
+                    <button className={`px-3 py-1.5 font-medium text-[13px] transition-colors ${hasScrolled ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-500 hover:text-zinc-900"}`}>
+                      Cas d&apos;usage
+                    </button>
+                  </a>
+                </div>
+              )}
               {user ? (
                 <>
                   <Link href="/dashboard">
@@ -63,12 +78,12 @@ export function LandingTopbar() {
               ) : (
                 <>
                   <Link href="/login">
-                    <button className="px-3 py-1.5 text-zinc-400 hover:text-zinc-200 font-medium text-[13px] transition-colors">
+                    <button className={`px-3 py-1.5 font-medium text-[13px] transition-colors ${hasScrolled ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-500 hover:text-zinc-900"}`}>
                       Se connecter
                     </button>
                   </Link>
                   <Link href="/register">
-                    <button className="px-4 py-1.5 bg-zinc-100 text-zinc-900 font-medium text-[13px] rounded-md hover:bg-white transition-colors">
+                    <button className="px-4 py-1.5 bg-zinc-900 text-white font-medium text-[13px] rounded-md hover:bg-zinc-700 transition-colors">
                       Commencer
                     </button>
                   </Link>

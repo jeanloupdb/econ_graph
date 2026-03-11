@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion, useScroll, useTransform } from "framer-motion";
-import { ArrowRight, TrendingUp, AlertCircle, CheckCircle2 } from "lucide-react";
+import { ArrowRight, TrendingUp, CheckCircle2, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 
@@ -65,14 +65,14 @@ export function UseCasesSection() {
   }, [active, router]);
 
   return (
-    <section ref={sectionRef} className="relative py-40 overflow-hidden bg-[#f5f5f7] border-t border-zinc-100">
+    <section ref={sectionRef} className="relative py-40 overflow-hidden bg-[#f5f5f7] border-t border-zinc-100" id="cas">
       <div className="relative z-10 max-w-6xl mx-auto px-6">
 
         {/* Header */}
         <div className="flex flex-col items-center mb-24 text-center">
           <motion.div style={{ y: y2 }} className="mb-4">
             <span className="px-3 py-1 rounded-full bg-white border border-zinc-200 text-zinc-600 text-[12px] font-medium tracking-wide shadow-sm">
-              INSIGHTS IA
+              Exemples concrets
             </span>
           </motion.div>
           <h2 className="text-4xl md:text-6xl font-bold text-zinc-900 tracking-tighter max-w-3xl">
@@ -122,11 +122,8 @@ export function UseCasesSection() {
                   className="space-y-4"
                 >
                   <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "w-10 h-10 rounded-full flex items-center justify-center",
-                      active.data.some(d => d.status === 'bad') ? "bg-red-50 text-red-500" : "bg-emerald-50 text-emerald-600"
-                    )}>
-                      <AlertCircle className="w-6 h-6" />
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center bg-violet-50 text-violet-600">
+                      <Sparkles className="w-5 h-5" />
                     </div>
                     <span className="text-zinc-400 font-mono text-sm tracking-widest uppercase">Conclusion IA</span>
                   </div>
@@ -191,13 +188,13 @@ export function UseCasesSection() {
               <div className="pt-6 grid grid-cols-2 gap-4">
                 <div className="p-4 rounded-2xl bg-white border border-zinc-200 shadow-sm">
                   <TrendingUp className="w-5 h-5 text-emerald-600 mb-2" />
-                  <div className="text-[10px] text-zinc-500 uppercase font-bold">Optimisation</div>
+                  <div className="text-[10px] text-zinc-500 font-bold">Optimisation</div>
                   <div className="text-sm text-zinc-700">Boost de marge +18%</div>
                 </div>
                 <div className="p-4 rounded-2xl bg-white border border-zinc-200 shadow-sm">
                   <CheckCircle2 className="w-5 h-5 text-violet-600 mb-2" />
-                  <div className="text-[10px] text-zinc-500 uppercase font-bold">Confiance</div>
-                  <div className="text-sm text-zinc-700">Calcul certifié</div>
+                  <div className="text-[10px] text-zinc-500 font-bold">Confiance</div>
+                  <div className="text-sm text-zinc-700">Traçable ligne par ligne</div>
                 </div>
               </div>
             </div>

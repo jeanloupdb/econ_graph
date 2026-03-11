@@ -47,7 +47,7 @@ export function HeroSection() {
               <motion.div variants={itemVariants} className="mb-6">
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-100 border border-zinc-200 text-zinc-700 text-[13px] font-medium">
                   <Sparkles className="w-3.5 h-3.5 text-violet-500" />
-                  Modélisation visuelle × IA
+                  Pour TPE, consultants & porteurs de projet
                 </span>
               </motion.div>
 
@@ -56,9 +56,9 @@ export function HeroSection() {
                 variants={itemVariants}
                 className="text-[2.75rem] lg:text-[3.25rem] xl:text-[3.75rem] font-semibold text-zinc-900 leading-[1.08] tracking-[-0.02em] mb-5"
               >
-                Du brainstorming
+                De l&apos;idée
                 <br />
-                au modèle Excel.
+                à la décision chiffrée.
                 <br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-violet-600 via-purple-500 to-indigo-500">
                   En quelques mots.
@@ -70,9 +70,9 @@ export function HeroSection() {
                 variants={itemVariants}
                 className="text-[17px] text-zinc-500 leading-relaxed mb-8 max-w-md"
               >
-                Décrivez votre problème en langage naturel. SmartGraph génère le
-                graphe de dépendances, calcule en cascade, compare vos scénarios
-                et exporte en Excel.
+                Décrivez votre problème en français. SmartGraph structure
+                les variables, relie les chiffres entre eux, et vous dit
+                quelle décision prendre — avec un fichier Excel en bonus.
               </motion.p>
 
               {/* CTAs */}
@@ -93,6 +93,20 @@ export function HeroSection() {
               <motion.p variants={itemVariants} className="mt-5 text-[12px] text-zinc-400">
                 Gratuit · Sans carte bancaire · Export Excel inclus
               </motion.p>
+
+              {/* Social proof */}
+              <motion.div variants={itemVariants} className="mt-8 flex items-center gap-4">
+                <div className="flex -space-x-2">
+                  {["J", "M", "A", "T"].map((initial, i) => (
+                    <div key={i} className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-400 to-indigo-500 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white">
+                      {initial}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[12px] text-zinc-500">
+                  <span className="font-semibold text-zinc-700">+200 modèles</span> générés depuis le lancement
+                </p>
+              </motion.div>
             </motion.div>
           </div>
 
