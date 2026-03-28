@@ -690,7 +690,12 @@ def _sanitize_algorithm(algorithm: str) -> str:
     sanitized = sanitized.replace('^(', '**(')
     sanitized = _re.sub(r'(\w)\^(\w)', r'\1**\2', sanitized)
 
-    # 3. Normalize body identifiers to match declared param names
+    # 3. Wrap range() arguments with int() to handle float parameters
+    sanitized = _re.sub(r'range\(([^,)]+)\)', r'range(int(\1))', sanitized)
+    sanitized = _re.sub(r'range\(([^,)]+),\s*([^,)]+)\)', r'range(int(\1), int(\2))', sanitized)
+    sanitized = _re.sub(r'range\(([^,)]+),\s*([^,)]+),\s*([^)]+)\)', r'range(int(\1), int(\2), int(\3))', sanitized)
+
+    # 4. Normalize body identifiers to match declared param names
     # Extract declared parameter names from "def compute(a, b, c):"
     sig_match = _re.search(r'def\s+compute\s*\(([^)]*)\)\s*:', sanitized)
     if sig_match:
@@ -802,7 +807,7 @@ def execute_algorithm(algorithm: str, variables: Dict[str, float], timeout: int 
         )
         restricted_globals = {
             '__builtins__': safe_builtins,
-            '_getiter_': guarded_iter_unpack_sequence,
+            '_getiter_': iter,
             '_iter_unpack_sequence_': guarded_iter_unpack_sequence,
             # Allow safe math operations
             'abs': abs,
@@ -856,6 +861,11 @@ def execute_algorithm(algorithm: str, variables: Dict[str, float], timeout: int 
             result = compute_func(**variables)
 
             # Ensure result is a number
+            if isinstance(result, str):
+                raise ComputationError(
+                    f"La formule retourne une chaîne de caractères '{result}' au lieu d'un nombre. "
+                    f"Encodez les catégories comme des entiers (ex: 0=linéaire, 1=dégressif)."
+                )
             return float(result)
 
         finally:
@@ -1087,8 +1097,21 @@ def compute_all_nodes(
         dependencies = dependency_graph.dependencies
         dependents = dependency_graph.dependents
 
+        # Strip self-loops before topological sort (defensive guard)
+        for node_id in list(dependencies.keys()):
+            dependencies[node_id].discard(node_id)
+
         computation_order = topological_sort(dependencies)
         all_nodes = list(computation_order)
+
+        # Also include isolated nodes (no edges at all) that topological_sort misses
+        if project_id:
+            stmt_all_ids = select(Node.id).where(Node.project_id == project_id)
+            all_project_node_ids = set(db.execute(stmt_all_ids).scalars().all())
+            computation_set = set(computation_order)
+            isolated_ids = [nid for nid in all_project_node_ids if nid not in computation_set]
+            if isolated_ids:
+                all_nodes = list(computation_order) + isolated_ids
 
         real_cache_values = scenario_cache.get_all_real_values(project_id)
         scenario_cached_values: Dict[str, Optional[float]] = {}
@@ -1116,7 +1139,7 @@ def compute_all_nodes(
         real_updates: Dict[str, Optional[float]] = {}
         scenario_updates: Dict[str, Optional[float]] = {}
 
-        for node_id in computation_order:
+        for node_id in all_nodes:
             qn = db.query(Node).filter(Node.id == node_id)
             if project_id:
                 qn = qn.filter(Node.project_id == project_id)
@@ -1227,6 +1250,9 @@ def compute_all_nodes(
                 real_value, error = compute_node(db, node_id, project_id=project_id)
             elif node.provider_enabled:
                 real_value = node.value_computed
+            else:
+                # Plain parameter with a stored value (no formula, no provider)
+                real_value = node.value_computed
 
             if error is None and real_value is not None:
                 node.value_computed = real_value
@@ -1287,7 +1313,10 @@ def compute_all_nodes(
                     override = overrides_map[node_id]
                     if override.mode == "formula" and override.override_code:
                         try:
-                            algorithm = f"def compute(real_value):\n    {override.override_code}\n"
+                            code_str = override.override_code.strip()
+                            if not code_str.startswith("return "):
+                                code_str = f"return {code_str}"
+                            algorithm = f"def compute(real_value):\n    {code_str}\n"
                             scenario_value = execute_algorithm(
                                 algorithm,
                                 {

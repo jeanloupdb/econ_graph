@@ -2,6 +2,8 @@
  * Types pour le chat IA par projet.
  */
 
+import type { AiContextInfo } from "@/types/ai-context";
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -9,6 +11,7 @@ export interface ChatMessage {
   metadata?: {
     prompt_tokens?: number;
     completion_tokens?: number;
+    context?: AiContextInfo;
     [key: string]: unknown;
   };
   created_at: string;
@@ -24,16 +27,20 @@ export interface Conversation {
   generation_prompt?: string;
 }
 
+export interface SuggestedAction {
+  label: string;
+  action: string;
+}
+
 export interface ChatResponse {
   message: ChatMessage;
   actions_performed: Array<{
-    type: string;
+    tool?: string;
+    args?: Record<string, unknown>;
+    result?: Record<string, unknown>;
     [key: string]: unknown;
   }>;
-  suggested_actions: Array<{
-    label: string;
-    action: string;
-  }>;
+  suggested_actions: SuggestedAction[];
 }
 
 export interface ProjectChatState {
@@ -41,4 +48,5 @@ export interface ProjectChatState {
   isLoading: boolean;
   isSending: boolean;
   error: string | null;
+  suggestedActions: SuggestedAction[];
 }

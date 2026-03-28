@@ -36,6 +36,8 @@ interface AgentState {
   startTask: (taskId: string) => void;
   addLog: (log: AgentLog) => void;
   addLogs: (logs: AgentLog[]) => void;
+  /** Batch update: merge logs + optional status + optional step in a single set() */
+  batchUpdate: (params: { newLogs?: AgentLog[]; status?: AgentStatus; step?: string }) => void;
   setStatus: (status: AgentStatus) => void;
   setCurrentStep: (step: string) => void;
   completeTask: (projectId?: string, errorMessage?: string) => void;
@@ -77,6 +79,20 @@ export const useAgentStore = create<AgentState>((set) => ({
         currentTask: {
           ...state.currentTask,
           logs: [...state.currentTask.logs, ...newLogs],
+        },
+      };
+    }),
+
+  batchUpdate: ({ newLogs, status, step }) =>
+    set((state) => {
+      if (!state.currentTask) return state;
+
+      return {
+        currentTask: {
+          ...state.currentTask,
+          ...(newLogs?.length ? { logs: [...state.currentTask.logs, ...newLogs] } : {}),
+          ...(status !== undefined ? { status } : {}),
+          ...(step !== undefined ? { currentStep: step } : {}),
         },
       };
     }),

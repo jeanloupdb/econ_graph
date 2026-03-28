@@ -30,10 +30,14 @@ async def _run_cycle():
             latest = (
                 db.query(ProjectNotification)
                 .filter(ProjectNotification.project_id == project.id)
-                .order_by(ProjectNotification.created_at.desc())
+                .order_by(
+                    ProjectNotification.last_event_at.desc().nulls_last(),
+                    ProjectNotification.created_at.desc(),
+                )
                 .first()
             )
-            if latest and latest.created_at and (now - latest.created_at) < interval:
+            latest_at = latest.last_event_at or latest.created_at if latest else None
+            if latest_at and (now - latest_at) < interval:
                 continue
 
             try:

@@ -18,6 +18,8 @@ from .wizard import router as wizard_router
 from .usage import router as usage_router
 from .project_agent import router as project_agent_router
 from .project_chat import router as project_chat_router
+from .dashboard_generator import router as dashboard_generator_router
+from .import_suggestions import router as import_suggestions_router
 
 # Router principal qui agrège tous les sous-routers
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -29,3 +31,5 @@ router.include_router(wizard_router)
 router.include_router(usage_router)
 router.include_router(project_agent_router)
 router.include_router(project_chat_router)
+router.include_router(dashboard_generator_router)
+router.include_router(import_suggestions_router)

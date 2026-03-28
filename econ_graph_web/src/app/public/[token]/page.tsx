@@ -11,7 +11,8 @@ import { apiClient } from "@/lib/api/client";
 import type { Edge, Node } from "@/lib/types";
 import { useProjectStore } from "@/store/projectState";
 import { useUIStore } from "@/store/uiState";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowRight, Loader2 } from "lucide-react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ReactFlowProvider } from "reactflow";
@@ -40,6 +41,7 @@ export default function PublicProjectPage() {
   const setViewMode = useUIStore((s) => s.setViewMode);
   const setDeveloperMode = useUIStore((s) => s.setDeveloperMode);
   const setLibraryPanelOpen = useUIStore((s) => s.setLibraryPanelOpen);
+  const setWorkspaceView = useUIStore((s) => s.setWorkspaceView);
 
   useEffect(() => {
     if (!token) return;
@@ -64,10 +66,11 @@ export default function PublicProjectPage() {
         addProject(publicProject);
         setCurrentProject(result.project.id);
 
-        // Force view mode and close library panel
+        // Force causal column view and close library panel
         setDeveloperMode(false);
         setViewMode("baseline");
         setLibraryPanelOpen(false);
+        setWorkspaceView("causal");
       } catch (err) {
         console.error(err);
         setError(
@@ -86,6 +89,7 @@ export default function PublicProjectPage() {
     setDeveloperMode,
     setViewMode,
     setLibraryPanelOpen,
+    setWorkspaceView,
   ]);
 
   if (loading) {
@@ -105,12 +109,30 @@ export default function PublicProjectPage() {
     );
   }
 
+  // Check if this is a demo project the user just generated
+  const isDemoProject = typeof window !== "undefined" && localStorage.getItem("sg_demo_token") === token;
+
   return (
     <ProjectGraphProvider initialNodes={data.nodes} initialEdges={data.edges}>
       <CommandPalette />
 
       <div className="flex h-screen flex-col bg-zinc-100 dark:bg-[#0a0a0b]">
         <TopbarMinimal />
+
+        {/* Demo claim banner */}
+        {isDemoProject && (
+          <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2.5 flex items-center justify-center gap-3 shrink-0">
+            <span className="text-white text-sm">
+              Votre modèle est prêt ! Créez un compte pour le modifier et l&apos;exporter.
+            </span>
+            <Link
+              href="/register"
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-white text-violet-700 font-medium text-sm rounded-lg hover:bg-violet-50 transition-colors"
+            >
+              Créer un compte <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        )}
 
         <div className="flex-1 relative overflow-hidden">
           <ReactFlowProvider>

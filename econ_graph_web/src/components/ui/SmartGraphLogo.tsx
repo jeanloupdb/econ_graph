@@ -1,58 +1,91 @@
+"use client";
+
 import { cn } from "@/lib/utils";
+import { useEffect, useId, useState } from "react";
 
 interface SmartGraphLogoProps {
   className?: string;
   size?: number;
+  loading?: boolean;
+  forceHover?: boolean;
 }
 
-export function SmartGraphLogo({ className, size = 24 }: SmartGraphLogoProps) {
+// ── Left shape paths ───────────────────────────────────────────────────────────
+const circleLeft =
+  "M 1.5 12 C 1.5 9.5 3.5 7.5 6 7.5 C 8.5 7.5 10.5 9.5 10.5 12 C 10.5 14.5 8.5 16.5 6 16.5 C 3.5 16.5 1.5 14.5 1.5 12 Z";
+const triangleLeft =
+  "M 11.5 6 C 11 8 10 10 10 12 C 10 14 11 16 11.5 18 C 7 15 2 12 2 12 C 2 12 7 9 11.5 6 Z";
+const arrowInLeft =
+  "M 2 7 C 2 7 3 10 3 12 C 3 14 2 17 2 17 C 6 15 11 12 11 12 C 11 12 6 9 2 7 Z";
+
+// ── Right shape paths ──────────────────────────────────────────────────────────
+const triangleRight =
+  "M 12.5 6 C 13 8 14 10 14 12 C 14 14 13 16 12.5 18 C 17 15 22 12 22 12 C 22 12 17 9 12.5 6 Z";
+const circleRight =
+  "M 13.5 12 C 13.5 9.5 15.5 7.5 18 7.5 C 20.5 7.5 22.5 9.5 22.5 12 C 22.5 14.5 20.5 16.5 18 16.5 C 15.5 16.5 13.5 14.5 13.5 12 Z";
+const arrowInRight =
+  "M 22 7 C 22 7 21 10 21 12 C 21 14 22 17 22 17 C 18 15 13 12 13 12 C 13 12 18 9 22 7 Z";
+
+// 3 states: ●▶  /  ◀●  /  ▶◀ (both inward)
+const STATES = [
+  { left: circleLeft,   right: triangleRight },
+  { left: triangleLeft, right: circleRight   },
+  { left: arrowInLeft,  right: arrowInRight  },
+] as const;
+
+export function SmartGraphLogo({ className, size = 24, loading = false, forceHover = false }: SmartGraphLogoProps) {
+  const uid = useId().replace(/:/g, "");
+  const [stateIndex, setStateIndex] = useState(0);
+
+  useEffect(() => {
+    if (!loading) {
+      setStateIndex(0);
+      return;
+    }
+
+    let timer: ReturnType<typeof setTimeout>;
+
+    const scheduleNext = () => {
+      const delay = 500 + Math.random() * 2500; // random 0.5s → 3s
+      timer = setTimeout(() => {
+        setStateIndex((prev) => (prev + 1) % STATES.length);
+        scheduleNext();
+      }, delay);
+    };
+
+    scheduleNext();
+    return () => clearTimeout(timer);
+  }, [loading]);
+
+  const { left, right } = loading
+    ? STATES[stateIndex]
+    : forceHover
+      ? { left: triangleLeft, right: circleRight }
+      : STATES[0];
+  const L = `.sg-l-${uid}`;
+  const R = `.sg-r-${uid}`;
+  const W = `.sg-w-${uid}`;
+
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      className={cn(className)}
-    >
-      <defs>
-        {/* Gradient bleu -> violet (AI colors) */}
-        <linearGradient
-          id="sg-grad"
-          x1="0"
-          y1="24"
-          x2="24"
-          y2="0"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop offset="0" stopColor="#3B82F6" />
-          <stop offset="0.5" stopColor="#8B5CF6" />
-          <stop offset="1" stopColor="#A855F7" />
-        </linearGradient>
-        {/* Glow subtil */}
-        <filter id="sg-glow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="0.5" result="b" />
-          <feMerge>
-            <feMergeNode in="b" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
-      <g
-        filter="url(#sg-glow)"
-        stroke="url(#sg-grad)"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+    <>
+      <style>{`
+        ${L} { d: path("${left}");  transition: d 0.45s cubic-bezier(0.4, 0, 0.2, 1); }
+        ${R} { d: path("${right}"); transition: d 0.45s cubic-bezier(0.4, 0, 0.2, 1); }
+        /* Hover (static mode only) */
+        ${W}:not(.sg-loading):hover ${L} { d: path("${triangleLeft}"); }
+        ${W}:not(.sg-loading):hover ${R} { d: path("${circleRight}"); }
+      `}</style>
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
         fill="none"
+        className={cn(`sg-w-${uid}`, loading && "sg-loading", className)}
       >
-        {/* Network icon from Lucide */}
-        <rect x="15" y="14.2" width="7.5" height="7.5" rx="1.5" />
-        <circle cx="5" cy="18" r="4" />
-        <rect x="9" y="2" width="6" height="6" rx="1" />
-        <path d="M5 14v-1a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v1" />
-        <path d="M12 12V8" />
-      </g>
-    </svg>
+        <path className={`sg-l-${uid}`} fill="#3B82F6" d={left}  />
+        <path className={`sg-r-${uid}`} fill="#8B5CF6" d={right} />
+      </svg>
+    </>
   );
 }

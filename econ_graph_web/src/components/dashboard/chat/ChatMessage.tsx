@@ -11,12 +11,10 @@ import { WizardOption } from "@/types/wizard";
 import { motion } from "framer-motion";
 import {
   AlertCircle,
-  ArrowRight,
   Check,
   Pencil,
   Rocket,
   Sparkles,
-  Zap,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Message } from "./types";
@@ -166,7 +164,7 @@ function EditableBriefBlock({
     <div className="border-t border-zinc-200">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-200">
-        <span className="text-[12px] text-zinc-400 font-medium tracking-wide uppercase">Brief généré</span>
+        <span className="font-mono text-[10px] text-zinc-400 uppercase tracking-widest">› Brief généré</span>
         {!isEditing ? (
           <button
             onClick={() => setIsEditing(true)}
@@ -215,7 +213,7 @@ function EditableBriefBlock({
         )}
         <Button
           onClick={() => onCreateProject(prompt !== originalPrompt ? prompt : undefined)}
-          className="flex-1 bg-zinc-200 hover:bg-white text-zinc-900 font-medium h-9 text-[13px]"
+          className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-white font-medium h-9 text-[13px] transition-all rounded-lg"
         >
           <Rocket className="w-3.5 h-3.5 mr-2" />
           {prompt !== originalPrompt ? "Créer la version modifiée" : "Créer ce modèle"}
@@ -244,7 +242,7 @@ export function ChatMessage({ message, onQuickOption, isLoading, onCreateProject
         animate={{ opacity: 1, y: 0 }}
         className="flex justify-end"
       >
-        <div className="max-w-[76%] bg-zinc-900 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 shadow-sm">
+        <div className="max-w-[76%] bg-zinc-900 text-white rounded-xl px-4 py-2.5 shadow-sm">
           <p className="text-[14px] leading-relaxed">{message.content}</p>
         </div>
       </motion.div>
@@ -280,7 +278,7 @@ export function ChatMessage({ message, onQuickOption, isLoading, onCreateProject
       </div>
 
       {/* Single card wrapping ALL AI response content */}
-      <div className="flex-1 min-w-0 rounded-2xl rounded-tl-sm bg-white border border-zinc-200 shadow-sm overflow-hidden">
+      <div className="flex-1 min-w-0 rounded-xl bg-white border border-zinc-200 overflow-hidden">
         {/* Text */}
         <div className="px-4 py-3">
           <MarkdownContent content={message.content} />
@@ -297,13 +295,13 @@ export function ChatMessage({ message, onQuickOption, isLoading, onCreateProject
 
         {/* Refine options when modelReady — compact chips */}
         {message.isCurrentQuestion && message.modelReady && message.options && message.options.length > 0 && !isLoading && (
-          <div className="border-t border-zinc-200 px-4 py-2.5 flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] text-zinc-400 shrink-0">Affiner :</span>
+          <div className="border-t border-zinc-100 px-4 py-2.5 flex items-center gap-1.5 flex-wrap">
+            <span className="font-mono text-[10px] text-zinc-400 shrink-0 uppercase tracking-widest mr-1">› Affiner</span>
             {message.options.map(option => (
               <button
                 key={option.value}
                 onClick={() => onQuickOption(option)}
-                className="text-[12px] text-zinc-500 hover:text-zinc-700 px-2.5 py-1 rounded-lg border border-zinc-200 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 transition-all duration-150 leading-none"
+                className="text-[12px] text-zinc-500 hover:text-zinc-900 px-2.5 py-1 rounded-md border border-zinc-200 hover:border-zinc-400 hover:bg-zinc-50 transition-all duration-150 leading-none"
               >
                 {option.label}
               </button>
@@ -343,15 +341,15 @@ function NormalOptions({ options, onQuickOption, embedded = false }: { options: 
           key={option.value}
           onClick={() => onQuickOption(option)}
           className={cn(
-            "group w-full flex items-center justify-between gap-3 px-4 py-3 text-left",
+            "group w-full flex items-center gap-2.5 px-4 py-2.5 text-left",
             "transition-colors hover:bg-zinc-50",
             (i < regularOptions.length - 1 || jokerOption) && "border-b border-zinc-100"
           )}
         >
-          <span className="text-[13px] font-medium text-zinc-600 group-hover:text-zinc-900 transition-colors leading-snug">
+          <span className="font-mono font-bold text-violet-400 text-sm shrink-0 group-hover:text-violet-600 transition-colors">›</span>
+          <span className="flex-1 text-[13px] font-medium text-zinc-600 group-hover:text-zinc-900 transition-colors leading-snug">
             {option.label}
           </span>
-          <ArrowRight className="h-3.5 w-3.5 text-zinc-300 group-hover:text-zinc-500 flex-shrink-0 transition-colors" />
         </button>
       ))}
 
@@ -359,13 +357,12 @@ function NormalOptions({ options, onQuickOption, embedded = false }: { options: 
         <button
           type="button"
           onClick={() => onQuickOption(jokerOption)}
-          className="group w-full flex items-center gap-3 px-4 py-3 bg-zinc-50 hover:bg-zinc-100 transition-colors text-left"
+          className="group w-full flex items-center gap-2.5 px-4 py-2.5 bg-zinc-50/60 hover:bg-zinc-50 transition-colors text-left border-t border-zinc-100"
         >
-          <Zap className="h-3.5 w-3.5 text-zinc-400 flex-shrink-0 group-hover:text-zinc-600 transition-colors" />
+          <span className="font-mono font-bold text-zinc-300 text-sm shrink-0 group-hover:text-zinc-400 transition-colors">›</span>
           <span className="flex-1 text-[13px] text-zinc-500 group-hover:text-zinc-700 transition-colors">
             Générer maintenant
           </span>
-          <ArrowRight className="h-3.5 w-3.5 text-zinc-300 flex-shrink-0 group-hover:text-zinc-500 transition-colors" />
         </button>
       )}
     </>
@@ -382,7 +379,7 @@ function NormalOptions({ options, onQuickOption, embedded = false }: { options: 
   return (
     <div className="flex flex-col gap-2">
       {(regularOptions.length > 0 || jokerOption) && (
-        <div className="rounded-xl border border-zinc-200 overflow-hidden bg-white">
+        <div className="rounded-xl border border-zinc-200 shadow-sm overflow-hidden bg-white">
           {optionRows}
         </div>
       )}
@@ -393,21 +390,21 @@ function NormalOptions({ options, onQuickOption, embedded = false }: { options: 
           animate={{ opacity: 1, scale: 1, y: 0 }}
           className="mt-1 w-full"
         >
-          <div className="bg-white border border-zinc-200 rounded-xl p-3.5 flex flex-col gap-3">
+          <div className="bg-white border border-zinc-200 shadow-sm rounded-xl p-3.5 flex flex-col gap-3">
             <div className="flex items-start gap-2.5">
               <div className="w-7 h-7 flex items-center justify-center shrink-0">
                 <SmartGraphLogo size={20} />
               </div>
               <div>
-                <h4 className="text-zinc-800 font-medium text-[13px]">Prêt à créer</h4>
-                <p className="text-zinc-500 text-[12px] mt-0.5 leading-relaxed">
+                <h4 className="font-mono text-[11px] uppercase tracking-widest text-zinc-400 mb-0.5">› Prêt à créer</h4>
+                <p className="text-zinc-700 font-medium text-[13px] leading-snug">
                   Le contexte est suffisant pour générer une première version.
                 </p>
               </div>
             </div>
             <Button
               onClick={() => onQuickOption(creationOption)}
-              className="w-full bg-zinc-200 hover:bg-white text-zinc-900 font-medium h-9 text-[13px] transition-colors"
+              className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-medium h-9 text-[13px] transition-all rounded-lg"
             >
               <Sparkles className="w-3.5 h-3.5 mr-2" />
               Créer ce modèle

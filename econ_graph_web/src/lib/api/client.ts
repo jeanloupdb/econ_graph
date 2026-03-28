@@ -132,7 +132,7 @@ export const apiClient = {
     return handleResponse<T>(response);
   },
 
-  async post<T, D = unknown>(path: string, data?: D): Promise<T> {
+  async post<T, D = unknown>(path: string, data?: D, options?: { signal?: AbortSignal }): Promise<T> {
     const isFormData = data instanceof FormData;
     const headers: HeadersInit = {
       ...getAuthHeader(),
@@ -146,6 +146,7 @@ export const apiClient = {
       method: 'POST',
       headers,
       body: data ? (isFormData ? (data as any) : JSON.stringify(data)) : undefined,
+      signal: options?.signal,
     });
     return handleResponse<T>(response);
   },
@@ -187,3 +188,38 @@ export const apiClient = {
 };
 
 export const API_BASE_URL = getApiBaseUrl();
+
+/**
+ * Download a file from the API (for binary responses like Excel)
+ */
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    method: 'GET',
+    headers: {
+      ...getAuthHeader(),
+    },
+  });
+
+  if (!response.ok) {
+    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+    try {
+      const errorData = await response.json();
+      if (typeof errorData.detail === 'string') {
+        errorMessage = errorData.detail;
+      }
+    } catch {
+      // Response might not be JSON
+    }
+    throw new APIClientError(errorMessage, response.status);
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+}

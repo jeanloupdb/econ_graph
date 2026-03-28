@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store/uiState";
 import { AiContextInfo } from "@/types/ai-context";
-import { Eye, Pencil } from "lucide-react";
+import { Sparkles, Pencil } from "lucide-react";
 
 interface AiContextButtonProps {
   context: AiContextInfo;
@@ -45,7 +45,7 @@ export function AiContextButton({ context, className, isLightMode = false, onHov
   const handleEditClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     const label = context.label || "cet élément";
-    openAiWithPrompt(`Édite @${label} : `, false, context);
+    openAiWithPrompt(`Édite @${label} : `, false);
   };
 
   const showEdit = context.target?.kind !== "section";
@@ -53,10 +53,11 @@ export function AiContextButton({ context, className, isLightMode = false, onHov
   return (
     <div
       className={cn(
-        "flex items-center rounded-md overflow-hidden shadow-sm border",
+        "flex items-center gap-0.5 rounded-lg p-0.5",
+        "backdrop-blur-sm shadow-lg border",
         isLightMode
-          ? "bg-white border-zinc-200"
-          : "bg-zinc-800 border-zinc-700/60",
+          ? "bg-white/90 border-zinc-200/80 shadow-zinc-200/40"
+          : "bg-zinc-900/90 border-zinc-700/60 shadow-black/20",
         className
       )}
       onMouseEnter={() => onHover?.(true)}
@@ -66,31 +67,28 @@ export function AiContextButton({ context, className, isLightMode = false, onHov
         onClick={handleExplainClick}
         title="Expliquer"
         className={cn(
-          "flex items-center justify-center p-1.5 transition-colors duration-150",
+          "flex items-center justify-center h-6 w-6 rounded-md transition-all duration-150",
           isLightMode
-            ? "text-zinc-400 hover:text-zinc-700 hover:bg-zinc-50"
-            : "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-700/60"
+            ? "text-zinc-400 hover:text-violet-600 hover:bg-violet-50"
+            : "text-zinc-500 hover:text-violet-300 hover:bg-violet-500/15"
         )}
       >
-        <Eye className="h-3 w-3" />
+        <Sparkles className="h-3 w-3" />
       </button>
 
       {showEdit && (
-        <>
-          <div className={cn("w-px self-stretch", isLightMode ? "bg-zinc-200" : "bg-zinc-700/60")} />
-          <button
-            onClick={handleEditClick}
-            title="Éditer"
-            className={cn(
-              "flex items-center justify-center p-1.5 transition-colors duration-150",
-              isLightMode
-                ? "text-zinc-400 hover:text-zinc-700 hover:bg-zinc-50"
-                : "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-700/60"
-            )}
-          >
-            <Pencil className="h-3 w-3" />
-          </button>
-        </>
+        <button
+          onClick={handleEditClick}
+          title="Éditer avec l'IA"
+          className={cn(
+            "flex items-center justify-center h-6 w-6 rounded-md transition-all duration-150",
+            isLightMode
+              ? "text-zinc-400 hover:text-violet-600 hover:bg-violet-50"
+              : "text-zinc-500 hover:text-violet-300 hover:bg-violet-500/15"
+          )}
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
       )}
     </div>
   );

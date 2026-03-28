@@ -20,6 +20,10 @@ export function useAgentStream(
 ) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const optionsRef = useRef(options);
+  const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const retryCountRef = useRef(0);
+  const isActiveRef = useRef(true);
+  const flushTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Update options ref when options change to avoid useEffect dependency
   useEffect(() => {
@@ -31,99 +35,134 @@ export function useAgentStream(
 
     const url = `${API_BASE_URL}/ai/agent-status/${taskId}`;
 
-    console.log("[Agent Stream] Connecting to:", url);
-    const eventSource = new EventSource(url);
-    eventSourceRef.current = eventSource;
-    
-    // Batching system
-    let logBuffer: AgentLog[] = [];
-    let flushTimeout: NodeJS.Timeout | null = null;
+    isActiveRef.current = true;
+    retryCountRef.current = 0;
 
-    const flushLogs = () => {
-      if (logBuffer.length > 0) {
-        const store = useAgentStore.getState();
-        store.addLogs([...logBuffer]);
-        logBuffer = [];
+    const connect = () => {
+      if (!isActiveRef.current) return;
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
       }
-      flushTimeout = null;
-    };
 
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data) as AgentLog;
+      console.log("[Agent Stream] Connecting to:", url);
+      const eventSource = new EventSource(url);
+      eventSourceRef.current = eventSource;
 
-        // Ajouter au buffer
-        logBuffer.push(data);
+      // Batching system
+      let logBuffer: AgentLog[] = [];
 
-        // Planifier le flush si pas déjà fait
-        if (!flushTimeout) {
-          flushTimeout = setTimeout(flushLogs, 100);
-        }
+      const stepToStatus: Record<string, AgentStatus> = {
+        analyste: "analyzing",
+        executeur: "executing",
+        validateur: "validating",
+        correcteur: "correcting",
+      };
 
-        // Pour les événements critiques, flush immédiat pour garantir la réactivité
-        if (data.type === 'start' || data.type === 'complete' || data.step) {
-          if (flushTimeout) clearTimeout(flushTimeout);
-          flushLogs();
-
-          // Traitement des changements d'état (après le flush des logs)
+      const flushLogs = () => {
+        if (logBuffer.length > 0) {
           const store = useAgentStore.getState();
+          store.addLogs([...logBuffer]);
+          logBuffer = [];
+        }
+        flushTimeoutRef.current = null;
+      };
 
-          // Mettre à jour le statut selon le type de log
-          if (data.type === "start") {
-            store.setStatus("initializing");
-          }
-  
-          // Détection de l'étape actuelle
-          if (data.step) {
-            store.setCurrentStep(data.step);
-  
-            // Mapper les steps aux statuts (pipeline optimisé - plus de planificateur)
-            const stepToStatus: Record<string, AgentStatus> = {
-              analyste: "analyzing",
-              executeur: "executing",
-              validateur: "validating",
-              correcteur: "correcting",
-            };
-  
-            const status = stepToStatus[data.step];
-            if (status) {
-              store.setStatus(status);
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data) as AgentLog;
+
+          // Ajouter au buffer
+          logBuffer.push(data);
+
+          // Reset retry on valid message
+          retryCountRef.current = 0;
+
+          // Pour les événements critiques, flush immédiat en un seul set() atomique
+          if (data.type === 'start' || data.type === 'complete' || data.step) {
+            if (flushTimeoutRef.current) {
+              clearTimeout(flushTimeoutRef.current);
+              flushTimeoutRef.current = null;
+            }
+
+            const store = useAgentStore.getState();
+            const pendingLogs = logBuffer.length > 0 ? [...logBuffer] : undefined;
+            logBuffer = [];
+
+            if (data.type === "complete") {
+              // For completion, flush logs first then complete (avoids extra set calls)
+              if (pendingLogs) store.addLogs(pendingLogs);
+              const isSuccess = (data as any).status === "success";
+              const projectId = (data as any).project_id;
+              const errorMessage = isSuccess ? undefined : data.message;
+              store.completeTask(projectId, errorMessage);
+              eventSource.close();
+              if (optionsRef.current?.onComplete) {
+                optionsRef.current.onComplete(projectId, errorMessage);
+              }
+            } else {
+              // Merge logs + status + step into a single set() call
+              const status: AgentStatus | undefined =
+                data.type === "start"
+                  ? "initializing"
+                  : data.step
+                  ? stepToStatus[data.step]
+                  : undefined;
+
+              store.batchUpdate({
+                newLogs: pendingLogs,
+                status,
+                step: data.step,
+              });
+            }
+          } else {
+            // Planifier le flush si pas déjà fait
+            if (!flushTimeoutRef.current) {
+              flushTimeoutRef.current = setTimeout(flushLogs, 100);
             }
           }
-  
-          // Gestion de la complétion
-          if (data.type === "complete") {
-            const isSuccess = (data as any).status === "success";
-            const projectId = (data as any).project_id;
-            const errorMessage = isSuccess ? undefined : data.message;
-  
-            store.completeTask(projectId, errorMessage);
-            eventSource.close();
-  
-            if (optionsRef.current?.onComplete) {
-              optionsRef.current.onComplete(projectId, errorMessage);
-            }
-          }
+
+        } catch (error) {
+          console.error("[Agent Stream] Error parsing message:", error);
+        }
+      };
+
+      eventSource.onerror = (error) => {
+        console.error("[Agent Stream] Connection error:", error);
+        eventSource.close();
+
+        if (!isActiveRef.current) return;
+        const retryCount = retryCountRef.current + 1;
+        retryCountRef.current = retryCount;
+
+        if (retryCount > 5) {
+          return;
         }
 
-      } catch (error) {
-        console.error("[Agent Stream] Error parsing message:", error);
-      }
+        const baseDelay = Math.min(1000 * 2 ** (retryCount - 1), 8000);
+        const jitter = Math.floor(Math.random() * 400);
+        const delay = baseDelay + jitter;
+
+        if (retryTimerRef.current) {
+          clearTimeout(retryTimerRef.current);
+        }
+        retryTimerRef.current = setTimeout(connect, delay);
+      };
     };
 
-    eventSource.onerror = (error) => {
-      console.error("[Agent Stream] Connection error:", error);
-      eventSource.close();
-    };
+    connect();
 
     // Cleanup
     return () => {
+      isActiveRef.current = false;
       if (eventSourceRef.current) {
         console.log("[Agent Stream] Closing connection");
         eventSourceRef.current.close();
       }
-      if (flushTimeout) {
-        clearTimeout(flushTimeout);
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+      }
+      if (flushTimeoutRef.current) {
+        clearTimeout(flushTimeoutRef.current);
       }
     };
   }, [taskId]);

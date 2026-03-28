@@ -13,6 +13,7 @@ from app.api.scenarios import router as scenarios_router
 from app.api.auth import router as auth_router
 from app.api.ai import router as ai_router
 from app.api.export import router as export_router
+from app.api.excel_import_sessions import router as excel_import_sessions_router
 from app.api.suggestions import router as suggestions_router
 from app.api.notifications import router as notifications_router
 from app.core.config import settings
@@ -35,8 +36,12 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "*",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "https://smartgraph.vercel.app",
     ],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -59,6 +64,7 @@ app.include_router(scenarios_router)
 app.include_router(composites_router)
 app.include_router(ai_router)
 app.include_router(export_router)
+app.include_router(excel_import_sessions_router)
 app.include_router(suggestions_router)
 app.include_router(notifications_router)
 app.include_router(viewer_router)
@@ -138,9 +144,35 @@ async def startup_event():
             finally:
                 db.close()
 
+        def ensure_notification_columns():
+            column_statements = [
+                "ALTER TABLE project_notification ADD COLUMN IF NOT EXISTS theme VARCHAR(32)",
+                "ALTER TABLE project_notification ADD COLUMN IF NOT EXISTS objective VARCHAR(32)",
+                "ALTER TABLE project_notification ADD COLUMN IF NOT EXISTS dedup_key VARCHAR(128)",
+                "ALTER TABLE project_notification ADD COLUMN IF NOT EXISTS group_key VARCHAR(128)",
+                "ALTER TABLE project_notification ADD COLUMN IF NOT EXISTS score DOUBLE PRECISION",
+                "ALTER TABLE project_notification ADD COLUMN IF NOT EXISTS aggregate_count INTEGER DEFAULT 1",
+                "ALTER TABLE project_notification ADD COLUMN IF NOT EXISTS last_event_at TIMESTAMP",
+                "ALTER TABLE project_notification ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP",
+                "ALTER TABLE project_notification ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP",
+                "CREATE INDEX IF NOT EXISTS ix_project_notification_dedup_key ON project_notification (project_id, dedup_key)",
+                "CREATE INDEX IF NOT EXISTS ix_project_notification_group_key ON project_notification (project_id, group_key)",
+                "UPDATE project_notification SET aggregate_count = 1 WHERE aggregate_count IS NULL",
+                "UPDATE project_notification SET last_event_at = created_at WHERE last_event_at IS NULL",
+            ]
+            db = SessionLocal()
+            try:
+                for stmt in column_statements:
+                    db.execute(text(stmt))
+                db.commit()
+                logger.info("Notification columns ensured")
+            finally:
+                db.close()
+
         try:
             ensure_project_columns()
             ensure_node_columns()
+            ensure_notification_columns()
         except Exception as e:
             logger.warning("ensure columns failed", error=str(e))
     except Exception as e:

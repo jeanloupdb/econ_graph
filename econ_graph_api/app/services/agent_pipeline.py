@@ -31,6 +31,7 @@ from app.models import Project, Node, Edge, Scenario, ScenarioNodeOverride
 from app.services.computation import compute_all_nodes, validate_algorithm
 from app.services.layout import apply_layout
 from app.services.project_insights import run_insights_task
+from app.api.ai.dashboard_generator import generate_dashboard_for_project
 
 
 # Configuration Gemini - Modèle STABLE
@@ -58,10 +59,13 @@ class PipelineState(TypedDict):
 
     # Statut
     status: Literal["initializing", "analyzing", "executing", "validating", "correcting", "success", "error"]
-    
+
     # Token usage tracking
     total_prompt_tokens: int
     total_completion_tokens: int
+
+    # Demo mode
+    demo_token: str | None
 
 
 def emit_log(state: PipelineState, level: str, message: str, step: str = None) -> dict:
@@ -116,11 +120,10 @@ ANALYSIS_PROMPT = """Tu es un EXPERT en modélisation économique et financière
 Tu es aussi un CONSEILLER qui comprend l'objectif réel de l'utilisateur.
 
 ## CONTEXTE D'INTERFACE (IMPORTANT)
-L'utilisateur verra 3 colonnes :
-- **Paramètres** : valeurs modifiables.
-- **Calculs** : étapes intermédiaires automatiques.
-- **Résultats** : outputs finaux (nœuds calculés sans dépendants).
-Conçois le modèle pour que les résultats finaux soient clairs et utiles.
+L'interface a deux modes :
+- **Mode Insights (par défaut)** : GAUCHE (1/3) Paramètres modifiables | DROITE (2/3) Tableau de bord Insights avec visualisations IA des résultats clés.
+- **Mode Détails (3 colonnes)** : Paramètres | Calculs intermédiaires | Résultats finaux.
+Conçois le modèle pour que les résultats finaux soient clairs et utiles, et que les données key soient bien identifiées.
 
 ## TA MISSION
 1. **FIDÉLITÉ** : Si l'utilisateur liste des paramètres ou calculs → crée-les TOUS.
@@ -133,12 +136,12 @@ Conçois le modèle pour que les résultats finaux soient clairs et utiles.
 ## CONTRAINTES STRICTES
 1. **Pas de listes d'objets** : agrégats uniquement.
 2. **Pas de séries temporelles** : une photo à l'instant T, calcule des ratios/sommes sur période si besoin.
-3. **Sorties numériques uniquement** : scores, pourcentages, décisions 0/1.
+3. **Sorties numériques uniquement** : unités réelles (€, %, mois, ratio, heures), pourcentages, décisions 0/1. JAMAIS de scores arbitraires (/10, /100).
 
 ## CONCEPTION DU MODÈLE
 - **Paramètres** (type="parameter") : valeurs réalistes, actionnables, décrites clairement.
 - **Calculs** (type="computed") : formules Python simples, inputs cohérents.
-- **Résultats** : prévois 2-5 nœuds calculés finaux (sans dépendants).
+- **Résultats** : prévois 2-5 nœuds calculés finaux (sans dépendants), TOUJOURS en unités réelles (€, %, mois, ratio). JAMAIS de score arbitraire comme "Score de X = 7/10".
 - **Scénarios** : 2-3 scénarios pertinents avec overrides réalistes.
 
 ## RÈGLES TECHNIQUES
@@ -148,11 +151,23 @@ Conçois le modèle pour que les résultats finaux soient clairs et utiles.
 4. Pas d'auto-référence.
 5. Chaque nœud a une description pédagogique.
 
-## SCORES (TOUJOURS INTERPRÉTABLES)
-Si tu crées un score :
-- Échelle explicite (/10, /100, %).
-- Description = guide d'interprétation (ex: 0-3=Faible, 4-6=Moyen, 7-10=Bon).
-- Normalise sur une échelle standard si possible.
+## RÈGLES ABSOLUES SUR LES FORMULES (VIOLATIONS = ERREUR D'EXÉCUTION)
+- **INTERDIT** : list comprehensions `[x for x in range(n)]` — retourne une liste, NON SUPPORTÉ.
+- **INTERDIT** : indexing `[i]` sur une variable-nœud — chaque nœud est un SCALAIRE (float), pas une liste.
+- **INTERDIT** : `for`, `while`, boucles de toute forme dans une formule.
+- **INTERDIT** : retourner un dict, tuple, list, None, ou tout objet non-numérique.
+- **INTERDIT** : retourner une chaîne de caractères (`'lineaire'`, `'degressive'`, `'methodeA'`, etc.) — CRASH GARANTI.
+- **INTERDIT** : `default_value` de type string (ex: `"default_value": "lineaire"`) — utilise un entier (0, 1, 2…).
+- **OBLIGATOIRE** : chaque formule retourne UN SEUL nombre (float ou int).
+- **CATÉGORIES / MÉTHODES** : encode toujours en entier. Ex: méthode de dépréciation → paramètre `methode` avec `default_value: 0` (0=linéaire, 1=dégressif). Le label/description explique la correspondance.
+- Si le modèle a N niveaux/catégories, crée N nœuds séparés (un par niveau) ou un nœud agrégat avec `sum()` sur des scalaires. Ne crée JAMAIS un nœud "liste par niveau".
+
+## SCORES : INTERDITS PAR DÉFAUT
+- Les résultats finaux DOIVENT être en unités réelles (€, %, mois, ratio, heures, unités/jour).
+  ✅ "Bénéfice net mensuel", "Marge nette", "Point mort", "Coût total", "ROI"
+  ❌ "Score de rentabilité", "Indice de performance", "Score financier"
+- Les scores (/10, /100) sont INTERDITS sauf méthodologie reconnue et publiée (NPS, IMC, score FICO). Si tu ne peux pas citer la source de la méthodologie → c'est arbitraire → INTERDIT.
+- INTERDIT : résumer tout un modèle dans un seul nœud "score" synthétique. Crée plutôt 2-4 résultats concrets et complémentaires qui répondent directement à la question de l'utilisateur.
 
 ## FORMAT DE SORTIE (JSON)
 {{
@@ -334,6 +349,9 @@ def generate_computation_definition(entity: dict) -> str:
     """Génère le code Python à partir de la structure analysée (PAS BESOIN DE LLM)"""
     if entity.get('type') == 'parameter':
         value = entity.get('default_value', 0)
+        # String default_values cannot be stored as floats — default to 0
+        if isinstance(value, str):
+            value = 0
         return f"def compute():\n    return {value}"
     elif entity.get('type') == 'computed':
         inputs = entity.get('inputs', [])
@@ -427,14 +445,18 @@ async def executeur(state: PipelineState) -> PipelineState:
             full_description = f"{user_intent}\n\n{base_description}" if base_description else user_intent
             emit_log(state, "info", f"💡 Objectif compris: {user_intent}", "executeur")
         
+        user_id = state["user_id"] if state["user_id"] else None
+        demo_token = state.get("demo_token")
+
         project = Project(
             id=project_id,
             name=structure.get('project_name', 'Nouveau projet'),
-            user_id=state["user_id"],
+            user_id=user_id,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
-            generation_prompt=state["prompt"],  # Store the original prompt
-            description=full_description if full_description else None  # Store the AI-understood intent
+            generation_prompt=state["prompt"],
+            description=full_description if full_description else None,
+            public_view_token=demo_token,  # Set for demo projects
         )
         db.add(project)
         db.flush()
@@ -621,6 +643,14 @@ async def validateur(state: PipelineState) -> PipelineState:
 
         emit_log(state, "success", "✓ Tous les calculs OK", "validateur")
         state["status"] = "success"
+
+        # Auto-generate dashboard v2 in background
+        threading.Thread(
+            target=generate_dashboard_for_project,
+            args=(project_id,),
+            daemon=True,
+        ).start()
+
         return state
 
     except Exception as e:
@@ -647,7 +677,10 @@ Inputs disponibles (slugs): {available_inputs}
 
 Corrige le code. Règles:
 - def compute({args}): return expression
-- Ne retourne JAMAIS None/null
+- Ne retourne JAMAIS None/null, ni une liste, ni un dict, ni un tuple
+- INTERDIT : list comprehensions `[x for x in ...]`, boucles `for`/`while`, indexing `variable[i]`
+- Chaque input est un SCALAIRE (float) — ne l'indexe pas
+- Si la formule tente de calculer "par niveau/catégorie", remplace par un agrégat scalaire (somme, moyenne, etc.)
 - Utilise UNIQUEMENT les inputs listés
 
 Retourne UNIQUEMENT le JSON:

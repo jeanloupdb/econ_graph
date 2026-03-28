@@ -179,6 +179,9 @@ INSTRUCTIONS:
    - It must be a valid Python function `def compute(...)`.
    - It must fix the specific error reported.
    - It should be robust (e.g., handle division by zero if that was the issue).
+   - CRITICAL: must return a single numeric value (float or int). NEVER a list, dict, tuple, or None.
+   - FORBIDDEN: list comprehensions `[x for x in ...]`, `for`/`while` loops, `variable[i]` indexing.
+   - Each input variable is a scalar (float) — never index into it.
 3. Provide a short, educational EXPLANATION of the fix.
    - Explain what was wrong and how you fixed it.
    - Be concise and helpful.

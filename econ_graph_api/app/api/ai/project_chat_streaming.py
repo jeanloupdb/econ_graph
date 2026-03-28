@@ -18,6 +18,7 @@ from .project_chat_context import (
     build_nodes_context,
     build_scenarios_context,
     build_agent_snapshot,
+    build_dashboard_context,
     build_conversation_context,
     enrich_message_with_context,
 )
@@ -77,17 +78,20 @@ async def stream_chat_generator(
 
     try:
         configure_gemini()
-        model = genai.GenerativeModel(
-            GEMINI_MODEL,
-            tools=[GRAPH_TOOLS]
-        )
 
         system_prompt = PROJECT_CHAT_SYSTEM_PROMPT.format(
             project_name=project.name,
             node_count=len(nodes),
             nodes_context=build_nodes_context(nodes, edges),
             scenarios_context=build_scenarios_context(scenarios, overrides, nodes_by_id),
+            dashboard_context=build_dashboard_context(project),
             agent_snapshot=build_agent_snapshot(db, project_id, len(nodes), MAX_NODES_IN_CONTEXT),
+        )
+
+        model = genai.GenerativeModel(
+            GEMINI_MODEL,
+            tools=[GRAPH_TOOLS],
+            system_instruction=system_prompt
         )
 
         conversation_history = build_conversation_context(existing_messages)
@@ -96,22 +100,7 @@ async def stream_chat_generator(
         # Enrich message with context if user clicked on a specific element
         enriched_content = enrich_message_with_context(content, context_data, nodes_map)
 
-        # Start chat
-        chat = model.start_chat(history=[
-            {"role": "user", "parts": [system_prompt]},
-            {"role": "model", "parts": ["Compris. Je suis prêt à t'aider avec ton modèle."]},
-            *conversation_history
-        ])
-
-        # Initial request
-        current_response_stream = chat.send_message(enriched_content, stream=True)
-
-        full_ai_response_text = ""
-        actions_performed = []
-        did_modify_graph = False
-        total_prompt_tokens = 0
-        total_completion_tokens = 0
-        # Detect action intent from user message (not just "Lance cette modification")
+        # Detect action intent BEFORE sending so we can force tool use from the start
         import unicodedata
         def _strip_accents(s: str) -> str:
             return "".join(
@@ -123,9 +112,32 @@ async def stream_chat_generator(
             "lance cette modification", "modifie", "change", "corrige", "cree",
             "creer", "ajoute", "supprime", "mets a jour", "edite", "nouveau",
             "scenario pessimiste", "scenario optimiste", "scenario pecimiste",
-            "scenario", "analyse de sensibilite",
+            "scenario",
+            # Optimization intents → must trigger scenario creation
+            "comment ameliorer", "comment atteindre", "comment optimiser",
+            "comment avoir", "comment maximiser", "comment augmenter",
+            "comment reduire", "comment diminuer", "comment faire",
+            "quel parametre", "que dois-je", "ameliore", "optimise",
+            "atteindre", "maximiser", "augmenter", "reduire",
         ]
         action_required = any(kw in _normalized for kw in _action_keywords)
+
+        # Start chat with only conversation history (system prompt is set via system_instruction)
+        chat = model.start_chat(history=conversation_history)
+
+        # When an action is expected, force Gemini to call a tool (mode=ANY eliminates randomness)
+        _send_kwargs: dict = {"stream": True}
+        if action_required:
+            _send_kwargs["tool_config"] = {"function_calling_config": {"mode": "ANY"}}
+
+        # Initial request
+        current_response_stream = chat.send_message(enriched_content, **_send_kwargs)
+
+        full_ai_response_text = ""
+        actions_performed = []
+        did_modify_graph = False
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
         forced_action_attempts = 0
         buffered_text: list[str] = []
 
@@ -174,11 +186,11 @@ async def stream_chat_generator(
                 if action_required and forced_action_attempts < 1 and not actions_performed:
                     forced_action_attempts += 1
                     buffered_text.clear()
+                    # Force tool use on retry (mode=ANY: Gemini must call a function)
                     current_response_stream = chat.send_message(
-                        "STOP. Tu as répondu en texte au lieu d'agir. "
-                        "L'utilisateur attend une ACTION. Appelle les outils MAINTENANT. "
-                        "Ne réponds pas en texte tant que les outils ne sont pas appelés.",
-                        stream=True
+                        "L'utilisateur attend une ACTION concrète. Appelle maintenant l'outil approprié.",
+                        stream=True,
+                        tool_config={"function_calling_config": {"mode": "ANY"}},
                     )
                     continue
                 break
@@ -240,9 +252,11 @@ async def stream_chat_generator(
         if action_required and actions_performed and buffered_text:
             buffered_text.clear()
 
-        if action_required and not actions_performed:
-            full_ai_response_text = "Action non exécutée automatiquement. Merci de réessayer."
+        if action_required and not actions_performed and buffered_text:
+            # Gemini responded with text instead of calling tools — show it rather than an error
+            full_ai_response_text = "".join(buffered_text)
             yield f"data: {json.dumps({'type': 'content', 'content': full_ai_response_text})}\n\n"
+            buffered_text.clear()
 
         ai_message = ConversationMessage(
             id=str(uuid.uuid4()),

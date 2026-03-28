@@ -1,246 +1,344 @@
 # Smart Graph
 
-Economic graph visualization platform with FastAPI backend and Next.js frontend.
+**L'IA qui transforme vos idées en modèles économiques visuels.**
+
+Décrivez votre problème en langage naturel. Smart Graph génère automatiquement un modèle de calcul interactif, vous permettant de simuler des scénarios et de prendre des décisions éclairées.
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-16-black?logo=next.js" alt="Next.js 16" />
+  <img src="https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/AI-Gemini_2.0-4285F4?logo=google" alt="Gemini AI" />
+</p>
 
 ---
 
-## 🎨 REDESIGN DOCUMENTATION
+## ✨ Pourquoi Smart Graph ?
 
-**You're looking for the redesign documentation?**
+### Le problème
 
-➡️ **[START HERE - Redesign Guide](./START_HERE.md)** ← Complete redesign documentation
+- **Excel** : Puissant mais opaque. Les formules sont cachées dans des cellules. Impossible de voir la logique d'un modèle.
+- **Python/Notebooks** : Flexibles mais techniques. Inaccessibles aux non-développeurs.
+- **Outils No-Code** : Simples mais limités. Pas de vrais calculs, pas de scénarios.
 
-### 📚 Available Guides:
+### La solution
 
-1. **[START_HERE.md](./START_HERE.md)** - Quick start (30 min) + complete 4-week plan
-2. **[REDESIGN_INDEX.md](./REDESIGN_INDEX.md)** - Navigation guide for all docs
-3. **[DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md)** - Philosophy, colors, typography, animations
-4. **[VISUAL_IDENTITY_GUIDE.md](./VISUAL_IDENTITY_GUIDE.md)** - Before/After examples with code
-5. **[DESIGN_CHEATSHEET.md](./DESIGN_CHEATSHEET.md)** - Quick reference (1 page)
-6. **[SHADCN_LAYOUTS_SYSTEM.md](./SHADCN_LAYOUTS_SYSTEM.md)** - Layout patterns with Shadcn
-7. **[REDESIGN_ROADMAP.md](./REDESIGN_ROADMAP.md)** - Complete 4-week roadmap
-8. **[DEV_CHEATSHEET.md](./DEV_CHEATSHEET.md)** - Daily dev commands & patterns
+Smart Graph combine le meilleur des trois mondes :
 
-**Total:** ~5500 lines of documentation ready to use!
+| Aspect        | Smart Graph                                 |
+| ------------- | ------------------------------------------- |
+| **Interface** | Graphe visuel où chaque nœud = une variable |
+| **Calculs**   | Python sécurisé sous le capot               |
+| **Création**  | IA générative : décrivez, c'est construit   |
+| **Analyse**   | Scénarios comparables visuellement          |
 
 ---
 
-## Project Structure
+## 🎯 Fonctionnalités Clés
+
+### 1. Génération IA de Modèles
+
+```
+"Crée un modèle de rentabilité pour un e-commerce avec
+panier moyen, taux de conversion, coût d'acquisition"
+```
+
+→ Smart Graph génère automatiquement les nœuds, les relations et les formules.
+
+### 2. Graphe de Calcul Visuel
+
+- Chaque **nœud** représente une variable (CA, marge, coûts...)
+- Chaque **arête** représente une dépendance
+- Les valeurs se **propagent** automatiquement quand vous modifiez un paramètre
+
+### 3. Scénarios & Comparaison
+
+- Créez des scénarios alternatifs ("Optimiste", "Pessimiste", "Base")
+- **Comparez** deux scénarios côte à côte
+- Visualisez les **différences** en un coup d'œil (🟢 hausse, 🔴 baisse)
+
+### 4. Composites (Templates Réutilisables)
+
+- Encapsulez un groupe de calculs en un **composite**
+- Réutilisez-le dans d'autres projets
+- Comme des **fonctions** pour vos modèles économiques
+
+### 5. Intelligence Économique (Règles Engine)
+
+Le moteur de règles vérifie automatiquement la **cohérence économique** :
+
+- Identité de Fisher (taux nominal = taux réel + inflation)
+- Règle de Taylor (politique monétaire)
+- Courbe de taux (normalité/inversion)
+- Et 10+ autres règles macroéconomiques
+
+---
+
+## 🚀 Cas d'Usage
+
+| Utilisateur            | Cas d'usage                                | Valeur                                            |
+| ---------------------- | ------------------------------------------ | ------------------------------------------------- |
+| **Analyste Financier** | Modèle DCF, valorisation, P&L prévisionnel | Visualiser les dépendances, tester des hypothèses |
+| **Économiste**         | Modèle macro (PIB, inflation, emploi)      | Cohérence automatique, scénarios politiques       |
+| **Entrepreneur**       | Business plan, unit economics              | Générer rapidement un modèle avec l'IA            |
+| **Consultant**         | Templates réutilisables pour clients       | Composites exportables, gain de temps             |
+| **Enseignant**         | Démontrer des relations économiques        | Interface visuelle pédagogique                    |
+
+---
+
+## 🔧 Architecture Technique
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        FRONTEND (Next.js 16)                    │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
+│  │ React Flow   │  │ Zustand      │  │ TanStack Query       │  │
+│  │ (Graphe)     │  │ (State)      │  │ (Cache & Mutations)  │  │
+│  └──────────────┘  └──────────────┘  └──────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        BACKEND (FastAPI)                        │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
+│  │ AI Engine    │  │ Computation  │  │ Rules Engine         │  │
+│  │ (Gemini 2.0) │  │ (Restricted  │  │ (Coherence Checks)   │  │
+│  │              │  │  Python)     │  │                      │  │
+│  └──────────────┘  └──────────────┘  └──────────────────────┘  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
+│  │ Scenarios    │  │ Composites   │  │ Multi-Agent Pipeline │  │
+│  │ & Overrides  │  │ & Templates  │  │ (LangGraph)          │  │
+│  └──────────────┘  └──────────────┘  └──────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      DATABASE (PostgreSQL)                      │
+│  Projects │ Nodes │ Edges │ Scenarios │ Composites │ Users     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Stack Technique
+
+**Frontend**
+
+- Next.js 16 (App Router)
+- React Flow (graphe interactif)
+- Tailwind CSS + shadcn/ui
+- Zustand (state management)
+- TanStack Query (data fetching)
+
+**Backend**
+
+- FastAPI (Python 3.11)
+- SQLAlchemy 2.0 (ORM)
+- Alembic (migrations)
+- RestrictedPython (exécution sécurisée)
+- Google Gemini 2.0 Flash (IA)
+- LangGraph (pipeline multi-agents)
+
+**Infrastructure**
+
+- PostgreSQL 16 (Neon)
+- Vercel (frontend)
+- Fly.io (backend)
+- Docker (dev local)
+
+---
+
+## 📦 Structure du Projet
 
 ```
 econ_graph/
-├── econ_graph_api/           # FastAPI backend
-│   ├── app/                  # Application code
-│   ├── alembic/              # Database migrations
-│   ├── infra/                # Infrastructure (Docker, SQL scripts)
-│   ├── Dockerfile            # API Docker configuration
-│   └── requirements.txt      # Python dependencies
+├── econ_graph_api/           # Backend FastAPI
+│   ├── app/
+│   │   ├── api/              # Routes (nodes, scenarios, ai, compute...)
+│   │   ├── models/           # Modèles SQLAlchemy
+│   │   ├── schemas/          # Schémas Pydantic
+│   │   ├── services/         # Logique métier
+│   │   │   ├── computation.py      # Moteur de calcul
+│   │   │   ├── agent_pipeline.py   # Pipeline IA multi-agents
+│   │   │   └── ...
+│   │   └── logic/            # Rules engine
+│   ├── alembic/              # Migrations DB
+│   └── tests/                # Tests pytest
 │
-├── econ_graph_web/           # Next.js frontend
-│   ├── src/                  # Source code
-│   │   ├── app/              # Next.js App Router
-│   │   └── styles/           # Global styles
-│   ├── public/               # Static assets
-│   ├── Dockerfile            # Web Docker configuration
-│   └── package.json          # Node dependencies
+├── econ_graph_web/           # Frontend Next.js
+│   ├── src/
+│   │   ├── app/              # Routes (App Router)
+│   │   ├── components/       # Composants React
+│   │   │   ├── graph/        # Canvas, nœuds, edges
+│   │   │   ├── panels/       # Inspector, Scenario, Algorithm
+│   │   │   └── ...
+│   │   ├── store/            # Zustand stores
+│   │   └── lib/              # Utilitaires, hooks, API client
+│   └── public/               # Assets statiques
 │
-├── docker-compose.yml        # Orchestrates all services
-├── .env                      # Environment variables
-├── .env.example              # Environment template
-├── Makefile                  # Convenience commands
-└── README.md                 # This file
+├── docker-compose.yml        # Orchestration dev
+└── Makefile                  # Commandes pratiques
 ```
 
-## Services
+---
 
-The application consists of three main services:
+## 🛠 Installation & Développement
 
-1. **db** - PostgreSQL 16 database
-2. **api** - FastAPI backend (Python 3.11)
-3. **web** - Next.js frontend (Node 22)
+### Prérequis
 
-## Quick Start
+- Docker & Docker Compose
+- Node.js 20+ (pour dev frontend local)
+- Python 3.11+ (pour dev backend local)
 
-### Prerequisites
-
-- Docker
-- Docker Compose
-
-### First Time Setup
-
-1. Clone the repository and navigate to the project root:
+### Démarrage Rapide (Docker)
 
 ```bash
+# 1. Cloner le repo
+git clone https://github.com/jeanloupdb/econ_graph.git
 cd econ_graph
-```
 
-2. Copy the environment template:
-
-```bash
+# 2. Configurer l'environnement
 cp .env.example .env
-```
+# Éditer .env avec vos clés (GOOGLE_GENERATIVE_AI_API_KEY, etc.)
 
-3. Start all services:
-
-```bash
-docker compose up --build -d
-```
-
-Or using Make:
-
-```bash
+# 3. Lancer tous les services
 make up
+
+# 4. Accéder à l'application
+# Frontend: http://localhost:3000
+# Backend API: http://localhost:8000
+# API Docs: http://localhost:8000/docs
 ```
 
-### Accessing the Application
-
-Once started, the services will be available at:
-
-- **Web Frontend**: [http://localhost:3000](http://localhost:3000)
-- **API Backend**: [http://localhost:8000](http://localhost:8000)
-- **API Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Database**: `localhost:5432`
-
-## Development
-
-### Using Make Commands
-
-The project includes a Makefile with convenient commands:
+### Commandes Make
 
 ```bash
-make up          # Start all services (with build)
-make down        # Stop all services and remove volumes
-make logs        # View logs from all services
-make ps          # Show status of all services
-make rebuild     # Rebuild all services without cache
-make shell-api   # Open bash shell in API container
-make shell-web   # Open shell in web container
-make shell-db    # Open psql shell in database
-make restart     # Restart all services
-make logs-api    # View API logs only
-make logs-web    # View web logs only
-make logs-db     # View database logs only
-make migrate     # Run migrations manually
-make clean       # Clean everything
-make help        # Show all available commands
+make up          # Démarrer tous les services
+make down        # Arrêter les services
+make logs        # Voir les logs
+make logs-api    # Logs backend uniquement
+make logs-web    # Logs frontend uniquement
+make shell-api   # Shell dans le container API
+make migrate     # Appliquer les migrations
+make rebuild     # Rebuild complet
 ```
 
-### Using Docker Compose Directly
+---
+
+## 🌐 Déploiement Production
+
+| Service  | Plateforme | URL                                 |
+| -------- | ---------- | ----------------------------------- |
+| Frontend | Vercel     | Auto-deploy sur push `main`         |
+| Backend  | Fly.io     | `fly deploy` dans `econ_graph_api/` |
+| Database | Neon       | PostgreSQL serverless               |
 
 ```bash
-# Start services
-docker compose up -d
+# Déployer le backend
+cd econ_graph_api
+fly deploy
 
-# View logs
-docker compose logs -f
-
-# Stop services
-docker compose down
-
-# Rebuild a specific service
-docker compose build api
-docker compose up -d api
+# Le frontend se déploie automatiquement via Vercel
+git push origin main
 ```
 
-### Hot Reload
+---
 
-Both the API and web services are configured for hot reload in development:
+## 🔐 Sécurité
 
-- **API**: Mounted volume at `./econ_graph_api/app` with `--reload` flag
-- **Web**: Mounted volumes at `./econ_graph_web/src` and `./econ_graph_web/public`
+- **Exécution Sandboxée** : Le code Python utilisateur est exécuté via RestrictedPython avec :
+  - Aucun import autorisé
+  - Timeout de 5 secondes
+  - Accès limité aux fonctions mathématiques
+- **Authentification** : JWT avec refresh tokens
+- **CORS** : Configuration stricte par environnement
+- **Variables sensibles** : Gérées via secrets Fly.io / Vercel
 
-Changes to source code will automatically trigger reloads.
+---
 
-### Database Migrations
+## 📊 API Endpoints Principaux
 
-Migrations run automatically when starting the services via the `migrate` service.
+### Nœuds
 
-To run migrations manually:
+```http
+GET    /nodes              # Liste des nœuds
+POST   /nodes              # Créer un nœud
+PATCH  /nodes/{id}         # Modifier un nœud
+DELETE /nodes/{id}         # Supprimer un nœud
+```
+
+### Calculs
+
+```http
+POST   /compute/all        # Recalculer tout le projet
+POST   /compute/nodes/{id} # Recalculer un nœud
+```
+
+### Scénarios
+
+```http
+GET    /projects/{id}/scenarios           # Liste des scénarios
+POST   /projects/{id}/scenarios           # Créer un scénario
+POST   /scenarios/{id}/compute            # Calculer avec scénario
+POST   /scenarios/compare                 # Comparer deux scénarios
+```
+
+### IA
+
+```http
+POST   /ai/generate          # Générer du code Python
+POST   /ai/graph-action      # Générer des nœuds/scénarios
+POST   /ai/smart-fix         # Corriger une erreur de code
+POST   /ai/agent-project-create  # Créer un projet complet (multi-agents)
+GET    /ai/agent-status/{id}     # Stream SSE du pipeline
+```
+
+### Règles Économiques
+
+```http
+GET    /rules/check         # Vérifier la cohérence
+GET    /rules/catalog       # Catalogue des règles
+```
+
+---
+
+## 🧪 Tests
 
 ```bash
-make migrate
-# or
-docker compose exec api alembic upgrade head
+# Backend
+cd econ_graph_api
+pytest -v --cov=app
+
+# Avec Docker
+make test
 ```
 
-To create a new migration:
+---
 
-```bash
-docker compose exec api alembic revision --autogenerate -m "description"
-```
+## 📈 Roadmap
 
-## Environment Variables
+- [x] Génération IA de modèles
+- [x] Scénarios avec comparaison visuelle
+- [x] Composites réutilisables
+- [x] Rules Engine (cohérence économique)
+- [x] Pipeline multi-agents (LangGraph)
+- [ ] Export Excel/PDF
+- [ ] Collaboration temps réel
+- [ ] Marketplace de composites
+- [ ] Intégrations API externes (Bloomberg, INSEE...)
 
-The application uses the following environment variables (see [.env.example](.env.example)):
+---
 
-### API Configuration
+## 🤝 Contribution
 
-- `APP_ENV` - Application environment (local, dev, prod)
-- `APP_HOST` - API host (default: 0.0.0.0)
-- `APP_PORT` - API port (default: 8000)
+Les contributions sont bienvenues ! Voir [CONTRIBUTING.md](CONTRIBUTING.md) pour les guidelines.
 
-### Database Configuration
+---
 
-- `DB_HOST` - Database host (default: db)
-- `DB_PORT` - Database port (default: 5432)
-- `DB_NAME` - Database name (default: econ)
-- `DB_USER` - Database user (default: econ_user)
-- `DB_PASSWORD` - Database password
-- `DATABASE_URL` - Full database connection string
+## 📄 Licence
 
-### Web Configuration
+MIT © 2026 Jean-Loup
 
-- `NEXT_PUBLIC_API_BASE_URL` - API base URL for browser (default: http://localhost:8000)
-- `WEB_PORT` - Web server port (default: 3000)
+---
 
-## CORS Configuration
-
-If you need to access the API from the frontend, ensure CORS is properly configured in the FastAPI application to allow requests from `http://localhost:3000`.
-
-## Troubleshooting
-
-### Port Conflicts
-
-If you have port conflicts, modify the port mappings in [.env](.env):
-
-```bash
-APP_PORT=8001    # Change API port
-WEB_PORT=3001    # Change web port
-DB_PORT=5433     # Change database port
-```
-
-### Database Connection Issues
-
-If the API can't connect to the database:
-
-1. Check database is healthy: `docker compose ps`
-2. View database logs: `make logs-db`
-3. Restart services: `make restart`
-
-### Container Build Issues
-
-To rebuild from scratch:
-
-```bash
-make clean
-make rebuild
-make up
-```
-
-## Production Notes
-
-This setup is optimized for development with hot reload and mounted volumes.
-
-For production deployment:
-
-1. Remove volume mounts from [docker-compose.yml](docker-compose.yml)
-2. Remove `--reload` flag from API command
-3. Set `NODE_ENV=production` for web service
-4. Use proper secrets management for environment variables
-5. Configure proper reverse proxy (nginx, traefik)
-6. Enable HTTPS/SSL
-7. Update CORS settings for production domain
-
-## License
-
-[Add your license information here]
+<p align="center">
+  <strong>Smart Graph</strong> — Simulez vos décisions avant de les prendre.
+</p>

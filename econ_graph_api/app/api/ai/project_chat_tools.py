@@ -10,6 +10,7 @@ from app.models import Node, Scenario, Edge
 from app.models.scenario import ScenarioNodeOverride
 from app.services.computation import compute_all_nodes
 from app.services.dependency_tracker import invalidate_dependency_graph
+from app.services import scenario_cache
 
 logger = get_logger(__name__)
 
@@ -76,6 +77,8 @@ def _dispatch_tool(tool_name: str, args: dict, db: Session, project_id: str, nod
         return _list_providers(db, project_id)
     elif tool_name == "get_project_summary":
         return _get_project_summary(db, project_id)
+    elif tool_name == "regenerate_dashboard":
+        return _regenerate_dashboard(db, project_id)
     else:
         return {"error": f"Unknown tool: {tool_name}"}
 
@@ -507,7 +510,10 @@ def _set_scenario_override(db: Session, project_id: str, nodes_map: dict, args: 
         return {"success": False, "error": "scenario_id, node_slug et mode requis"}
     node = nodes_map.get(node_slug)
     if not node:
-        return {"success": False, "error": f"Nœud '{node_slug}' non trouvé"}
+        # Fallback: try to look up by UUID in case the AI used the node's internal id
+        node = next((n for n in nodes_map.values() if n.id == node_slug), None)
+    if not node:
+        return {"success": False, "error": f"Nœud '{node_slug}' non trouvé. Utilisez le node_slug (ex: 'prix_unitaire'), pas l'UUID."}
     scenario = db.query(Scenario).filter(
         Scenario.id == scenario_id, Scenario.project_id == project_id
     ).first()
@@ -531,10 +537,19 @@ def _set_scenario_override(db: Session, project_id: str, nodes_map: dict, args: 
         override.override_value = args.get("value")
         override.override_code = None
     else:
-        override.override_code = args.get("code") or ""
+        code = args.get("code") or ""
+        # Auto-prepend return if the user wrote an expression without it
+        code = code.strip()
+        if code and not code.startswith("return "):
+            code = f"return {code}"
+        override.override_code = code
         override.override_value = None
 
     db.flush()
+
+    # Invalidate scenario cache so next computation uses new overrides
+    scenario_cache.mark_dirty_nodes(project_id, scenario_id, [node.id])
+
     return {
         "success": True,
         "message": f"Override appliqué sur {node.label}",
@@ -598,7 +613,7 @@ def _search_nodes(db: Session, project_id: str, args: dict) -> dict:
 def _list_parameters(db: Session, project_id: str) -> dict:
     nodes = db.query(Node).filter(Node.project_id == project_id).all()
     params = [
-        {"id": n.id, "slug": n.slug, "label": n.label, "value": n.value_computed}
+        {"node_slug": n.slug, "label": n.label, "value": n.value_computed, "unit": n.unit}
         for n in nodes
         if n.status == "imposed"
     ]
@@ -952,3 +967,53 @@ def _detect_cycles(db: Session, project_id: str, nodes_map: dict) -> dict:
         "has_cycles": False,
         "message": "Aucun cycle détecté"
     }
+
+
+def _regenerate_dashboard(db: Session, project_id: str) -> dict:
+    """Regenerate the V2 dashboard config for the project."""
+    try:
+        from app.api.ai.dashboard_generator import (
+            _build_v2_prompt, _validate_v2_config, DASHBOARD_V2_SYSTEM_PROMPT,
+        )
+        from app.api.ai.shared import GEMINI_MODEL, configure_gemini, clean_json_response
+        from app.models import Project
+        import json
+        import google.generativeai as genai
+
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            return {"success": False, "error": "Projet non trouvé"}
+
+        nodes = db.query(Node).filter(Node.project_id == project_id).all()
+        edges = db.query(Edge).filter(Edge.project_id == project_id).all()
+        if not nodes:
+            return {"success": False, "error": "Aucun nœud dans le projet"}
+
+        configure_gemini()
+        model = genai.GenerativeModel(
+            model_name=GEMINI_MODEL,
+            system_instruction=DASHBOARD_V2_SYSTEM_PROMPT,
+            generation_config=genai.GenerationConfig(
+                temperature=0.2,
+                response_mime_type="application/json",
+            ),
+        )
+        response = model.generate_content(
+            _build_v2_prompt(nodes, edges, project.name, project.description)
+        )
+        raw = response.text or "{}"
+        config = json.loads(clean_json_response(raw))
+        config = _validate_v2_config(config, nodes)
+
+        project.dashboard_config = config
+        db.commit()
+
+        widget_count = len(config.get("kpi_widgets", []))
+        return {
+            "success": True,
+            "message": f"Tableau de bord régénéré : {widget_count} widget(s) KPI",
+            "widget_count": widget_count,
+        }
+    except Exception as e:
+        logger.error("regenerate_dashboard failed", error=str(e), project_id=project_id)
+        return {"success": False, "error": str(e)}

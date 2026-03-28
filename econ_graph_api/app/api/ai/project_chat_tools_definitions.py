@@ -310,4 +310,13 @@ GRAPH_TOOLS = Tool(function_declarations=[
             "required": []
         }
     ),
+    FunctionDeclaration(
+        name="regenerate_dashboard",
+        description="Régénère le tableau de bord Insights (widgets KPI et groupes de paramètres) en tenant compte de l'état actuel du modèle. À utiliser après avoir créé ou modifié des nœuds importants, ou quand l'utilisateur demande de mettre à jour les visualisations.",
+        parameters={
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    ),
 ])

@@ -3,6 +3,7 @@
  * Using Zustand for lightweight state management
  */
 
+import type { AiContextInfo, AiFocusTarget } from '@/types/ai-context';
 import { create } from 'zustand';
 import type { InteractionMode, ViewMode } from '../lib/types';
 
@@ -88,14 +89,29 @@ interface UIState {
   highlightedNodeId: string | null;
   flashNodeHighlight: (nodeId: string | null, durationMs?: number) => void;
 
+  // Navigation request (scroll + flash in column view)
+  pendingNavigationNodeId: string | null;
+  requestNodeNavigation: (nodeId: string | null) => void;
+
   // AI Assistant visibility
   aiAssistantOpen: boolean;
   setAiAssistantOpen: (open: boolean) => void;
-  aiPromptPrefill: string;
-  setAiPromptPrefill: (text: string) => void;
+  aiPromptPrefill: string | null;
+  setAiPromptPrefill: (text: string | null) => void;
+  aiAutoSend: boolean;
+  setAiAutoSend: (autoSend: boolean) => void;
+  // AI Context - selected object as context chip
+  aiContext: AiContextInfo | null;
+  setAiContext: (context: AiContextInfo | null) => void;
+  clearAiContext: () => void;
+  openAiWithPrompt: (prompt: string, autoSend?: boolean, context?: AiContextInfo) => void;
+  aiFocusTarget: AiFocusTarget | null;
+  setAiFocusTarget: (target: AiFocusTarget | null) => void;
+  clearAiFocusTarget: () => void;
 
   // Computing state (reload/refresh)
   isComputing: boolean;
+  computingCount: number; // Internal ref count for concurrent loaders
   setIsComputing: (isComputing: boolean) => void;
 
   // Edit Node Modal
@@ -130,6 +146,11 @@ interface UIState {
   // Workspace View (causal, graph)
   workspaceView: 'causal' | 'graph';
   setWorkspaceView: (view: 'causal' | 'graph') => void;
+
+  // Column view mode — insights (2-col) or details (3-col)
+  columnViewMode: 'insights' | 'details';
+  setColumnViewMode: (mode: 'insights' | 'details') => void;
+
 }
 
 let highlightTimeout: number | null = null;
@@ -154,12 +175,18 @@ export const useUIStore = create<UIState>((set) => ({
   sidePanelWidth: 448, // ~28rem default
   scenarioPanelHighlightId: null,
   highlightedNodeId: null,
+  pendingNavigationNodeId: null,
   aiAssistantOpen: false,
-  aiPromptPrefill: '',
+  aiPromptPrefill: null,
+  aiAutoSend: false,
+  aiContext: null,
+  aiFocusTarget: null,
   isComputing: false,
+  computingCount: 0,
   editNodeModalOpen: false,
   developerMode: true,
   workspaceView: 'causal',
+  columnViewMode: 'details',
 
   // Node Editor State
   nodeEditorMode: null,
@@ -196,19 +223,19 @@ export const useUIStore = create<UIState>((set) => ({
   setMode: (mode) => set({ mode }),
   setViewMode: (mode) => set({ viewMode: mode }),
   setDeveloperMode: (mode) => set({ developerMode: mode }),
+  setColumnViewMode: (mode) => {
+    if (typeof window !== 'undefined') localStorage.setItem('causal_column_mode', mode);
+    set({ columnViewMode: mode });
+  },
   setWorkspaceView: (view) => set({
     workspaceView: view,
-    // When switching views, hide inspector and clear selections
     inspectorOpen: false,
     scenarioPanelOpen: false,
     selectedNodeId: null,
     selectedEdgeId: null,
     selectedEdgeIds: [],
     panelStack: [],
-    // Additionally hide floating panel when going to graph mode
-    ...(view === 'graph' ? {
-      floatingPanelOpen: false,
-    } : {}),
+    ...(view === 'graph' ? { floatingPanelOpen: false } : {}),
   }),
   setEditNodeModalOpen: (open) => set({ editNodeModalOpen: open }),
   toggleInspector: () =>
@@ -358,6 +385,8 @@ export const useUIStore = create<UIState>((set) => ({
     }
   },
 
+  requestNodeNavigation: (nodeId) => set({ pendingNavigationNodeId: nodeId }),
+
   resetDetailPanels: () =>
     set(() => ({
       inspectorOpen: false,
@@ -371,10 +400,37 @@ export const useUIStore = create<UIState>((set) => ({
       scenarioPanelHighlightId: null,
       highlightedNodeId: null,
       aiAssistantOpen: false,
+      aiFocusTarget: null,
     })),
 
   setAiAssistantOpen: (open) => set({ aiAssistantOpen: open }),
   setAiPromptPrefill: (text) => set({ aiPromptPrefill: text }),
+  setAiAutoSend: (autoSend) => set({ aiAutoSend: autoSend }),
+  setAiContext: (context) => set({ aiContext: context }),
+  clearAiContext: () => set({ aiContext: null }),
+  setAiFocusTarget: (target) => set({ aiFocusTarget: target }),
+  clearAiFocusTarget: () => set({ aiFocusTarget: null }),
+  openAiWithPrompt: (prompt, autoSend = false, context) => set({
+    aiAssistantOpen: true,
+    aiPromptPrefill: prompt,
+    aiAutoSend: autoSend,
+    aiContext: context || null,
+  }),
 
-  setIsComputing: (isComputing) => set({ isComputing }),
+  setIsComputing: (isComputing) =>
+    set((state) => {
+      // Use ref counting to handle multiple parallel requests
+      // If isComputing is true, increment count. If false, decrement.
+      // Only set actual boolean state based on count > 0
+      
+      // Safety check: if decrementing from 0, keep at 0
+      const currentCount = state.computingCount || 0;
+      let newCount = isComputing ? currentCount + 1 : currentCount - 1;
+      if (newCount < 0) newCount = 0;
+      
+      return {
+        computingCount: newCount,
+        isComputing: newCount > 0
+      };
+    }),
 }));

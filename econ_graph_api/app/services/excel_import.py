@@ -1133,6 +1133,121 @@ def analyze_excel(file_content: bytes, max_cells: int = 500) -> ExcelAnalysis:
     )
 
 
+def qualify_workbook(file_content: bytes) -> dict:
+    """
+    Qualify a workbook before import: compute candidate blocks (one per sheet),
+    a suitability verdict, and a recommended scope.
+    No AI — pure mechanical pass. Used by the session-based import flow.
+    """
+    snapshot = extract_snapshot(file_content)
+
+    candidate_blocks = []
+    for sheet in snapshot.sheets:
+        total_cells = sheet.formula_count + sheet.value_count + sheet.text_count
+        if total_cells == 0:
+            continue
+
+        formula_density = sheet.formula_count / max(total_cells, 1)
+
+        # Sheet type classification
+        if sheet.formula_count == 0:
+            sheet_type = "decorative" if sheet.text_count > sheet.value_count * 2 else "raw_data"
+        elif formula_density > 0.4:
+            sheet_type = "calculation"
+        elif formula_density > 0.15:
+            sheet_type = "mixed"
+        else:
+            sheet_type = "input"
+
+        # Interest score: how valuable is this sheet as a model block
+        interest = 0
+        if sheet.has_formulas:
+            interest += 40
+        interest += min(30, int(formula_density * 100))
+        if sheet.text_count > 5:
+            interest += 15  # has labels → nodes will be well-named
+        estimated_nodes = min(sheet.formula_count + sheet.value_count, 50)
+        if 3 <= estimated_nodes <= 40:
+            interest += 15
+        interest = min(100, interest)
+
+        warnings = []
+        if sheet_type == "raw_data":
+            warnings.append("Cette feuille contient principalement des données brutes.")
+        if estimated_nodes > 40:
+            warnings.append("Feuille complexe — une simplification sera appliquée à l'import.")
+
+        candidate_blocks.append({
+            "block_id": f"block_{re.sub(r'[^a-z0-9]', '_', sheet.name.lower())}",
+            "label": sheet.name,
+            "source_sheet": sheet.name,
+            "sheet_type": sheet_type,
+            "estimated_node_count": estimated_nodes,
+            "formula_count": sheet.formula_count,
+            "value_count": sheet.value_count,
+            "interest_score": interest,
+            "is_recommended": False,
+            "warnings": warnings,
+        })
+
+    # Mark the best block as recommended
+    formula_blocks = [b for b in candidate_blocks if b["formula_count"] > 0]
+    if formula_blocks:
+        best = max(formula_blocks, key=lambda b: b["interest_score"])
+        best["is_recommended"] = True
+
+    # Overall classification
+    overall_warnings = []
+    errors = []
+
+    if snapshot.total_formulas == 0:
+        classification = "not_suitable"
+        verdict_message = "Ce classeur ne contient que des données brutes sans formules."
+        errors.append("Aucune formule détectée — impossible de construire un graphe causal.")
+    elif not formula_blocks:
+        classification = "not_suitable"
+        verdict_message = "Aucune feuille n'a de structure de modèle exploitable."
+        errors.append("Les formules détectées sont trop isolées pour construire un graphe.")
+    elif snapshot.total_formulas > 300 or len(formula_blocks) > 3:
+        classification = "partially_importable"
+        verdict_message = f"{len(formula_blocks)} feuille(s) exploitable(s) — import recommandé par bloc."
+        overall_warnings.append("Un import complet créerait un graphe difficile à lire. Sélectionnez un bloc.")
+    else:
+        classification = "importable"
+        verdict_message = "Ce classeur est adapté à Smart Graph."
+
+    workbook_summary = {
+        "sheet_count": snapshot.total_sheets,
+        "total_formulas": snapshot.total_formulas,
+        "total_values": snapshot.total_values,
+        "formula_blocks_count": len(formula_blocks),
+        "verdict": classification,
+    }
+
+    # Recommended scope
+    recommended_scope = None
+    if formula_blocks:
+        best_block = max(formula_blocks, key=lambda b: b["interest_score"])
+        excludes = [b["source_sheet"] for b in candidate_blocks if b["block_id"] != best_block["block_id"]]
+        recommended_scope = {
+            "kind": "sheet",
+            "target_id": best_block["block_id"],
+            "reason": f"Meilleur équilibre qualité/lisibilité ({best_block['formula_count']} formules).",
+            "includes": [best_block["source_sheet"]],
+            "excludes": excludes[:3],
+        }
+
+    return {
+        "classification": classification,
+        "verdict_message": verdict_message,
+        "workbook_summary": workbook_summary,
+        "candidate_blocks": candidate_blocks,
+        "recommended_scope": recommended_scope,
+        "warnings": overall_warnings,
+        "errors": errors,
+    }
+
+
 def enhance_analysis_with_ai(analysis: ExcelAnalysis) -> ExcelAnalysis:
     """
     Enrich analysis labels using AI (lightweight).
@@ -1147,6 +1262,7 @@ def create_project_from_excel(
     file_content: bytes,
     project_name: str,
     max_cells: int = 100,
+    target_sheets: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
     Main entry point: parse Excel and generate SmartGraph project structure.
@@ -1166,6 +1282,19 @@ def create_project_from_excel(
 
     # PASS 1: Mechanical extraction
     snapshot = extract_snapshot(file_content)
+
+    # Filter to target sheets if a specific scope was selected
+    if target_sheets:
+        filtered = [s for s in snapshot.sheets if s.name in target_sheets]
+        if filtered:
+            snapshot = ExcelSnapshot(
+                sheets=filtered,
+                total_formulas=sum(s.formula_count for s in filtered),
+                total_values=sum(s.value_count for s in filtered),
+                total_text=sum(s.text_count for s in filtered),
+                total_sheets=len(filtered),
+            )
+
     logger.info(
         f"Mechanical pass: {snapshot.total_sheets} sheets, "
         f"{snapshot.total_formulas} formulas, "

@@ -5,7 +5,6 @@ import {
     RenameProjectDialog,
     ShareDialog,
 } from "@/components/dashboard/DashboardDialogs";
-import { ImportExcelModal } from "@/components/modals/ImportExcelModal";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -13,6 +12,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import type { Project } from "@/store/projectState";
 import { useProjectStore } from "@/store/projectState";
 import { Edit3, MoreHorizontal, SquarePen, Trash2, Upload, Users, X } from "lucide-react";
 import Link from "next/link";
@@ -44,8 +44,6 @@ export function DashboardSidebar({
     const [deleteOpen, setDeleteOpen] = useState<null | { id: string; name: string }>(null);
     const [shareOpen, setShareOpen] = useState<null | { id: string; name: string }>(null);
     const [editName, setEditName] = useState("");
-
-    const [importExcelOpen, setImportExcelOpen] = useState(false);
 
     const completedProjects = [...projects]
         .filter(p => p.id)
@@ -86,7 +84,7 @@ export function DashboardSidebar({
         setEditOpen(null);
     };
 
-    const ProjectItem = ({ p, isShared = false }: { p: any; isShared?: boolean }) => {
+    const ProjectItem = ({ p, isShared = false }: { p: Project; isShared?: boolean }) => {
         const collaboratorCount = typeof p.collaborator_count === "number" ? p.collaborator_count : 0;
         const isCollaborative = !isShared && collaboratorCount > 0;
 
@@ -94,8 +92,8 @@ export function DashboardSidebar({
             <div
                 key={p.id}
                 className={cn(
-                    "group flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer mx-2 text-[13px]",
-                    "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100"
+                    "group flex items-center justify-between px-3 py-1.5 rounded-lg transition-all cursor-pointer mx-2 text-[13px] font-medium",
+                    "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100/70"
                 )}
                 onClick={() => handleOpenProject(p.id)}
             >
@@ -118,12 +116,12 @@ export function DashboardSidebar({
                     <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                         <button className={cn(
                             "ml-1 p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-all focus:opacity-100",
-                            "hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700"
+                            "hover:bg-accent text-muted-foreground hover:text-foreground"
                         )}>
                             <MoreHorizontal className="w-3.5 h-3.5" />
                         </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-40 bg-white border-zinc-200 text-zinc-700 rounded-xl">
+                    <DropdownMenuContent align="end" className="w-40 bg-card border-border text-foreground rounded-xl">
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setShareOpen({ id: p.id, name: p.name }); }}>
                             <Users className="w-3.5 h-3.5 mr-2" />
                             <span className="text-xs">Partager</span>
@@ -155,17 +153,18 @@ export function DashboardSidebar({
             )}
             <aside
                 className={cn(
-                    "w-[300px] flex flex-col bg-white border-r border-zinc-200 shrink-0 lg:h-full z-50",
+                    "w-[300px] flex flex-col shrink-0 lg:h-full z-50",
                     "fixed left-0 top-0 bottom-0 lg:static",
+                    "bg-white border-r border-zinc-200 lg:border lg:border-zinc-200 lg:rounded-xl lg:overflow-hidden",
                     "transition-transform duration-300 ease-out",
                     isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
                 )}
             >
                 {/* Header */}
-                <div className="h-14 flex items-center px-3 shrink-0 justify-between">
-                    <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                        <SmartGraphLogo size={22} className="text-zinc-700" />
-                        <span className="font-semibold text-[13px] text-zinc-700 tracking-[-0.01em]">SmartGraph</span>
+                <div className="h-12 flex items-center px-4 shrink-0 justify-between border-b border-zinc-100">
+                    <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                        <SmartGraphLogo size={20} />
+                        <span className="font-mono font-semibold text-[12px] text-zinc-800 tracking-tight">SmartGraph</span>
                     </Link>
                     <div className="flex items-center gap-0.5">
                         <button
@@ -179,7 +178,7 @@ export function DashboardSidebar({
                             }}
                             title="Nouveau modèle"
                             aria-label="Nouveau modèle"
-                            className="h-7 w-7 flex items-center justify-center rounded-md text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors"
+                            className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                         >
                             <SquarePen className="w-[15px] h-[15px]" />
                         </button>
@@ -188,18 +187,18 @@ export function DashboardSidebar({
                                 if (onImportClick) {
                                     onImportClick();
                                 } else {
-                                    setImportExcelOpen(true);
+                                    router.push("/dashboard?view=import");
                                 }
                                 onClose?.();
                             }}
                             title="Importer un Excel"
                             aria-label="Importer un Excel"
-                            className="h-7 w-7 flex items-center justify-center rounded-md text-zinc-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                            className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
                         >
                             <Upload className="w-[14px] h-[14px]" />
                         </button>
                         <button
-                            className="lg:hidden h-7 w-7 flex items-center justify-center rounded-md text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-colors"
+                            className="lg:hidden h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                             onClick={() => onClose?.()}
                             aria-label="Fermer le menu"
                         >
@@ -210,13 +209,17 @@ export function DashboardSidebar({
 
                 {/* Scrollable project list */}
                 <div className="flex-1 relative min-h-0">
-                <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-white to-transparent pointer-events-none z-10" />
+                <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-white to-transparent pointer-events-none z-10 hidden lg:block" />
+                <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-white to-transparent pointer-events-none z-10 lg:hidden" />
                 <div className="h-full overflow-y-auto pt-1 pb-2 sidebar-scroll">
-                    {/* My Projects — grouped by date, no labels */}
+                    {/* My Projects — grouped by date */}
                     {myProjects.length > 0 && (
                         <div className="pt-1">
                             {DATE_GROUP_ORDER.filter(g => groupedProjects[g]?.length).map((group, gi) => (
-                                <div key={group} className={gi > 0 ? "mt-4" : ""}>
+                                <div key={group} className={gi > 0 ? "mt-5" : ""}>
+                                    <div className="px-5 mb-1.5">
+                                        <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-medium">› {group}</span>
+                                    </div>
                                     <div className="space-y-0.5">
                                         {groupedProjects[group].map((p) => (
                                             <ProjectItem key={p.id} p={p} />
@@ -229,7 +232,10 @@ export function DashboardSidebar({
 
                     {/* Shared Projects */}
                     {sharedProjects.length > 0 && (
-                        <div className="mt-5 pt-4 border-t border-zinc-100">
+                        <div className="mt-5 pt-4 border-t border-zinc-200/60">
+                            <div className="px-5 mb-1.5">
+                                <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 font-medium">› Partagés</span>
+                            </div>
                             <div className="space-y-0.5">
                                 {sharedProjects.map((p) => (
                                     <ProjectItem key={p.id} p={p} isShared />
@@ -242,8 +248,8 @@ export function DashboardSidebar({
                 </div>
 
                 {/* User menu */}
-                <div className="px-3 pb-3 pt-2 shrink-0 border-t border-zinc-100">
-                    <UserMenu dropUp />
+                <div className="px-2 pb-3 pt-2 shrink-0 border-t border-zinc-100">
+                    <UserMenu dropUp sidebar />
                 </div>
             </aside>
 
@@ -272,11 +278,6 @@ export function DashboardSidebar({
                 onClose={() => setShareOpen(null)}
                 projectId={shareOpen?.id || ""}
                 projectName={shareOpen?.name || "Projet"}
-            />
-
-            <ImportExcelModal
-                open={importExcelOpen}
-                onClose={() => setImportExcelOpen(false)}
             />
         </>
     );

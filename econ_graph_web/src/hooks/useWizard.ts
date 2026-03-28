@@ -11,7 +11,7 @@ import {
     loadUserWizardState,
     saveUserWizardState,
 } from '@/lib/api/wizard';
-import { ConversationTurn, WizardState } from '@/types/wizard';
+import { ConversationTurn, WizardOption, WizardState, WizardSummary } from '@/types/wizard';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const SESSION_STORAGE_KEY = 'wizard_state';
@@ -26,17 +26,44 @@ const INITIAL_STATE: WizardState = {
   error: null,
 };
 
+const toSerializableState = (state: WizardState): WizardState => {
+  const systemMessage =
+    state.systemMessage && typeof state.systemMessage.content === 'string'
+      ? state.systemMessage
+      : undefined;
+  return { ...state, systemMessage };
+};
+
 export function useWizard() {
   const [state, setState] = useState<WizardState>(INITIAL_STATE);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isInitializedRef = useRef(false);
+  const requestIdRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const persistSessionState = useCallback((nextState: WizardState) => {
+    try {
+      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(toSerializableState(nextState)));
+    } catch (error) {
+      console.error('Failed to persist wizard state to sessionStorage', error);
+    }
+  }, []);
+
+  const nextRequest = useCallback(() => {
+    requestIdRef.current += 1;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+    return {
+      requestId: requestIdRef.current,
+      signal: abortControllerRef.current.signal,
+    };
+  }, []);
 
   // Sauvegarder l'état dans sessionStorage (pour navigation rapide)
   useEffect(() => {
     if (state.currentQuestion) {
-      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(state));
+      persistSessionState(state);
     }
-  }, [state]);
+  }, [state, persistSessionState]);
 
   // Sauvegarder sur le serveur avec debounce
   const saveToServer = useCallback((newState: WizardState) => {
@@ -68,7 +95,20 @@ export function useWizard() {
       if (saved) {
         const parsedState = JSON.parse(saved) as WizardState;
         if (parsedState.currentQuestion) {
-          setState(parsedState);
+          if (parsedState.isLoading) {
+            setState({
+              ...parsedState,
+              isLoading: false,
+              currentStep: 'question',
+              systemMessage: {
+                type: 'info',
+                content: 'Une génération précédente a été interrompue.',
+                timestamp: new Date().toISOString(),
+              },
+            });
+          } else {
+            setState(parsedState);
+          }
           return;
         }
       }
@@ -85,12 +125,14 @@ export function useWizard() {
       if (serverState && serverState.currentQuestion) {
         // État existant sur le serveur
         setState(serverState);
-        sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(serverState));
+        persistSessionState(serverState);
         return;
       }
 
       // 3. Pas d'état existant, initialiser avec la question initiale
-      const initialQuestion = await getInitialQuestion();
+      const { signal, requestId } = nextRequest();
+      const initialQuestion = await getInitialQuestion(signal);
+      if (requestId !== requestIdRef.current) return;
       const newState: WizardState = {
         ...INITIAL_STATE,
         currentQuestion: initialQuestion,
@@ -99,7 +141,7 @@ export function useWizard() {
       };
 
       setState(newState);
-      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(newState));
+      persistSessionState(newState);
       saveToServer(newState);
     } catch (error) {
       setState((prev) => ({
@@ -108,14 +150,28 @@ export function useWizard() {
         isLoading: false,
       }));
     }
-  }, [saveToServer]);
+  }, [nextRequest, saveToServer]);
 
   /**
    * Soumet la réponse de l'utilisateur et passe à l'étape suivante.
    */
   const submitAnswer = useCallback(
-    async (userChoice?: string, userFreeform?: string) => {
+    async (
+      userChoice?: string,
+      userFreeform?: string,
+      meta?: {
+        selectedOption?: WizardOption;
+        choiceType?: 'option' | 'freeform' | 'mixed';
+        displayText?: string;
+      }
+    ) => {
       if (!state.currentQuestion) return;
+
+      const selectedOption = meta?.selectedOption;
+      const choiceType =
+        meta?.choiceType ||
+        (selectedOption && userFreeform ? 'mixed' : selectedOption ? 'option' : userFreeform ? 'freeform' : undefined);
+      const displayText = meta?.displayText || userFreeform || userChoice;
 
       // 1. Créer le nouveau turn
       const newTurn: ConversationTurn = {
@@ -124,6 +180,12 @@ export function useWizard() {
         question: state.currentQuestion.question,
         userChoice,
         userFreeform,
+        userChoiceValue: selectedOption?.value,
+        userChoiceDescription: selectedOption?.description,
+        choiceType,
+        optionsSnapshot: state.currentQuestion.options,
+        draftPrompt: state.currentQuestion.draft_prompt,
+        displayText,
         timestamp: new Date().toISOString(),
       };
 
@@ -143,7 +205,9 @@ export function useWizard() {
 
         if (state.currentQuestion.is_final_step) {
           // Finaliser le wizard
-          const summary = await finalizeWizard(updatedHistory);
+          const { signal, requestId } = nextRequest();
+          const summary = await finalizeWizard(updatedHistory, signal);
+          if (requestId !== requestIdRef.current) return;
           newState = {
             ...intermediateState,
             currentStep: 'summary',
@@ -152,7 +216,9 @@ export function useWizard() {
           };
         } else {
           // Question suivante
-          const nextQuestion = await getNextQuestion(updatedHistory);
+          const { signal, requestId } = nextRequest();
+          const nextQuestion = await getNextQuestion(updatedHistory, signal);
+          if (requestId !== requestIdRef.current) return;
           newState = {
             ...intermediateState,
             currentQuestion: nextQuestion,
@@ -164,6 +230,9 @@ export function useWizard() {
         setState(newState);
         saveToServer(newState);
       } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return;
+        }
         console.error('Generation failed', error);
         setState((prev) => ({
           ...prev,
@@ -172,7 +241,7 @@ export function useWizard() {
         }));
       }
     },
-    [state, saveToServer]
+    [nextRequest, state, saveToServer]
   );
 
   /**
@@ -192,7 +261,9 @@ export function useWizard() {
 
     try {
       if (updatedHistory.length === 0) {
-        const initialQuestion = await getInitialQuestion();
+        const { signal, requestId } = nextRequest();
+        const initialQuestion = await getInitialQuestion(signal);
+        if (requestId !== requestIdRef.current) return;
         const newState: WizardState = {
           ...state,
           conversationHistory: updatedHistory,
@@ -204,7 +275,9 @@ export function useWizard() {
         setState(newState);
         saveToServer(newState);
       } else {
-        const previousQuestion = await getNextQuestion(updatedHistory.slice(0, -1));
+        const { signal, requestId } = nextRequest();
+        const previousQuestion = await getNextQuestion(updatedHistory.slice(0, -1), signal);
+        if (requestId !== requestIdRef.current) return;
         const newState: WizardState = {
           ...state,
           conversationHistory: updatedHistory,
@@ -217,13 +290,16 @@ export function useWizard() {
         saveToServer(newState);
       }
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
       setState((prev) => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Failed to go back',
         isLoading: false,
       }));
     }
-  }, [state, saveToServer]);
+  }, [nextRequest, state, saveToServer]);
 
   /**
    * Revient du récapitulatif aux questions pour affiner.
@@ -238,7 +314,9 @@ export function useWizard() {
     }));
 
     try {
-      const lastQuestion = await getNextQuestion(state.conversationHistory);
+      const { signal, requestId } = nextRequest();
+      const lastQuestion = await getNextQuestion(state.conversationHistory, signal);
+      if (requestId !== requestIdRef.current) return;
       const newState: WizardState = {
         ...state,
         currentStep: 'question',
@@ -249,13 +327,16 @@ export function useWizard() {
       setState(newState);
       saveToServer(newState);
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
       setState((prev) => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Failed to refine',
         isLoading: false,
       }));
     }
-  }, [state, saveToServer]);
+  }, [nextRequest, state, saveToServer]);
 
   /**
    * Ajoute un message système (ex: erreur de création)
@@ -273,45 +354,155 @@ export function useWizard() {
     }));
   }, []);
 
+  const buildSummary = useCallback(
+    async (draftPromptOverride?: string): Promise<WizardSummary | null> => {
+      if (!state.currentQuestion) return null;
+      const { signal, requestId } = nextRequest();
+      const summary = await finalizeWizard(state.conversationHistory, signal, draftPromptOverride);
+      if (requestId !== requestIdRef.current) return null;
+      return summary;
+    },
+    [nextRequest, state]
+  );
+
   /**
-   * Crée le projet avec le prompt final du wizard.
+   * Prépare le récapitulatif (preview) avant génération.
    */
-  const createProject = useCallback(async (customPrompt?: string): Promise<string | null> => {
-    const promptToUse = customPrompt || state.summary?.final_prompt || state.currentQuestion?.draft_prompt;
+  const prepareSummary = useCallback(
+    async (draftPromptOverride?: string): Promise<void> => {
+      if (!state.currentQuestion) return;
 
-    if (!promptToUse) {
-      console.error('No prompt available to create project');
-      return null;
-    }
-
-    setState((prev) => ({
-      ...prev,
-      currentStep: 'creating',
-      isLoading: true,
-      error: null,
-      systemMessage: undefined,
-    }));
-
-    try {
-      const result = await createProjectFromWizard(promptToUse);
-      return result.task_id;
-    } catch (error) {
       setState((prev) => ({
         ...prev,
-        error: error instanceof Error ? error.message : 'Failed to create project',
-        isLoading: false,
-        currentStep: 'question',
+        isLoading: true,
+        error: null,
       }));
-      return null;
-    }
-  }, [state.summary, state.currentQuestion]);
+
+      try {
+        const summary = await buildSummary(draftPromptOverride);
+        if (!summary) return;
+
+        const newState: WizardState = {
+          ...state,
+          summary,
+          currentStep: 'summary',
+          isLoading: false,
+        };
+        setState(newState);
+        saveToServer(newState);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return;
+        }
+        setState((prev) => ({
+          ...prev,
+          error: error instanceof Error ? error.message : 'Failed to prepare summary',
+          isLoading: false,
+        }));
+      }
+    },
+    [buildSummary, saveToServer, state]
+  );
+
+  /**
+   * Crée le projet avec le prompt final du wizard.
+   * Construit le résumé en interne si nécessaire (skip l'étape summary UI).
+   */
+  const createProject = useCallback(
+    async (customPrompt?: string): Promise<string | null> => {
+      setState((prev) => ({
+        ...prev,
+        isLoading: true,
+        error: null,
+        systemMessage: undefined,
+      }));
+
+      try {
+        // Determine prompt to use
+        let promptToUse = customPrompt;
+
+        if (!promptToUse) {
+          if (state.summary?.final_prompt) {
+            promptToUse = state.summary.final_prompt;
+          } else {
+            // Build summary inline (skip showing summary UI)
+            const summary = await buildSummary(state.currentQuestion?.draft_prompt);
+            if (summary?.final_prompt) {
+              promptToUse = summary.final_prompt;
+            }
+          }
+        }
+
+        // Fallback to draft prompt
+        if (!promptToUse) {
+          promptToUse = state.currentQuestion?.draft_prompt;
+        }
+
+        if (!promptToUse) {
+          console.error('No prompt available to create project');
+          setState((prev) => ({
+            ...prev,
+            isLoading: false,
+            error: 'Aucun prompt disponible pour créer le projet.',
+          }));
+          return null;
+        }
+
+        const result = await createProjectFromWizard(promptToUse);
+        setState((prev) => ({
+          ...prev,
+          currentStep: 'question',
+          isLoading: false,
+          systemMessage: {
+            type: 'info',
+            content: "Création lancée en arrière-plan. Vous pouvez continuer.",
+            timestamp: new Date().toISOString(),
+          },
+        }));
+        return result.task_id;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return null;
+        }
+        setState((prev) => ({
+          ...prev,
+          error: error instanceof Error ? error.message : 'Failed to create project',
+          isLoading: false,
+          currentStep: 'question',
+        }));
+        return null;
+      }
+    },
+    [buildSummary, state.currentQuestion, state.summary]
+  );
+
+  const cancelLoading = useCallback((message: unknown = 'Génération interrompue.') => {
+    requestIdRef.current += 1;
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    const content = typeof message === 'string' ? message : 'Génération interrompue.';
+    setState((prev) => ({
+      ...prev,
+      isLoading: false,
+      error: null,
+      systemMessage: {
+        type: 'info',
+        content,
+        timestamp: new Date().toISOString(),
+      },
+      currentStep: 'question',
+    }));
+  }, []);
 
   /**
    * Réinitialise complètement la conversation.
    * Efface l'état local et serveur, puis recharge la question initiale.
    */
-  const resetConversation = useCallback(async () => {
-    setState((prev) => ({ ...prev, isLoading: true, error: null }));
+  const resetConversation = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
+    if (!silent) {
+      setState((prev) => ({ ...prev, isLoading: true, error: null }));
+    }
 
     try {
       // 1. Effacer sessionStorage
@@ -330,7 +521,7 @@ export function useWizard() {
       };
 
       setState(newState);
-      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(newState));
+      persistSessionState(newState);
       // Pas besoin de sauvegarder sur le serveur car on vient de le vider
       // et le nouvel état sera sauvegardé lors de la prochaine interaction
     } catch (error) {
@@ -348,7 +539,7 @@ export function useWizard() {
    */
   const loadFromState = useCallback((wizardState: WizardState) => {
     setState(wizardState);
-    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(wizardState));
+    persistSessionState(wizardState);
   }, []);
 
   return {
@@ -361,5 +552,7 @@ export function useWizard() {
     resetConversation,
     addSystemMessage,
     loadFromState,
+    cancelLoading,
+    prepareSummary,
   };
 }

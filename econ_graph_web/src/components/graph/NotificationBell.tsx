@@ -468,64 +468,6 @@ export function NotificationBell({ dropDown = false, topbarMode = false }: { dro
         )}
       </AnimatePresence>
 
-      {/* ── Transient chip in topbar mode — renders outside bell container ── */}
-      {topbarMode && transientVisible && transientNotif && !panelOpen && (
-        <AnimatePresence>
-          <motion.div
-            key="transient-topbar"
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2, ease: [0.22, 0.8, 0.35, 1] }}
-            onClick={handleTransientClick}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleTransientClick(); }}
-            className={cn(
-              "fixed top-16 right-4 z-[300] flex items-start gap-3 px-4 py-3 rounded-xl border shadow-lg cursor-pointer max-w-[320px]",
-              "group",
-              isLightMode
-                ? "bg-white border-zinc-200 hover:bg-zinc-50 hover:border-zinc-300"
-                : "bg-zinc-800 border-violet-500/50 hover:bg-zinc-700 hover:border-violet-400"
-            )}
-          >
-            <div className={cn(
-              "shrink-0 p-1.5 rounded-lg mt-0.5",
-              isLightMode ? "bg-violet-100 text-violet-600" : "bg-violet-900/40 text-violet-300"
-            )}>
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className={cn(
-                "text-[13px] font-medium leading-snug",
-                isLightMode ? "text-zinc-800" : "text-zinc-100"
-              )}>{transientNotif.title}</p>
-              {transientNotif.body && (
-                <p className={cn(
-                  "text-[12px] leading-snug mt-1",
-                  isLightMode ? "text-zinc-500" : "text-zinc-400"
-                )}>{transientNotif.body}</p>
-              )}
-            </div>
-            <button
-              onClick={handleTransientDismiss}
-              className={cn(
-                "shrink-0 p-0.5 rounded-full transition-colors",
-                isLightMode
-                  ? "hover:bg-zinc-100 text-zinc-400 hover:text-zinc-600"
-                  : "hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300"
-              )}
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <div className={cn(
-              "absolute bottom-0 left-0 right-0 h-1 rounded-b-xl origin-left animate-shrink-8s",
-              isLightMode ? "bg-violet-400" : "bg-violet-500"
-            )} style={{ width: "100%" }} />
-          </motion.div>
-        </AnimatePresence>
-      )}
-
       {/* ── Bell button OR Transient notification (floating mode) ─────────── */}
       <AnimatePresence mode="popLayout">
         {transientVisible && transientNotif && !panelOpen && !dropDown && !topbarMode ? (
@@ -614,24 +556,38 @@ export function NotificationBell({ dropDown = false, topbarMode = false }: { dro
             transition={{ duration: 0.2, ease: [0.22, 0.8, 0.35, 1] }}
             onClick={handleBellClick}
             className={cn(
-              "relative flex items-center justify-center rounded-full border transition-all duration-200",
-              "hover:-translate-y-0.5 hover:shadow-md",
-              "w-10 h-10",
-              panelOpen
-                ? isLightMode
-                  ? "bg-violet-50 border-violet-300 shadow-violet-100"
-                  : "bg-violet-600 border-violet-500 shadow-lg shadow-violet-900/40"
-                : isLightMode
-                  ? "bg-white border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 text-zinc-500 hover:text-zinc-700"
-                  : "bg-zinc-700 border-zinc-500 hover:border-zinc-400 hover:bg-zinc-600"
+              "relative flex items-center justify-center transition-all duration-150",
+              topbarMode
+                ? cn(
+                    "w-7 h-7 rounded-md",
+                    panelOpen
+                      ? "bg-accent text-violet-500"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                  )
+                : cn(
+                    "rounded-full border w-10 h-10",
+                    "hover:-translate-y-0.5 hover:shadow-md",
+                    panelOpen
+                      ? isLightMode
+                        ? "bg-violet-50 border-violet-300 shadow-violet-100"
+                        : "bg-violet-600 border-violet-500 shadow-lg shadow-violet-900/40"
+                      : isLightMode
+                        ? "bg-white border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 text-zinc-500 hover:text-zinc-700"
+                        : "bg-zinc-700 border-zinc-500 hover:border-zinc-400 hover:bg-zinc-600"
+                  )
             )}
           >
             <Bell
               className={cn(
-                "w-[18px] h-[18px] transition-colors",
-                panelOpen
-                  ? isLightMode ? "text-violet-600" : "text-white"
-                  : isLightMode ? "text-zinc-600" : "text-zinc-100"
+                "transition-colors",
+                topbarMode
+                  ? "w-4 h-4"
+                  : cn(
+                      "w-[18px] h-[18px]",
+                      panelOpen
+                        ? isLightMode ? "text-violet-600" : "text-white"
+                        : isLightMode ? "text-zinc-600" : "text-zinc-100"
+                    )
               )}
             />
 

@@ -69,49 +69,27 @@ export function KpiCard({ kpi, nodeBySlug, scenarioValues, isScenarioActive }: P
     return { label: kpi.node_labels?.[i] ?? n?.label ?? slug, value: val as number, color: nodeColor };
   }).filter(b => b.value !== null && b.value !== undefined);
 
-  // Top gradient color line based on delta or original color
-  const topGradientFrom = deltaStyle ? deltaStyle.stroke : colors.stroke;
-
   return (
-    <div className={cn(
-      "relative overflow-hidden rounded-2xl border transition-all duration-200 group/card flex flex-col h-full",
-      "bg-white border-zinc-200 hover:shadow-sm",
-      "shadow-sm"
-    )}>
-      {/* Top accent gradient line */}
-      <div
-        className="h-px w-full shrink-0 transition-all duration-500"
-        style={{ background: `linear-gradient(to right, ${topGradientFrom}90, ${topGradientFrom}30, transparent)` }}
-      />
-
-      {/* Scenario tint overlay */}
-      {isScenarioActive && deltaStyle && (
-        <div
-          className="absolute inset-0 pointer-events-none transition-opacity duration-500 rounded-xl"
-          style={{ background: `radial-gradient(ellipse at 50% 0%, ${deltaStyle.bg} 0%, transparent 70%)` }}
-        />
-      )}
-
+    <div className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white flex flex-col h-full">
       {/* Header */}
-      <div className="relative px-4 pt-3 pb-2 flex items-center justify-between gap-2 shrink-0">
+      <div className="px-3 pt-3 pb-1 flex items-center justify-between gap-2 shrink-0">
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 truncate">
           {kpi.title}
         </span>
         {diffPct !== null && deltaStyle && (
           <span className={cn(
-            "shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded border tabular-nums",
-            "animate-in fade-in-0 slide-in-from-right-1 duration-300",
+            "shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded tabular-nums",
             deltaStyle.badge
           )}>
-            {diff! > 0 ? "↑" : "↓"} {Math.abs(diffPct).toFixed(1)}%
+            {diff! > 0 ? "+" : ""}{Math.abs(diffPct).toFixed(1)}%
           </span>
         )}
       </div>
 
       {/* Visualization */}
-      <div className="relative flex-1 min-h-0 flex flex-col items-center justify-center px-4 pb-4 gap-2">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-3 pb-3 gap-2">
         {kpi.viz_type === "donut" && (
-          <DonutViz value={displayed} unit={unit} color={activeStroke} textColor={deltaStyle?.text ?? negativeOverride ?? colors.text} breakdown={breakdownNodes} hasDelta={!!deltaStyle} />
+          <DonutViz value={displayed} unit={unit} color={activeStroke} textColor={deltaStyle?.text ?? negativeOverride ?? colors.text} breakdown={breakdownNodes} />
         )}
         {kpi.viz_type === "gauge" && (
           <GaugeViz value={displayed} unit={unit} min={kpi.min ?? 0} max={kpi.max ?? 100} color={activeStroke} textColor={deltaStyle?.text ?? negativeOverride ?? colors.text} />
@@ -123,10 +101,18 @@ export function KpiCard({ kpi, nodeBySlug, scenarioValues, isScenarioActive }: P
           <BarBreakdownViz mainValue={displayed} unit={unit} textColor={deltaStyle?.text ?? negativeOverride ?? colors.text} breakdown={breakdownNodes} />
         )}
         {kpi.viz_type === "big_number" && (
-          <BigNumberViz value={displayed} unit={unit} textColor={deltaStyle?.text ?? negativeOverride ?? colors.text} color={activeStroke} deltaDir={deltaDir} bgFill={deltaStyle?.bg ?? colors.fill} />
+          <BigNumberViz
+            value={displayed}
+            unit={unit}
+            baseline={isScenarioActive ? baseline : null}
+            diff={diff}
+            diffPct={diffPct}
+            min={kpi.min}
+            max={kpi.max}
+          />
         )}
         {kpi.viz_type === "pie" && (
-          <PieViz breakdown={breakdownNodes} unit={unit} hasDelta={!!deltaStyle} deltaColor={activeStroke} />
+          <PieViz breakdown={breakdownNodes} unit={unit} />
         )}
         {kpi.viz_type === "grouped_bar" && (
           <GroupedBarViz nodes={multiNodes.length > 0 ? multiNodes : breakdownNodes} unit={unit} />
@@ -139,11 +125,11 @@ export function KpiCard({ kpi, nodeBySlug, scenarioValues, isScenarioActive }: P
         )}
       </div>
 
-      {/* Baseline comparison */}
-      {isScenarioActive && baseline !== null && diff !== null && (
-        <div className="relative px-4 pb-3 shrink-0">
+      {/* Baseline comparison footer — only for non-big_number (big_number embeds it) */}
+      {isScenarioActive && baseline !== null && diff !== null && kpi.viz_type !== "big_number" && (
+        <div className="px-3 pb-2 shrink-0 border-t border-zinc-100 pt-1.5">
           <p className="text-[10px] text-zinc-400 tabular-nums text-center">
-            Base : {formatNumber(baseline)}{unit ? ` ${unit}` : ""}
+            base {formatNumber(baseline)}{unit ? ` ${unit}` : ""}
           </p>
         </div>
       )}
@@ -152,10 +138,9 @@ export function KpiCard({ kpi, nodeBySlug, scenarioValues, isScenarioActive }: P
 }
 
 // ─── Donut ────────────────────────────────────────────────────────────────────
-function DonutViz({ value, unit, color, textColor, breakdown, hasDelta }: {
+function DonutViz({ value, unit, color, textColor, breakdown }: {
   value: number | null; unit: string; color: string; textColor: string;
   breakdown: { label: string; value: number; color: string }[];
-  hasDelta?: boolean;
 }) {
   const R = 36; const CX = 50; const CY = 50;
   const circumference = 2 * Math.PI * R;
@@ -185,8 +170,6 @@ function DonutViz({ value, unit, color, textColor, breakdown, hasDelta }: {
               strokeLinecap="butt" strokeDasharray={`${arc.dashLen} ${circumference - arc.dashLen}`} strokeDashoffset={arc.offset}
               style={{ transition: "stroke-dashoffset 0.7s ease, stroke 0.5s ease" }} />
           ))}
-          {/* Delta ring */}
-          {hasDelta && <circle cx={CX} cy={CY} r={R + 6} fill="none" stroke={color} strokeWidth={1.5} strokeOpacity={0.5} strokeDasharray="4 3" />}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className={cn("text-lg font-mono font-bold tabular-nums leading-none transition-colors duration-300", textColor)}>{displayVal}</span>
@@ -289,7 +272,6 @@ function ProgressViz({ value, unit, min, max, color, textColor, baseline }: {
         </div>
         <div className="flex justify-between text-[10px] text-zinc-400 font-mono">
           <span>{formatNumber(min)}</span>
-          <span className="text-zinc-500">{(pct * 100).toFixed(0)}%</span>
           <span>{formatNumber(max)}</span>
         </div>
       </div>
@@ -297,31 +279,26 @@ function ProgressViz({ value, unit, min, max, color, textColor, baseline }: {
   );
 }
 
-// ─── Bar breakdown ─────────────────────────────────────────────────────────────
-function BarBreakdownViz({ mainValue, unit, textColor, breakdown }: {
+// ─── Bar breakdown ────────────────────────────────────────────────────────────
+function BarBreakdownViz({ mainValue, unit, breakdown }: {
   mainValue: number | null; unit: string; textColor: string;
   breakdown: { label: string; value: number; color: string }[];
 }) {
+  if (breakdown.length === 0) return <BigNumberViz value={mainValue} unit={unit} />;
   const maxVal = Math.max(...breakdown.map(b => Math.abs(b.value)), 1);
   return (
-    <div className="flex flex-col gap-3 w-full">
-      {mainValue !== null && (
-        <div className="flex items-baseline gap-1.5 mb-1">
-          <span className={cn("text-3xl font-mono font-bold tabular-nums", textColor)}>{formatNumber(mainValue)}</span>
-          {unit && <span className="text-sm text-zinc-500">{unit}</span>}
-        </div>
-      )}
+    <div className="flex flex-col gap-2.5 w-full">
       {breakdown.map((item, i) => {
         const pct = Math.max((Math.abs(item.value) / maxVal) * 100, 1.5);
         return (
           <div key={i} className="flex flex-col gap-1">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-zinc-500 truncate">{item.label}</span>
-              <span className="text-xs font-mono font-bold tabular-nums text-zinc-700 shrink-0">
+              <span className="text-[10px] text-zinc-500 truncate">{item.label}</span>
+              <span className="text-[10px] font-semibold tabular-nums text-zinc-700 shrink-0">
                 {formatNumber(item.value)}{unit ? ` ${unit}` : ""}
               </span>
             </div>
-            <div className="h-2 w-full bg-zinc-100 rounded-full overflow-hidden">
+            <div className="h-3 w-full bg-zinc-100 rounded-full overflow-hidden">
               <div className="h-full rounded-full transition-all duration-700 ease-out"
                 style={{ width: `${pct}%`, background: item.color }} />
             </div>
@@ -332,32 +309,30 @@ function BarBreakdownViz({ mainValue, unit, textColor, breakdown }: {
   );
 }
 
-// ─── Grouped bar (recharts) ───────────────────────────────────────────────────
+// ─── Grouped bar ─────────────────────────────────────────────────────────────
 function GroupedBarViz({ nodes, unit }: {
   nodes: { label: string; value: number; color: string }[];
   unit: string;
 }) {
-  if (nodes.length === 0) return <BigNumberViz value={null} unit={unit} textColor="text-zinc-400" />;
-  const data = nodes.map(n => ({ name: n.label.length > 10 ? n.label.slice(0, 9) + "…" : n.label, value: n.value, fullName: n.label }));
+  if (nodes.length === 0) return <BigNumberViz value={null} unit={unit} />;
+  const maxVal = Math.max(...nodes.map(n => Math.abs(n.value)), 1);
 
   return (
-    <div className="w-full" style={{ height: 160 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 8, right: 4, bottom: 20, left: 0 }}>
-          <XAxis dataKey="name" tick={{ fontSize: 9, fill: "#71717a" }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ fontSize: 9, fill: "#71717a" }} axisLine={false} tickLine={false}
-            tickFormatter={(v) => formatNumber(v)} width={38} />
-          <Tooltip
-            contentStyle={{ background: "#ffffff", border: "1px solid #e4e4e7", borderRadius: 8, fontSize: 11, color: "#3f3f46" }}
-            labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName ?? ""}
-            formatter={(v: number) => [formatNumber(v) + (unit ? ` ${unit}` : ""), ""]}
-            cursor={{ fill: "rgba(0,0,0,0.03)" }}
-          />
-          <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={48}>
-            {data.map((_, i) => <Cell key={i} fill={nodes[i]?.color ?? BREAKDOWN_COLORS[i % BREAKDOWN_COLORS.length]} />)}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+    <div className="flex items-end justify-center gap-2 w-full h-full px-2 pb-1 pt-3">
+      {nodes.map((n, i) => {
+        const pct = Math.max((Math.abs(n.value) / maxVal) * 100, 4);
+        return (
+          <div key={i} className="flex flex-col items-center justify-end gap-1 flex-1 h-full">
+            <span className="text-[9px] font-mono font-semibold tabular-nums text-zinc-600 leading-none">
+              {formatNumber(n.value)}{unit ? ` ${unit}` : ""}
+            </span>
+            <div className="w-full rounded-t-sm transition-all duration-700" style={{ height: `${pct}%`, background: n.color }} />
+            <span className="text-[9px] text-zinc-400 text-center leading-tight truncate w-full">
+              {n.label.length > 8 ? n.label.slice(0, 7) + "…" : n.label}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -419,15 +394,13 @@ function RadarViz({ nodes, color }: {
 }
 
 // ─── Pie chart ────────────────────────────────────────────────────────────────
-function PieViz({ breakdown, unit, hasDelta, deltaColor }: {
+function PieViz({ breakdown, unit }: {
   breakdown: { label: string; value: number; color: string }[];
   unit: string;
-  hasDelta?: boolean;
-  deltaColor?: string;
 }) {
   const total = breakdown.reduce((s, b) => s + Math.abs(b.value), 0);
   if (total === 0 || breakdown.length < 2) {
-    return <BigNumberViz value={breakdown[0]?.value ?? null} unit={unit} textColor="text-zinc-700" color="#71717a" deltaDir={null} bgFill="transparent" />;
+    return <BigNumberViz value={breakdown[0]?.value ?? null} unit={unit} textColor="text-zinc-700" color="#71717a" deltaDir={null} />;
   }
 
   const CX = 50, CY = 50, R = 38;
@@ -449,10 +422,6 @@ function PieViz({ breakdown, unit, hasDelta, deltaColor }: {
         {slices.map((s, i) => (
           <path key={i} d={s.d} fill={s.color} style={{ transition: "all 0.7s ease" }} />
         ))}
-        {/* Delta ring */}
-        {hasDelta && deltaColor && (
-          <circle cx={CX} cy={CY} r={R + 5} fill="none" stroke={deltaColor} strokeWidth={1.5} strokeOpacity={0.5} strokeDasharray="4 3" />
-        )}
       </svg>
       <div className="flex flex-col gap-1 w-full">
         {slices.map((s, i) => (
@@ -472,31 +441,36 @@ function PieViz({ breakdown, unit, hasDelta, deltaColor }: {
 }
 
 // ─── Big number ───────────────────────────────────────────────────────────────
-function BigNumberViz({ value, unit, textColor, color, deltaDir, bgFill }: {
-  value: number | null; unit: string; textColor: string; color: string;
-  deltaDir: "up" | "down" | null; bgFill: string;
+function BigNumberViz({ value, unit, diff, diffPct }: {
+  value: number | null; unit: string;
+  baseline?: number | null;
+  diff?: number | null;
+  diffPct?: number | null;
+  min?: number; max?: number;
+  textColor?: string; color?: string; deltaDir?: "up" | "down" | null;
 }) {
+  const hasScenario = diff != null && diff !== 0;
+  const positive = hasScenario && diff! > 0;
+  const numColor = hasScenario
+    ? positive ? "text-emerald-600" : "text-red-500"
+    : "text-zinc-900";
+  const badgeCls = positive
+    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+    : "bg-red-50 text-red-600 border border-red-200";
+
   return (
-    <div
-      className="flex flex-col items-center justify-center gap-2 w-full h-full rounded-lg py-4 px-2 transition-all duration-500"
-      style={{ background: `radial-gradient(ellipse at 50% 30%, ${bgFill} 0%, transparent 70%)` }}
-    >
-      <div className="flex items-end gap-2">
-        {deltaDir && (
-          <span className={cn(
-            "text-2xl font-bold transition-all duration-300 mb-1",
-            deltaDir === "up" ? "text-emerald-600" : "text-red-500"
-          )}>
-            {deltaDir === "up" ? "↑" : "↓"}
-          </span>
-        )}
-        <span className={cn("text-5xl font-mono font-black tabular-nums tracking-tight transition-colors duration-300", textColor)}>
-          {value !== null ? formatNumber(value) : "—"}
+    <div className="flex flex-col items-center justify-center gap-2 w-full h-full py-4 px-3">
+      <span className={cn("text-5xl font-bold tabular-nums tracking-tight leading-none", numColor)}>
+        {value !== null ? formatNumber(value) : "—"}
+      </span>
+      {unit && (
+        <span className="text-base font-normal text-zinc-400">{unit}</span>
+      )}
+      {hasScenario && diffPct != null && (
+        <span className={cn("text-xs font-semibold px-2 py-0.5 rounded-full tabular-nums", badgeCls)}>
+          {positive ? "+" : ""}{diffPct!.toFixed(1)}%
         </span>
-      </div>
-      {unit && <span className="text-sm text-zinc-500 font-medium">{unit}</span>}
-      {/* Subtle accent line */}
-      <div className="w-12 h-0.5 rounded-full mt-1 transition-all duration-500" style={{ background: color, opacity: 0.4 }} />
+      )}
     </div>
   );
 }

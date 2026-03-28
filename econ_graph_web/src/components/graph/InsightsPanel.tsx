@@ -8,18 +8,19 @@ import { useScenarioStore } from "@/store/scenarioState";
 import { useScenarios } from "@/lib/api/hooks";
 import type { DashboardConfigV2 } from "@/types/dashboard";
 import { isDashboardV2 } from "@/types/dashboard";
-import { Columns3, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { Loader2, RefreshCw, Sparkles, X } from "lucide-react";
 import { useMemo, useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { KpiCard } from "./dashboard/KpiCard";
+import { ColumnShell, ColumnHeader } from "@/components/graph/common/ColumnShell";
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 export function InsightsPanel({
-  onSwitchToDetails,
+  onClose,
   isLightMode,
 }: {
-  onSwitchToDetails: () => void;
+  onClose: () => void;
   isLightMode?: boolean;
 }) {
   const projects = useProjectStore((s) => s.projects);
@@ -104,51 +105,31 @@ export function InsightsPanel({
     }
   };
 
-  const headerBorder = isLightMode ? "border-zinc-200" : "border-zinc-800/60";
-  const containerCls = cn(
-    "h-full min-w-0 flex flex-col overflow-hidden",
-    isLightMode ? "bg-white border-l border-zinc-200 shadow-sm" : "bg-transparent"
-  );
-
-  const actionBtn = cn(
-    "shrink-0 p-1.5 rounded-lg border transition-colors duration-150",
-    isLightMode
-      ? "border-zinc-200 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-50"
-      : "border-zinc-800 text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/60 hover:border-zinc-700"
-  );
+  const iconBtn = "shrink-0 p-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-150";
+  const closeBtn = "w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-150 active:scale-95 shadow-sm ring-1 ring-inset ring-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground hover:shadow-md";
 
   // ── Loading / skeleton ─────────────────────────────────────────────────────
   if (!localConfig || isRegenerating) {
     return (
-      <div className={containerCls}>
-        <div className={cn(
-          "shrink-0 flex items-center gap-2 px-4 py-2.5 border-b",
-          headerBorder,
-          isLightMode ? "bg-white" : ""
-        )}>
-          {isRegenerating
-            ? <Loader2 className="w-3.5 h-3.5 text-zinc-500 animate-spin" />
-            : <Sparkles className="w-3.5 h-3.5 text-zinc-600 animate-pulse" />
-          }
-          <span className="text-xs text-zinc-500 flex-1">
-            {isRegenerating ? "Régénération…" : "Analyse du modèle en cours…"}
-          </span>
-          <button onClick={onSwitchToDetails} className={actionBtn} title="Vue 3 colonnes">
-            <Columns3 className="w-3.5 h-3.5" />
+      <ColumnShell color="emerald">
+        <ColumnHeader layout="between">
+          <button onClick={handleRegenerate} className={iconBtn} title="Régénérer">
+            {isRegenerating
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <RefreshCw className="w-3.5 h-3.5" />
+            }
           </button>
-        </div>
-        {/* Shimmer skeleton */}
+          <span className="text-lg font-semibold text-foreground">Stats</span>
+          <button onClick={onClose} className={closeBtn} title="Fermer">
+            <X className="w-4 h-4" />
+          </button>
+        </ColumnHeader>
         <div className="flex-1 p-3 grid grid-cols-2 gap-3">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className={cn(
-              "rounded-xl min-h-[180px] overflow-hidden relative",
-              isLightMode ? "bg-zinc-200 animate-pulse" : "bg-zinc-900/60 border border-zinc-800/50"
-            )}>
-              {!isLightMode && <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.8s_infinite] bg-gradient-to-r from-transparent via-white/[0.04] to-transparent" />}
-            </div>
+            <div key={i} className="rounded-xl bg-muted animate-pulse" />
           ))}
         </div>
-      </div>
+      </ColumnShell>
     );
   }
 
@@ -156,63 +137,30 @@ export function InsightsPanel({
   const numCols = kpis.length === 1 ? 1 : 2;
 
   return (
-    <div className={containerCls}>
-      {/* Header — read-only scenario badge + actions */}
-      <div className={cn(
-        "shrink-0 flex items-center gap-2 px-4 py-2.5 border-b",
-        headerBorder,
-        isLightMode ? "bg-white" : ""
-      )}>
-        {/* Scenario indicator (read-only) */}
-        <div className="flex-1 min-w-0">
-          {isScenarioActive && activeScenario ? (
-            <span className={cn(
-              "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border animate-in fade-in duration-300",
-              isLightMode
-                ? "bg-blue-50 text-blue-700 border-blue-200"
-                : "bg-blue-500/10 text-blue-400 border-blue-500/20"
-            )}>
-              <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", isLightMode ? "bg-blue-500" : "bg-blue-400")} />
-              {activeScenario.name}
-            </span>
-          ) : (
-            <span className="text-[10px] text-zinc-600 font-medium">Valeurs de base</span>
-          )}
-        </div>
-
-        <button
-          onClick={handleRegenerate}
-          className={actionBtn}
-          title="Régénérer le tableau de bord"
-        >
+    <ColumnShell color="emerald">
+      <ColumnHeader layout="between">
+        <button onClick={handleRegenerate} className={iconBtn} title="Régénérer">
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
-        <button
-          onClick={onSwitchToDetails}
-          className={cn(actionBtn, "flex items-center gap-1.5 px-2.5 !py-1 text-xs font-medium")}
-          title="Vue 3 colonnes"
-        >
-          <Columns3 className="w-3.5 h-3.5" />
-          <span>3 colonnes</span>
+        <span className="text-lg font-semibold text-foreground">Stats</span>
+        <button onClick={onClose} className={closeBtn} title="Fermer">
+          <X className="w-4 h-4" />
         </button>
-      </div>
+      </ColumnHeader>
 
       {/* KPI grid */}
-      <div
-        className="flex-1 min-h-0 p-3 overflow-y-auto"
-        style={{ scrollbarWidth: "none" }}
-      >
+      <div className="flex-1 min-h-0 p-3">
         <div
-          className="grid gap-3"
+          className="grid gap-3 h-full"
           style={{
             gridTemplateColumns: `repeat(${numCols}, 1fr)`,
-            gridAutoRows: "minmax(190px, auto)",
+            gridTemplateRows: `repeat(${Math.ceil(kpis.length / numCols)}, minmax(0, 1fr))`,
           }}
         >
           {kpis.map((kpi, idx) => (
             <div
               key={kpi.id}
-              className="animate-in fade-in-0 slide-in-from-bottom-2 duration-500 fill-mode-both"
+              className="animate-in fade-in-0 slide-in-from-bottom-2 duration-500 fill-mode-both min-h-0"
               style={{
                 animationDelay: `${idx * 60}ms`,
                 gridColumn: kpis.length % 2 !== 0 && idx === kpis.length - 1 ? "1 / -1" : undefined,
@@ -231,17 +179,13 @@ export function InsightsPanel({
 
       {/* Insight footer */}
       {localConfig.insight && (
-        <div className={cn(
-          "shrink-0 flex items-start gap-2 px-4 py-2.5 border-t backdrop-blur-sm",
-          headerBorder,
-          isLightMode ? "bg-zinc-50/80" : "bg-zinc-900/40"
-        )}>
-          <Sparkles className={cn("w-3 h-3 shrink-0 mt-0.5", isLightMode ? "text-zinc-400" : "text-zinc-500")} />
-          <p className={cn("text-[10px] leading-relaxed", isLightMode ? "text-zinc-600" : "text-zinc-500")}>
+        <div className="shrink-0 flex items-start gap-2 px-4 py-2.5 border-t border-border bg-muted/50">
+          <Sparkles className="w-3 h-3 shrink-0 mt-0.5 text-muted-foreground" />
+          <p className="text-[10px] leading-relaxed text-muted-foreground">
             {localConfig.insight}
           </p>
         </div>
       )}
-    </div>
+    </ColumnShell>
   );
 }

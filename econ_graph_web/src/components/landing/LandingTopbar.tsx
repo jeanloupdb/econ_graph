@@ -13,11 +13,8 @@ export function LandingTopbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [hasScrolled, setHasScrolled] = useState(false);
 
-  // Track scroll for header background
   useEffect(() => {
-    const handleScroll = () => {
-      setHasScrolled(window.scrollY > 10);
-    };
+    const handleScroll = () => setHasScrolled(window.scrollY > 10);
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
@@ -27,138 +24,96 @@ export function LandingTopbar() {
       <motion.header
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        transition={{ duration: 0.4 }}
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 font-mono ${
           hasScrolled
-            ? "bg-zinc-950/80 backdrop-blur-xl border-b border-white/[0.06]"
-            : "bg-white/80 backdrop-blur-sm border-b border-zinc-100"
+            ? "bg-white/90 backdrop-blur-md border-b border-zinc-200"
+            : "bg-transparent border-transparent"
         }`}
       >
         <div className="mx-auto max-w-6xl px-6">
           <div className="flex h-14 items-center justify-between">
-            {/* Logo */}
-            <Link
-              href="/"
-              className="flex items-center gap-2 group"
-            >
+            {/* Logo - Restored Original Component */}
+            <Link href="/" className="flex items-center gap-2 group">
               <SmartGraphLogo size={24} />
-              <span className={`text-[15px] font-medium tracking-[-0.01em] transition-colors duration-300 ${hasScrolled ? "text-zinc-200" : "text-zinc-900"}`}>
+              <span className="text-[15px] font-bold text-zinc-900 tracking-tight uppercase">
                 SmartGraph
               </span>
             </Link>
 
-            {/* Desktop Navigation */}
+            {/* Desktop Navigation - Monospace CLI style */}
             <nav className="hidden md:flex items-center gap-1">
-              {/* Section anchors — visible when not logged in */}
               {!user && (
-                <div className="flex items-center gap-1 mr-3">
-                  <a href="#methode">
-                    <button className={`px-3 py-1.5 font-medium text-[13px] transition-colors ${hasScrolled ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-500 hover:text-zinc-900"}`}>
-                      Comment ça marche
-                    </button>
+                <div className="flex items-center gap-2 mr-4">
+                  <a href="#methode" className="px-3 py-1.5 text-[11px] font-bold text-zinc-500 hover:text-zinc-900 transition-colors uppercase tracking-widest">
+                    ./méthode
                   </a>
-                  <a href="#cas">
-                    <button className={`px-3 py-1.5 font-medium text-[13px] transition-colors ${hasScrolled ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-500 hover:text-zinc-900"}`}>
-                      Cas d&apos;usage
-                    </button>
+                  <a href="#cas" className="px-3 py-1.5 text-[11px] font-bold text-zinc-500 hover:text-zinc-900 transition-colors uppercase tracking-widest">
+                    ./exemples
                   </a>
                 </div>
               )}
               {user ? (
-                <>
-                  <Link href="/dashboard">
-                    <button className="px-4 py-1.5 bg-zinc-100 text-zinc-900 font-medium text-[13px] rounded-md hover:bg-white transition-colors">
-                      Ouvrir l&apos;app
-                    </button>
+                <div className="flex items-center gap-4">
+                  <Link href="/dashboard" className="text-[12px] font-bold text-zinc-900 uppercase tracking-wider hover:underline underline-offset-4 decoration-zinc-300">
+                    CD /DASHBOARD
                   </Link>
-                  <div className="ml-1">
-                    <UserMenu />
-                  </div>
-                </>
+                  <UserMenu />
+                </div>
               ) : (
-                <>
-                  <Link href="/login">
-                    <button className={`px-3 py-1.5 font-medium text-[13px] transition-colors ${hasScrolled ? "text-zinc-400 hover:text-zinc-200" : "text-zinc-500 hover:text-zinc-900"}`}>
-                      Se connecter
-                    </button>
+                <div className="flex items-center gap-3">
+                  <Link href="/login" className="px-3 py-1.5 text-[11px] font-bold text-zinc-500 hover:text-zinc-900 transition-colors uppercase tracking-widest">
+                    LOGIN
                   </Link>
                   <Link href="/register">
-                    <button className="px-4 py-1.5 bg-zinc-900 text-white font-medium text-[13px] rounded-md hover:bg-zinc-700 transition-colors">
-                      Commencer
+                    <button className="px-4 py-2 bg-zinc-900 text-white font-bold text-[11px] rounded uppercase tracking-[0.15em] hover:bg-zinc-800 transition-all shadow-sm">
+                      START
                     </button>
                   </Link>
-                </>
+                </div>
               )}
             </nav>
 
-            {/* Mobile Menu Button */}
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="md:hidden p-2 text-zinc-400 hover:text-white transition-colors"
+              className="md:hidden p-2 text-zinc-500 hover:text-zinc-900"
             >
-              {isMenuOpen ? (
-                <X className="h-5 w-5" />
-              ) : (
-                <Menu className="h-5 w-5" />
-              )}
+              {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
           </div>
         </div>
       </motion.header>
 
-      {/* Mobile Menu */}
       <AnimatePresence>
         {isMenuOpen && (
           <>
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
+              className="fixed inset-0 z-40 bg-white/60 backdrop-blur-sm md:hidden"
             />
-
-            {/* Menu Panel */}
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.15 }}
               className="fixed top-14 left-4 right-4 z-50 md:hidden"
             >
-              <div className="bg-zinc-900/95 backdrop-blur-xl border border-white/[0.06] rounded-lg shadow-2xl overflow-hidden">
-                <div className="p-3 space-y-1.5">
+              <div className="bg-white border border-zinc-200 rounded-lg shadow-xl overflow-hidden font-mono">
+                <div className="p-4 space-y-3">
+                  {!user && (
+                    <>
+                      <a href="#methode" onClick={() => setIsMenuOpen(false)} className="block px-4 py-2 text-xs font-bold text-zinc-500 uppercase tracking-widest">./méthode</a>
+                      <a href="#cas" onClick={() => setIsMenuOpen(false)} className="block px-4 py-2 text-xs font-bold text-zinc-500 uppercase tracking-widest">./exemples</a>
+                    </>
+                  )}
                   {user ? (
-                    <Link
-                      href="/dashboard"
-                      onClick={() => setIsMenuOpen(false)}
-                      className="block"
-                    >
-                      <button className="w-full px-4 py-2.5 bg-zinc-100 text-zinc-900 font-medium text-sm rounded-md text-center hover:bg-white transition-colors">
-                        Ouvrir l&apos;app
-                      </button>
-                    </Link>
+                    <Link href="/dashboard" onClick={() => setIsMenuOpen(false)} className="block px-4 py-3 bg-zinc-100 text-zinc-900 font-bold text-xs rounded text-center">CD /DASHBOARD</Link>
                   ) : (
                     <>
-                      <Link
-                        href="/login"
-                        onClick={() => setIsMenuOpen(false)}
-                        className="block"
-                      >
-                        <button className="w-full px-4 py-2.5 text-zinc-300 font-medium text-sm rounded-md text-center border border-zinc-700 hover:bg-zinc-800 transition-colors">
-                          Se connecter
-                        </button>
-                      </Link>
-                      <Link
-                        href="/register"
-                        onClick={() => setIsMenuOpen(false)}
-                        className="block"
-                      >
-                        <button className="w-full px-4 py-2.5 bg-zinc-100 text-zinc-900 font-medium text-sm rounded-md text-center hover:bg-white transition-colors">
-                          Commencer
-                        </button>
-                      </Link>
+                      <Link href="/login" onClick={() => setIsMenuOpen(false)} className="block px-4 py-3 text-zinc-600 font-bold text-xs border border-zinc-200 rounded text-center uppercase tracking-widest">LOGIN</Link>
+                      <Link href="/register" onClick={() => setIsMenuOpen(false)} className="block px-4 py-3 bg-zinc-900 text-white font-bold text-xs rounded text-center uppercase tracking-[0.2em]">START</Link>
                     </>
                   )}
                 </div>

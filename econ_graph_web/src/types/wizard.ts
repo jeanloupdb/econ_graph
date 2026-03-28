@@ -42,6 +42,12 @@ export interface ConversationTurn {
   question: string;
   userChoice?: string;
   userFreeform?: string;
+  userChoiceValue?: string;
+  userChoiceDescription?: string;
+  choiceType?: 'option' | 'freeform' | 'mixed';
+  optionsSnapshot?: WizardOption[];
+  draftPrompt?: string;
+  displayText?: string;
   timestamp: string;
 }
 
@@ -50,6 +56,9 @@ export interface GraphPreview {
   structure: string;
   nodes_count: number;
   example_nodes?: string[];
+  parameters_count?: number;
+  computed_count?: number;
+  results_count?: number;
 }
 
 export interface WizardSummary {

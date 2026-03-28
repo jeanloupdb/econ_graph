@@ -126,6 +126,7 @@ function summarizeActions(actions: any[]): ActionSummary[] {
 export function MessageBubble({
   message,
   nodes,
+  isLightMode = true,
   isLastAssistant,
   isStreaming,
   suggestedActions,
@@ -134,6 +135,7 @@ export function MessageBubble({
 }: {
   message: ChatMessage;
   nodes?: any[];
+  isLightMode?: boolean;
   isLastAssistant?: boolean;
   isStreaming?: boolean;
   suggestedActions?: SuggestedAction[];
@@ -167,15 +169,15 @@ export function MessageBubble({
       }
     }
 
+    const userBubble = isLightMode
+      ? "bg-zinc-900 text-white"
+      : "bg-zinc-700 text-zinc-100";
+
     if (resolvedContext) {
       const canFocus = !!resolvedContext.target;
       return (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex justify-end"
-        >
-          <div className="max-w-[85%] bg-zinc-900 rounded-2xl rounded-br-sm px-3 py-2 text-sm text-white">
+        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="flex justify-end">
+          <div className={cn("max-w-[85%] rounded-2xl rounded-br-sm px-3 py-2 text-sm", userBubble)}>
             <ContextTag
               context={resolvedContext}
               onClick={canFocus ? () => focusContext(resolvedContext) : undefined}
@@ -188,12 +190,8 @@ export function MessageBubble({
     }
 
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex justify-end"
-      >
-        <div className="max-w-[85%] bg-zinc-900 rounded-2xl rounded-br-sm px-3 py-2 text-sm text-white whitespace-pre-wrap">
+      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="flex justify-end">
+        <div className={cn("max-w-[85%] rounded-2xl rounded-br-sm px-3 py-2 text-sm whitespace-pre-wrap", userBubble)}>
           {message.content}
         </div>
       </motion.div>
@@ -201,18 +199,7 @@ export function MessageBubble({
   }
 
   if (message.role === "assistant" && isStreaming && !message.content) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex gap-2.5 items-start"
-      >
-        <div className="w-5 h-5 rounded-full bg-zinc-200 flex items-center justify-center shrink-0 mt-0.5">
-          <SmartGraphLogo size={12} />
-        </div>
-        <TypingDots />
-      </motion.div>
-    );
+    return null; // TypingDots gérés directement dans FloatingAiHub
   }
 
   const rawActions = (message.metadata?.actions as any[]) || [];
@@ -222,17 +209,24 @@ export function MessageBubble({
     ? getSuggestions(message.content, detectedNodes, suggestedActions)
     : [];
 
+  const assistantBubble = isLightMode
+    ? "bg-zinc-100 text-zinc-900"
+    : "bg-zinc-800 text-zinc-100";
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       className="flex gap-2.5 items-start"
     >
-      <div className="w-5 h-5 rounded-full bg-zinc-200 flex items-center justify-center shrink-0 mt-0.5">
-        <SmartGraphLogo size={12} />
+      <div className={cn(
+        "w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5",
+        isLightMode ? "bg-violet-100" : "bg-violet-900/50"
+      )}>
+        <SmartGraphLogo size={13} />
       </div>
-      <div className="flex-1 min-w-0 space-y-2 bg-white border border-zinc-200 shadow-sm rounded-2xl rounded-tl-sm px-3 py-2">
-        <div className="text-zinc-800 text-sm leading-relaxed markdown-prose">
+      <div className={cn("flex-1 min-w-0 space-y-2 rounded-2xl rounded-tl-sm px-3 py-2.5", assistantBubble)}>
+        <div className="text-sm leading-relaxed markdown-prose">
           <RenderContent content={message.content} nodes={nodes || []} onClosePanel={onClosePanel} />
         </div>
 

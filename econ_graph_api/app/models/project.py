@@ -25,6 +25,9 @@ class Project(Base):
     generation_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)  # Original prompt used to generate
     description: Mapped[str | None] = mapped_column(Text, nullable=True)  # AI-understood intent or user description
 
+    # AI Dashboard config (JSONB) - persisted widget layout
+    dashboard_config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
     # Relationships
     owner = relationship("User", backref="projects")
     scenarios = relationship("Scenario", back_populates="project", cascade="all, delete-orphan")

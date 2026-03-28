@@ -78,6 +78,7 @@ export function useProjectNodes(
     queryKey: queryKeys.projectNodes(projectParam),
     queryFn: () => apiClient.get<Node[]>(`/nodes${project ? `?project=${encodeURIComponent(project)}` : ''}`),
     enabled: !!project,
+    staleTime: 30_000,
     ...options,
   });
 }
@@ -91,6 +92,7 @@ export function useProjectEdges(
     queryKey: queryKeys.projectEdges(projectParam),
     queryFn: () => apiClient.get<Edge[]>(`/edges${project ? `?project=${encodeURIComponent(project)}` : ''}`),
     enabled: !!project,
+    staleTime: 30_000,
     ...options,
   });
 }

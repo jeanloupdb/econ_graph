@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
 export interface User {
   id: string;
@@ -11,6 +11,14 @@ export interface User {
   is_superuser: boolean;
   created_at: string;
   updated_at: string;
+  smart_profile?: {
+    profession: string[];  // Multi-select
+    interests: string[];
+    level: string | null;
+    tools: string[];
+    completed: boolean;
+    created_at: string | null;
+  } | null;
 }
 
 interface AuthContextType {
@@ -19,13 +27,14 @@ interface AuthContextType {
   login: (username: string, password: string) => Promise<void>;
   register: (email: string, username: string, password: string, full_name?: string) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
   isLoading: boolean;
   isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -44,11 +53,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const fetchCurrentUser = async (authToken: string) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     try {
       const response = await fetch(`${API_BASE_URL}/auth/me`, {
         headers: {
           'Authorization': `Bearer ${authToken}`,
         },
+        signal: controller.signal,
       });
 
       if (response.ok) {
@@ -64,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem('auth_token');
       setToken(null);
     } finally {
+      clearTimeout(timeoutId);
       setIsLoading(false);
     }
   };
@@ -116,12 +130,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('auth_token');
   };
 
+  const refreshUser = async () => {
+    if (token) {
+      await fetchCurrentUser(token);
+    }
+  };
+
   const value = {
     user,
     token,
     login,
     register,
     logout,
+    refreshUser,
     isLoading,
     isAuthenticated: !!user && !!token,
   };

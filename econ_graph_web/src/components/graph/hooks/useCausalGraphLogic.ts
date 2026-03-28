@@ -19,7 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 export function useCausalGraphLogic() {
-  const { nodes = [] } = useGraphData();
+  const { nodes = [], isLoading: isDataLoading } = useGraphData();
   const { isLightMode } = useGraphTheme();
   
   // Store actions
@@ -355,6 +355,43 @@ export function useCausalGraphLogic() {
     setEditingParamId(null);
   }, [editingParamId, activeScenarioId, editValue, updateOverrides, computeWithScenario, computeAll, currentProjectId, setScenarioComputedValues, setIsComputing]);
 
+  // Direct value change (used by sliders) — saves immediately without entering edit mode
+  const handleDirectValueChange = useCallback(async (nodeId: string, numValue: number) => {
+    try {
+      setIsComputing(true);
+
+      if (activeScenarioId) {
+        await updateOverrides.mutateAsync({
+          scenarioId: activeScenarioId,
+          data: {
+            overrides: [{
+              node_id: nodeId,
+              mode: "value",
+              override_value: numValue,
+            }]
+          }
+        });
+
+        const result = await computeWithScenario.mutateAsync({
+          projectId: currentProjectId || undefined,
+          scenarioId: activeScenarioId,
+        });
+        setScenarioComputedValues(activeScenarioId, result.results);
+      } else {
+        const newDefinition = `def compute():\n    return ${numValue}`;
+        await apiClient.patch(`/nodes/${nodeId}`, {
+          computation_definition: newDefinition
+        });
+        await computeAll.mutateAsync();
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Erreur lors de la modification");
+    } finally {
+      setIsComputing(false);
+    }
+  }, [activeScenarioId, updateOverrides, computeWithScenario, computeAll, currentProjectId, setScenarioComputedValues, setIsComputing]);
+
     const handleDeleteScenario = useCallback(async () => {
         if (scenarioToDelete && currentProjectId) {
         const toDelete = scenarioToDelete;
@@ -453,6 +490,7 @@ export function useCausalGraphLogic() {
     handleCreateScenario,
     handleStartEdit,
     handleSaveEdit,
+    handleDirectValueChange,
     handleDeleteScenario,
     handleOpenInspector,
     
@@ -465,6 +503,6 @@ export function useCausalGraphLogic() {
     // Computed props - hover doesn't trigger fading, only selection does
     hasActiveInteraction: selectedResultId !== null,
     isScenarioActive: !!(activeScenarioId && scenarioValuesScenarioId === activeScenarioId),
-    isLoading: isComputing,
+    isLoading: isDataLoading || isComputing,
   };
 }

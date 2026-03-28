@@ -17,13 +17,14 @@ function getAuthHeader(): HeadersInit {
 /**
  * Récupère la question initiale du wizard.
  */
-export async function getInitialQuestion(): Promise<WizardQuestion> {
+export async function getInitialQuestion(signal?: AbortSignal): Promise<WizardQuestion> {
   const response = await fetch(`${API_BASE_URL}/ai/wizard-initial-question`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
       ...getAuthHeader(),
     },
+    signal,
   });
 
   if (!response.ok) {
@@ -37,7 +38,8 @@ export async function getInitialQuestion(): Promise<WizardQuestion> {
  * Génère la prochaine question du wizard basée sur l'historique conversationnel.
  */
 export async function getNextQuestion(
-  conversationHistory: ConversationTurn[]
+  conversationHistory: ConversationTurn[],
+  signal?: AbortSignal
 ): Promise<WizardQuestion> {
   const response = await fetch(`${API_BASE_URL}/ai/conversational-wizard`, {
     method: 'POST',
@@ -48,6 +50,7 @@ export async function getNextQuestion(
     body: JSON.stringify({
       conversation_history: conversationHistory,
     }),
+    signal,
   });
 
   if (!response.ok) {
@@ -61,7 +64,9 @@ export async function getNextQuestion(
  * Finalise le wizard et génère le résumé + prompt optimisé.
  */
 export async function finalizeWizard(
-  conversationHistory: ConversationTurn[]
+  conversationHistory: ConversationTurn[],
+  signal?: AbortSignal,
+  draftPromptOverride?: string
 ): Promise<WizardSummary> {
   const response = await fetch(`${API_BASE_URL}/ai/wizard-finalize`, {
     method: 'POST',
@@ -71,7 +76,9 @@ export async function finalizeWizard(
     },
     body: JSON.stringify({
       conversation_history: conversationHistory,
+      draft_prompt_override: draftPromptOverride,
     }),
+    signal,
   });
 
   if (!response.ok) {

@@ -417,7 +417,34 @@ async def generate_wizard_question(
         log_ai_usage(db, current_user.id, "wizard_question", GEMINI_MODEL, prompt_tokens, completion_tokens)
 
         is_final = bool(data.get("is_final_step", False))
-        logger.info("Wizard question generated", step=len(request.conversation_history) + 1, is_final=is_final)
+        model_ready = bool(data.get("model_ready", False))
+
+        # Safeguard: force model_ready when user chose "Modèle Global/Standard"
+        if request.conversation_history:
+            last_turn = request.conversation_history[-1]
+            last_choice = (last_turn.userChoiceValue or last_turn.userChoice or last_turn.userFreeform or "").lower()
+            is_global_choice = any(kw in last_choice for kw in [
+                "modèle global", "modele global", "modèle standard", "modele standard",
+                "générer un modèle complet", "generer un modele complet",
+                "modèle complet équilibré", "modele complet equilibre",
+            ])
+            if is_global_choice and not model_ready:
+                logger.info("Forcing model_ready=true (user chose global/standard model)")
+                model_ready = True
+                data["model_ready"] = True
+                # If AI didn't provide a draft_prompt, build a basic one from conversation
+                if not data.get("draft_prompt"):
+                    # Reconstruct intent from conversation
+                    intent_parts = []
+                    for turn in request.conversation_history:
+                        choice = turn.userChoiceValue or turn.userChoice or turn.userFreeform
+                        if choice and choice.lower() != "custom_input":
+                            intent_parts.append(choice)
+                    draft = f"Créer un modèle complet et équilibré couvrant: {'; '.join(intent_parts)}"
+                    data["draft_prompt"] = draft
+                    logger.info("Generated fallback draft_prompt", draft=draft[:200])
+
+        logger.info("Wizard question generated", step=len(request.conversation_history) + 1, is_final=is_final, model_ready=model_ready)
 
         # Construction robuste des options
         raw_options = data.get("options", [])
@@ -469,7 +496,7 @@ async def generate_wizard_question(
             is_final_step=is_final,
             draft_prompt=data.get("draft_prompt"),
             closing_remark=data.get("closing_remark"),
-            is_model_ready=bool(data.get("model_ready", False))
+            is_model_ready=model_ready
         )
 
     except HTTPException:

@@ -9,7 +9,6 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Sparkles, Loader2 } from 'lucide-react';
 import { WizardSummary as WizardSummaryType } from '@/types/wizard';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 
 interface WizardSummaryProps {
   summary: WizardSummaryType;
@@ -32,109 +31,95 @@ export function WizardSummary({
       className="flex h-full flex-col"
     >
       {/* Header */}
-      <div className="mb-8">
-        <div className="mb-4 flex items-center justify-between">
-          <button
-            onClick={onRefine}
-            disabled={isCreating}
-            className="flex items-center gap-2 text-sm text-zinc-400 transition-colors hover:text-white"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Affiner mon besoin
-          </button>
-          <div className="text-sm font-medium text-zinc-500">
-            Récapitulatif
+      <div className="mb-8 flex items-start justify-between">
+        <button
+          onClick={onRefine}
+          disabled={isCreating}
+          className="flex items-center gap-2 text-sm text-zinc-400 transition-colors hover:text-white"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Affiner mon besoin
+        </button>
+        <div className="text-sm font-medium text-zinc-500">Récapitulatif</div>
+      </div>
+
+      <div className="space-y-5 overflow-y-auto custom-scrollbar pr-1">
+        <div>
+          <h2 className="text-2xl font-semibold text-white">
+            Votre modèle est prêt
+          </h2>
+          <p className="text-sm text-zinc-500 mt-2">
+            Vérifiez la structure puis lancez la création.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/50 px-5 py-4">
+          <div className="text-[11px] font-medium text-zinc-500 uppercase tracking-wide">
+            Objectif
+          </div>
+          <p className="mt-2 text-[15px] text-zinc-100 leading-relaxed">
+            {summary.user_intent}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/50 px-5 py-4">
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] font-medium text-zinc-500 uppercase tracking-wide">
+              Structure
+            </div>
+            <div className="text-[11px] text-zinc-500">
+              {summary.graph_preview.nodes_count} nœuds
+            </div>
+          </div>
+
+          <div className="mt-3 rounded-xl border border-zinc-800/70 bg-zinc-950/70 px-3 py-2 text-center text-[13px] font-medium text-zinc-300">
+            {summary.graph_preview.structure}
+          </div>
+
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+            <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/70 p-2 text-zinc-400">
+              <div className="text-zinc-500">Paramètres</div>
+              <div className="text-zinc-200 font-medium">
+                {summary.graph_preview.parameters_count ?? '—'}
+              </div>
+            </div>
+            <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/70 p-2 text-zinc-400">
+              <div className="text-zinc-500">Calculs</div>
+              <div className="text-zinc-200 font-medium">
+                {summary.graph_preview.computed_count ?? '—'}
+              </div>
+            </div>
+            <div className="rounded-lg border border-zinc-800/70 bg-zinc-950/70 p-2 text-zinc-400">
+              <div className="text-zinc-500">Résultats</div>
+              <div className="text-zinc-200 font-medium">
+                {summary.graph_preview.results_count ?? '—'}
+              </div>
+            </div>
           </div>
         </div>
 
-        <h2 className="text-2xl font-semibold text-white">
-          ✨ Votre modèle est prêt
-        </h2>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 space-y-4 overflow-y-auto">
-        {/* User Intent */}
-        <Card className="border-zinc-800 bg-zinc-900/50">
-          <CardContent className="p-6">
-            <div className="mb-2 flex items-center gap-2 text-sm font-medium text-zinc-300">
-              💡 Objectif compris
-            </div>
-            <p className="text-white">
-              {summary.user_intent}
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Graph Preview */}
-        <Card className="border-zinc-800 bg-zinc-900/50">
-          <CardContent className="p-6">
-            <div className="mb-3 flex items-center gap-2 text-sm font-medium text-zinc-300">
-              📊 Structure du graphe
-            </div>
-
-            <div className="mb-4 rounded-md bg-zinc-950 border border-zinc-800 p-3 text-center text-sm font-medium text-zinc-300">
-              {summary.graph_preview.structure}
-            </div>
-
-            <p className="mb-4 text-sm text-zinc-400">
-              {summary.graph_preview.description}
-            </p>
-
-            {summary.graph_preview.example_nodes &&
-              summary.graph_preview.example_nodes.length > 0 && (
-                <div className="space-y-2">
-                  <div className="text-xs font-medium text-zinc-400">
-                    Nœuds principaux :
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {summary.graph_preview.example_nodes.map((node, i) => (
-                      <span
-                        key={i}
-                        className="rounded-md bg-violet-500/10 border border-violet-500/20 px-2 py-1 text-xs font-medium text-violet-400"
-                      >
-                        {node}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-          </CardContent>
-        </Card>
-
-        {/* Suggested Scenarios */}
         {summary.suggested_scenarios.length > 0 && (
-          <Card className="border-zinc-800 bg-zinc-900/50">
-            <CardContent className="p-6">
-              <div className="mb-3 flex items-center gap-2 text-sm font-medium text-zinc-300">
-                🎬 Scénarios suggérés
-              </div>
-              <ul className="space-y-2">
-                {summary.suggested_scenarios.map((scenario, i) => (
-                  <li
-                    key={i}
-                    className="flex items-start gap-2 text-sm text-zinc-400"
-                  >
-                    <span className="mt-0.5 text-violet-400">•</span>
-                    <span>{scenario}</span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+          <div className="rounded-2xl border border-zinc-800/60 bg-zinc-950/50 px-5 py-4">
+            <div className="text-[11px] font-medium text-zinc-500 uppercase tracking-wide">
+              Scénarios suggérés
+            </div>
+            <ul className="mt-2 space-y-2">
+              {summary.suggested_scenarios.map((scenario, i) => (
+                <li key={i} className="text-sm text-zinc-400">
+                  {scenario}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
 
       {/* Actions */}
-      <div className="mt-8 flex items-center justify-between gap-3">
-        <Button variant="outline" onClick={onRefine} disabled={isCreating}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Affiner mon besoin
-        </Button>
+      <div className="mt-8 flex items-center justify-end gap-3">
         <Button
           onClick={onCreateProject}
           disabled={isCreating}
-          className="min-w-[180px]"
+          className="min-w-[180px] bg-zinc-100 hover:bg-white text-zinc-900"
           size="lg"
         >
           {isCreating ? (

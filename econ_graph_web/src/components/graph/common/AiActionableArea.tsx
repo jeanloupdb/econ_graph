@@ -58,12 +58,12 @@ export function AiActionableArea({
         {/* Content */}
         {children}
 
-        {/* Floating Action Buttons */}
+        {/* Floating AI actions — inside card boundaries to avoid overflow clipping */}
         <div className={cn(
-            "absolute -top-3 -right-3 z-50 transition-all duration-200",
+            "absolute bottom-1.5 right-1.5 z-[60] transition-all duration-150",
             isHovered
-                ? "opacity-100 scale-100"
-                : "opacity-0 scale-90 pointer-events-none"
+                ? "opacity-100 scale-100 translate-y-0"
+                : "opacity-0 scale-95 -translate-y-0.5 pointer-events-none"
         )}>
              <AiContextButton
                 context={context}

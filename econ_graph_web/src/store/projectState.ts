@@ -4,13 +4,16 @@ import { create } from 'zustand';
 export interface Project {
   id: string;
   name: string;
+  status?: string | null;
   createdAt: string;
   updatedAt: string;
   public_view_token?: string | null;
   user_id?: string | null;
   user_role?: 'owner' | 'editor' | 'viewer' | 'public' | null;
+  collaborator_count?: number | null;
   generation_prompt?: string | null;
   description?: string | null;
+  dashboard_config?: Record<string, unknown> | null;
 }
 
 interface ProjectState {
@@ -82,13 +85,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         .map((p) => ({
           id: p.id,
           name: p.name,
+          status: p.status,
           createdAt: p.created_at,
           updatedAt: p.updated_at,
           public_view_token: p.public_view_token,
           user_id: p.user_id,
           user_role: p.user_role,
+          collaborator_count: p.collaborator_count ?? 0,
           generation_prompt: p.generation_prompt,
           description: p.description,
+          dashboard_config: p.dashboard_config ?? null,
         }));
       const cur = typeof window !== 'undefined' ? localStorage.getItem(LS_CUR) : null;
       const exists = projs.find(p => p.id === cur);
@@ -110,7 +116,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const now = new Date().toISOString();
     const idBase = name.trim().toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
     const id = `${idBase || 'project'}-${Date.now().toString(36)}`.slice(0, 48);
-    const p: Project = { id, name: name.trim() || 'Untitled Project', createdAt: now, updatedAt: now };
+    const p: Project = {
+      id,
+      name: name.trim() || 'Untitled Project',
+      createdAt: now,
+      updatedAt: now,
+      collaborator_count: 0,
+    };
 
     try {
       await apiClient.post<Project, { id: string; name: string; status: string }>('/projects', { id: p.id, name: p.name, status: 'completed' });

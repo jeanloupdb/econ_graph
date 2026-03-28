@@ -1,230 +1,131 @@
 "use client";
 
 import { ShareProjectModal } from "@/components/modals/ShareProjectModal";
-import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { useGraphTheme } from "@/lib/context/GraphThemeContext";
-import { cn } from "@/lib/utils";
 import { useProjectStore } from "@/store/projectState";
-import { ChevronDown, Download, FileSpreadsheet, LogOut, Share2, User } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ChevronUp, Download, LogOut, Share2, User } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
-export function UserMenu({ dropUp = false, forceDark = false, compact = false, onExportExcel }: { dropUp?: boolean; forceDark?: boolean; compact?: boolean; onExportExcel?: () => void }) {
-  const { isLightMode: globalIsLightMode } = useGraphTheme();
-  const isLightMode = forceDark ? false : globalIsLightMode;
+export function UserMenu({
+  dropUp = false,
+  forceDark = false,
+  compact: _compact = false,
+  sidebar = false,
+  onExportExcel,
+}: {
+  dropUp?: boolean;
+  forceDark?: boolean;
+  compact?: boolean;
+  sidebar?: boolean;
+  onExportExcel?: () => void;
+}) {
   const { user, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const [isOpen, setIsOpen] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   const currentProjectId = useProjectStore((s) => s.currentProjectId);
   const projects = useProjectStore((s) => s.projects);
   const currentProject = projects.find((p) => p.id === currentProjectId);
 
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
+  if (!user) return null;
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  if (!user) {
-    return null;
-  }
-
-  const handleLogout = () => {
-    logout();
-    router.push("/login");
-  };
-
-  const handleProfile = () => {
-    setIsOpen(false);
-    router.push("/profile");
-  };
-
-  const handleShare = () => {
-    setIsOpen(false);
-    setShowShareModal(true);
-  };
+  const initials = user.username.charAt(0).toUpperCase();
+  const displayName = user.full_name || user.username;
 
   return (
     <>
-      <div className="relative w-full" ref={menuRef}>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setIsOpen(!isOpen)}
-          className={cn("group w-full flex items-center justify-start gap-3 px-2 hover:bg-zinc-100 transition-all rounded-lg", compact ? "py-1.5" : "py-6")}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          {sidebar ? (
+            /* ── Sidebar variant: full-width row ── */
+            <button className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-zinc-100/80 transition-colors group outline-none text-left">
+              <div className="w-6 h-6 rounded-md bg-zinc-900 flex items-center justify-center shrink-0">
+                <span className="font-mono font-bold text-white text-[10px] leading-none">{initials}</span>
+              </div>
+              <span className="flex-1 min-w-0 text-[13px] font-medium text-zinc-600 group-hover:text-zinc-900 truncate transition-colors">
+                {displayName}
+              </span>
+              <ChevronUp className="w-3 h-3 text-zinc-400 group-hover:text-zinc-500 transition-colors shrink-0" />
+            </button>
+          ) : (
+            /* ── Default: compact icon ── */
+            <button className={cn(
+              "flex items-center justify-center w-7 h-7 rounded-lg outline-none transition-all duration-150",
+              "bg-zinc-900 hover:bg-zinc-800",
+              forceDark ? "ring-white/20 hover:ring-white/40" : ""
+            )}>
+              <span className="font-mono font-bold text-white text-[11px] leading-none">{initials}</span>
+            </button>
+          )}
+        </DropdownMenuTrigger>
+
+        <DropdownMenuContent
+          align={sidebar ? "start" : "end"}
+          side={dropUp ? "top" : "bottom"}
+          className="w-52 bg-white border border-zinc-200 rounded-xl shadow-xl p-1"
+          sideOffset={8}
         >
-          <div
-            className={cn(
-              "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-all",
-              isLightMode
-                ? "bg-blue-100 border-blue-300 group-hover:border-blue-500"
-                : "bg-blue-100 border-blue-300 group-hover:border-blue-500"
-            )}
-          >
-            <span
-              className={cn(
-                "text-xs font-semibold transition-colors",
-                isLightMode
-                  ? "text-blue-700"
-                  : "text-blue-700"
-              )}
-            >
-              {user.username.charAt(0).toUpperCase()}
-            </span>
+          <div className="px-3 py-2.5 border-b border-zinc-100 mb-1">
+            <p className="text-[13px] font-semibold text-zinc-900 truncate">{displayName}</p>
+            <p className="font-mono text-[10px] text-zinc-400 truncate mt-0.5">{user.email}</p>
           </div>
-          {!compact && (
-            <div className="flex flex-col items-start min-w-0 flex-1">
-              <span
-                className={cn(
-                  "text-sm font-medium truncate w-full text-left transition-colors",
-                  isLightMode
-                    ? "text-zinc-900 group-hover:text-blue-700"
-                    : "text-zinc-900 group-hover:text-blue-700"
-                )}
-              >
-                {user.username}
-              </span>
-              <span className="text-[10px] text-zinc-500 truncate w-full text-left">
-                  {user.email}
-              </span>
-            </div>
-          )}
-          
-          {!compact && (
-            <ChevronDown
-              className={cn(
-                "h-4 w-4 shrink-0 transition-transform ml-auto",
-                isOpen ? "rotate-180" : "",
-                isLightMode ? "text-zinc-700" : "text-zinc-700"
-              )}
-            />
-          )}
-        </Button>
 
-        {isOpen && (
-          <div
-            className={cn(
-              "absolute rounded-lg border shadow-xl z-[100]",
-              compact ? "right-0 w-[220px]" : "left-0 right-0",
-              dropUp ? "bottom-full mb-2" : "top-full mt-2",
-              isLightMode
-                ? "bg-white border-zinc-200"
-                : "bg-white border-zinc-200"
-            )}
+          {pathname?.startsWith("/graph") && currentProjectId && (
+            <>
+              <DropdownMenuItem
+                onClick={() => setShowShareModal(true)}
+                className="rounded-lg text-zinc-600 focus:text-zinc-900 focus:bg-zinc-50 cursor-pointer"
+              >
+                <Share2 className="mr-2 h-3.5 w-3.5" />
+                <span className="text-[13px]">Partager le projet</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-zinc-100" />
+            </>
+          )}
+
+          {onExportExcel && (
+            <>
+              <DropdownMenuItem
+                onClick={onExportExcel}
+                className="rounded-lg text-zinc-600 focus:text-zinc-900 focus:bg-zinc-50 cursor-pointer"
+              >
+                <Download className="mr-2 h-3.5 w-3.5" />
+                <span className="text-[13px]">Exporter en Excel</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-zinc-100" />
+            </>
+          )}
+
+          <DropdownMenuItem
+            onClick={() => router.push("/profile")}
+            className="rounded-lg text-zinc-600 focus:text-zinc-900 focus:bg-zinc-50 cursor-pointer"
           >
-            {/* User Info (redundant if shown in button but good for mobile or compact view logic, though keeping here for now) */}
-            <div
-              className={cn(
-                "px-4 py-3 border-b",
-                isLightMode ? "border-zinc-200" : "border-zinc-200"
-              )}
-            >
-              <p
-                className={cn(
-                  "text-sm font-medium",
-                  isLightMode ? "text-zinc-900" : "text-zinc-900"
-                )}
-              >
-                {user.full_name || user.username}
-              </p>
-              <p
-                className={cn(
-                  "text-xs",
-                  isLightMode ? "text-zinc-600" : "text-zinc-600"
-                )}
-              >
-                Pro Plan
-              </p>
-            </div>
+            <User className="mr-2 h-3.5 w-3.5" />
+            <span className="text-[13px]">Mon profil</span>
+          </DropdownMenuItem>
 
-            {/* Menu Items */}
-            <div className="py-2">
-              {/* Share Button - only show if on a project page (/graph) */}
-              {pathname?.startsWith('/graph') && currentProjectId && (
-                <>
-                  <button
-                    onClick={handleShare}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors",
-                      isLightMode
-                        ? "text-zinc-800 hover:text-violet-700 hover:bg-violet-50"
-                        : "text-zinc-800 hover:text-violet-700 hover:bg-violet-50"
-                    )}
-                  >
-                    <Share2 className="h-4 w-4" />
-                    <span>Partager le projet</span>
-                  </button>
-                  <div className={cn(
-                    "my-2 mx-4 border-t",
-                    isLightMode ? "border-zinc-200" : "border-zinc-200"
-                  )} />
-                </>
-              )}
+          <DropdownMenuSeparator className="bg-zinc-100" />
 
-              {/* Export Excel - only when handler provided (mobile) */}
-              {onExportExcel && (
-                <>
-                  <button
-                    onClick={() => { onExportExcel(); setIsOpen(false); }}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors",
-                      isLightMode
-                        ? "text-emerald-700 hover:bg-emerald-50"
-                        : "text-emerald-700 hover:bg-emerald-50"
-                    )}
-                  >
-                    <FileSpreadsheet className="h-4 w-4" />
-                    <span>Exporter Excel</span>
-                    <Download className="h-3.5 w-3.5 ml-auto" />
-                  </button>
-                  <div className={cn(
-                    "my-2 mx-4 border-t",
-                    isLightMode ? "border-zinc-200" : "border-zinc-200"
-                  )} />
-                </>
-              )}
+          <DropdownMenuItem
+            className="rounded-lg text-red-500 focus:text-red-600 focus:bg-red-50 cursor-pointer"
+            onClick={() => { logout(); router.push("/login"); }}
+          >
+            <LogOut className="mr-2 h-3.5 w-3.5" />
+            <span className="text-[13px]">Se déconnecter</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-              <button
-                onClick={handleProfile}
-                className={cn(
-                  "w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors",
-                  isLightMode
-                    ? "text-zinc-800 hover:text-blue-700 hover:bg-zinc-100"
-                    : "text-zinc-800 hover:text-blue-700 hover:bg-zinc-100"
-                )}
-              >
-                <User className="h-4 w-4" />
-                <span>Profil</span>
-              </button>
-              <button
-                onClick={handleLogout}
-                className={cn(
-                  "w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors",
-                  isLightMode
-                    ? "text-red-600 hover:text-red-700 hover:bg-zinc-100"
-                    : "text-red-600 hover:text-red-700 hover:bg-zinc-100"
-                )}
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Sign out</span>
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Share Modal */}
       {showShareModal && currentProjectId && (
         <ShareProjectModal
           open={showShareModal}
@@ -236,4 +137,3 @@ export function UserMenu({ dropUp = false, forceDark = false, compact = false, o
     </>
   );
 }
-

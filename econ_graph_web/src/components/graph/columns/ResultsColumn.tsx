@@ -1,10 +1,15 @@
+import { ColumnShell } from "@/components/graph/common/ColumnShell";
 import { AiActionableArea } from "@/components/graph/common/AiActionableArea";
 import { DiffIndicator } from "@/components/graph/common/DiffIndicator";
 import { InlineNodeDetail } from "@/components/graph/panels/InlineNodeDetail";
 import type { Node } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { formatNumber } from "@/utils/format";
-import { AlertCircle, ChevronDown, ChevronUp, Circle, Loader2, Triangle } from "lucide-react";
+import { useUIStore } from "@/store/uiState";
+import { ColumnHeader } from "@/components/graph/common/ColumnShell";
+import { cva } from "class-variance-authority";
+import { useValueChanged } from "@/hooks/useValueChanged";
+import { AlertCircle, Circle, Triangle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 interface ResultsColumnProps {
@@ -61,34 +66,22 @@ export function ResultsColumn({
   isLoading,
   compact = false,
 }: ResultsColumnProps & { compact?: boolean }) {
+  const setColumnViewMode = useUIStore((s) => s.setColumnViewMode);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [scrollHint, setScrollHint] = useState<{ direction: 'up' | 'down'; label?: string } | null>(null);
 
-  // Scroll hint logic
   useEffect(() => {
     const checkScroll = () => {
       const container = scrollContainerRef.current;
       if (!container) return;
-
-      // Find first highlighted node that belongs to THIS column
       const targetId = results.find(n => highlightedNodeIds.has(n.id))?.id;
-
-      if (!targetId) {
-        setScrollHint(null);
-        return;
-      }
-
+      if (!targetId) { setScrollHint(null); return; }
       const element = document.getElementById(`node-res-${targetId}`);
       if (!element) return;
-
       const containerRect = container.getBoundingClientRect();
       const elementRect = element.getBoundingClientRect();
-
-      // Get label for current target
       const node = nodeById.get(targetId);
       const label = node?.label || node?.slug;
-
-      // Check if element is significantly out of view (allowing 10px margin)
       if (elementRect.top < containerRect.top - 10) {
         setScrollHint({ direction: 'up', label });
       } else if (elementRect.bottom > containerRect.bottom + 10) {
@@ -97,10 +90,7 @@ export function ResultsColumn({
         setScrollHint(null);
       }
     };
-
-    // Check on highlight change and scroll
     checkScroll();
-
     const container = scrollContainerRef.current;
     if (container) {
       container.addEventListener('scroll', checkScroll);
@@ -109,124 +99,107 @@ export function ResultsColumn({
   }, [highlightedNodeIds, results, nodeById]);
 
   return (
-    /* DROITE — RÉSULTATS (1/3) */
-      <div
-        className={cn(
-          "flex flex-col relative",
-          compact ? "overflow-visible min-h-full" : "flex-1 overflow-hidden rounded-2xl shadow-sm",
-          compact
-            ? "bg-white"
-            : "bg-white border border-zinc-200 shadow-zinc-200/60"
-        )}
-        onClick={() => {
-          if (!viewFullResultDetailId) {
-            setSelectedResultId(null);
-          }
-        }}
-      >
-        {/* Loading Overlay */}
-        {isLoading && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/70 backdrop-blur-sm animate-in fade-in duration-300">
-            <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
-            <span className="sr-only">Chargement...</span>
-          </div>
-        )}
-        {/* Scroll Indicators - Floating over the list */}
-        {scrollHint && !viewFullResultDetailId && (
-            <div className={cn(
-                "absolute left-0 right-0 z-20 flex items-center justify-center pointer-events-none py-1.5 backdrop-blur-sm transition-all animate-in fade-in duration-300",
-                scrollHint.direction === 'up' ? "top-[88px] border-b shadow-sm" : "bottom-0 border-t shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.08)]",
-                "bg-emerald-50/95 text-emerald-700 border-emerald-100/70"
-            )}>
-                <div className="flex items-center gap-2 text-xs font-medium tracking-wide">
-                    {scrollHint.direction === 'up' && <ChevronUp className="h-3.5 w-3.5 animate-bounce" />}
-                    <span className="max-w-[200px] truncate">
-                      {scrollHint.label ? scrollHint.label : (scrollHint.direction === 'up' ? 'Voir plus haut' : 'Voir plus bas')}
-                    </span>
-                    {scrollHint.direction === 'down' && <ChevronDown className="h-3.5 w-3.5 animate-bounce" />}
-                </div>
-            </div>
-        )}
-
-        {viewFullResultDetailId ? (
-          <InlineNodeDetail
-            nodeId={viewFullResultDetailId}
-            colorScheme="emerald"
-            onClose={() => setViewFullResultDetailId(null)}
-            nodeById={nodeById}
-            getNodeValues={getNodeValues}
-            getNodeDependencies={getNodeDependencies}
-            getNodeType={getNodeType}
-            isScenarioActive={isScenarioActive}
-            isLightMode={isLightMode}
-            onNodeClick={(id) => setSelectedCenterNodeId?.(id)}
-            onVariableHover={setHoveredNodeId}
-            navigateToDependency={navigateToDependency}
-            nodes={nodes}
-          />
-        ) : (
-          <>
-        {/* Header - Fixed height for alignment */}
-        <div className={cn(
-          "shrink-0 border-b flex items-center justify-center group/header bg-white border-zinc-200",
-          compact ? "py-3" : "h-[88px]",
-        )} onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center gap-2">
-            <AiActionableArea
-                isLightMode={isLightMode}
-                className="rounded-lg p-1 -m-1"
-                context={{
-                  label: "Résultats",
-                  type: "result",
-                  target: { kind: "section", id: "results" },
-                }}
-            >
-              <span className="text-lg font-semibold text-zinc-700">
+    <ColumnShell
+      color="emerald"
+      compact={compact}
+      isLoading={isLoading}
+      scrollHint={scrollHint}
+      scrollHintHidden={!!viewFullResultDetailId}
+      onClick={() => { if (!viewFullResultDetailId) setSelectedResultId(null); }}
+      className={!compact ? "animate-in fade-in slide-in-from-right-3 duration-300" : undefined}
+    >
+      {viewFullResultDetailId ? (
+        <InlineNodeDetail
+          nodeId={viewFullResultDetailId}
+          colorScheme="emerald"
+          onClose={() => setViewFullResultDetailId(null)}
+          nodeById={nodeById}
+          getNodeValues={getNodeValues}
+          getNodeDependencies={getNodeDependencies}
+          getNodeType={getNodeType}
+          isScenarioActive={isScenarioActive}
+          isLightMode={isLightMode}
+          onNodeClick={(id) => setSelectedCenterNodeId?.(id)}
+          onVariableHover={setHoveredNodeId}
+          navigateToDependency={navigateToDependency}
+          nodes={nodes}
+        />
+      ) : (
+        <>
+          {/* Header */}
+          <ColumnHeader compact={compact} stopPropagation>
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-semibold flex items-center gap-2 text-foreground">
+                <svg className="h-4 w-4 shrink-0 text-emerald-500" viewBox="0 0 10 10" fill="currentColor">
+                  <polygon points="5,0 9.3,2.5 9.3,7.5 5,10 0.7,7.5 0.7,2.5" />
+                </svg>
                 Résultats
               </span>
-            </AiActionableArea>
-            <span className="text-sm text-zinc-400">
-              ({results.length})
-            </span>
-          </div>
-        </div>
+              <span className="text-sm text-muted-foreground">({results.length})</span>
+            </div>
 
-        <div
-          ref={scrollContainerRef}
-          className={cn("p-5 graph-light-scrollbar", !compact && "flex-1 overflow-y-auto pb-28", compact && "pb-24")}
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        >
-          <div className="space-y-2">
-          {results.map((node) => (
-            <ResultCard
-              key={node.id}
-              node={node}
-              isLightMode={isLightMode}
-              isHighlighted={highlightedNodeIds.has(node.id)}
-              isFaded={hasActiveInteraction && !highlightedNodeIds.has(node.id)}
-              isFlashHighlight={flashHighlightId === node.id}
-              isScenarioActive={isScenarioActive}
-              getNodeValues={getNodeValues}
-              getNodeDependencies={getNodeDependencies}
-              getNodeType={getNodeType}
-              onSelect={() => setViewFullResultDetailId(node.id)}
-              onHover={(hovered, nodeId) => setHoveredNodeId(hovered && nodeId ? nodeId : null)}
-              onDependencyClick={navigateToDependency}
-              domId={`node-res-${node.id}`}
-            />
-          ))}
+          </ColumnHeader>
+
+          {/* Results list */}
+          <div
+            ref={scrollContainerRef}
+            className={cn(
+              "p-5",
+              !compact && "flex-1 overflow-y-auto pb-6",
+              compact && "pb-24"
+            )}
+            style={{ scrollbarWidth: 'none' }}
+          >
+            <div className="space-y-2">
+              {results.map((node) => (
+                <ResultCard
+                  key={node.id}
+                  node={node}
+                  isLightMode={isLightMode}
+                  isLoading={isLoading}
+                  isHighlighted={highlightedNodeIds.has(node.id)}
+                  isFaded={hasActiveInteraction && !highlightedNodeIds.has(node.id)}
+                  isFlashHighlight={flashHighlightId === node.id}
+                  isScenarioActive={isScenarioActive}
+                  getNodeValues={getNodeValues}
+                  getNodeDependencies={getNodeDependencies}
+                  getNodeType={getNodeType}
+                  onSelect={() => setViewFullResultDetailId(node.id)}
+                  onHover={(hovered, nodeId) => setHoveredNodeId(hovered && nodeId ? nodeId : null)}
+                  onDependencyClick={navigateToDependency}
+                  domId={`node-res-${node.id}`}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-          </>
-        )}
-      </div>
+
+        </>
+      )}
+    </ColumnShell>
   );
 }
 
-// Sub-component for expandable result cards
+// ── ResultCard variants (cva) ─────────────────────────────────────────────────
+const resultCardVariants = cva(
+  "relative rounded-xl transition-all duration-200 cursor-pointer border",
+  {
+    variants: {
+      state: {
+        default:     "bg-card border-border hover:bg-accent/40",
+        highlighted: "bg-card ring-1 ring-emerald-200 border-emerald-100",
+        flash:       "bg-emerald-50 border-emerald-200 ring-2 ring-emerald-100",
+        faded:       "bg-card border-border opacity-30",
+      },
+    },
+    defaultVariants: { state: "default" },
+  }
+);
+
+// ── Sub-component ─────────────────────────────────────────────────────────────
 function ResultCard({
   node,
   isLightMode,
+  isLoading,
   isHighlighted,
   isFaded,
   isFlashHighlight,
@@ -241,6 +214,7 @@ function ResultCard({
 }: {
   node: Node;
   isLightMode: boolean;
+  isLoading?: boolean;
   isHighlighted: boolean;
   isFaded: boolean;
   isFlashHighlight: boolean;
@@ -254,120 +228,125 @@ function ResultCard({
   domId?: string;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
-
   const { baseline, scenario, diff } = getNodeValues(node.id);
   const displayValue = isScenarioActive ? scenario : baseline;
   const { parents } = getNodeDependencies(node.id);
-
   const visibleParents = isExpanded ? parents : parents.slice(0, 2);
   const hasMoreParents = parents.length > 2;
+  const { changed: valueChanged, direction } = useValueChanged(displayValue, isLoading);
+
+  // Visual differentiation by value sign
+  const isError = !!node.computation_error;
+  const isPositive = !isError && displayValue !== null && displayValue > 1e-9;
+  const isNegative = !isError && displayValue !== null && displayValue < -1e-9;
+  // Value text color — always colored by sign, overridden by scenario diff or value change flash
+  const valueColorClass = isError
+    ? "text-red-400"
+    : valueChanged
+      ? (direction === "up" ? "text-emerald-500" : "text-rose-500")
+      : isScenarioActive && diff && Math.abs(diff) > 1e-9
+        ? (diff > 0 ? "text-emerald-500" : "text-rose-500")
+        : isPositive ? "text-emerald-500"
+          : isNegative ? "text-rose-500"
+            : "text-foreground";
+
+  const cardState = isFlashHighlight ? "flash" : isFaded ? "faded" : isHighlighted ? "highlighted" : "default";
 
   return (
     <div
       id={domId}
       onClick={onSelect}
       className={cn(
-        "rounded-xl transition-all duration-200 cursor-pointer border",
-        "bg-white border-transparent hover:border-zinc-200 hover:shadow-sm",
-        isFaded && "opacity-30",
-        isFlashHighlight
-          ? "bg-emerald-50 border-emerald-200 ring-2 ring-emerald-100"
-          : (isHighlighted && "ring-1 ring-emerald-200 border-emerald-100")
+        resultCardVariants({ state: cardState }),
+        "relative overflow-hidden",
+        valueChanged && !isFlashHighlight && "ring-1 ring-emerald-300 border-emerald-200"
       )}
     >
+      {/* Ripple overlay on value change */}
+      {valueChanged && (
+        <div className={cn(
+          "absolute inset-0 pointer-events-none animate-card-ripple rounded-xl",
+          direction === "up" ? "bg-emerald-100" : "bg-rose-100"
+        )} />
+      )}
       <AiActionableArea
-          isLightMode={isLightMode}
-          className="h-full rounded-xl flex flex-col"
-          context={{
-            label: node.label || node.slug,
-            type: "result",
-            target: { kind: "node", id: node.id },
-          }}
+        isLightMode={isLightMode}
+        className="h-full rounded-xl flex flex-col relative"
+        context={{
+          label: node.label || node.slug,
+          type: "result",
+          target: { kind: "node", id: node.id },
+        }}
       >
-        {/* Header */}
-        <div className="px-4 py-3 group/card">
+        <div className="pl-4 pr-4 pt-3 pb-2">
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-1.5 min-w-0">
-              {node.computation_error && (
+              {isError && (
                 <AlertCircle className="h-3.5 w-3.5 shrink-0 text-red-500" title={node.computation_error} />
               )}
               <span className={cn(
                 "text-xs font-medium uppercase tracking-wide truncate",
-                node.computation_error
-                  ? "text-red-500"
-                  : isHighlighted
-                    ? "text-emerald-700"
-                    : "text-zinc-500"
+                isError ? "text-red-500" : isHighlighted ? "text-emerald-700" : "text-muted-foreground"
               )}>
                 {node.label || node.slug}
               </span>
             </div>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className={cn(
-              "text-3xl font-mono font-bold tabular-nums tracking-tight",
-              node.computation_error
-                ? "text-red-400"
-                : diff && Math.abs(diff) > 1e-9
-                  ? (diff > 0 ? "text-emerald-600" : "text-red-500")
-                  : "text-zinc-900"
-            )}>
-              {node.computation_error ? "—" : formatNumber(displayValue)}
+            <span
+              key={displayValue}
+              className={cn(
+                "text-3xl font-mono font-bold tabular-nums tracking-tight inline-block",
+                valueChanged && "animate-value-pulse",
+                valueColorClass
+              )}
+            >
+              {isError ? "—" : formatNumber(displayValue)}
             </span>
-            {node.unit && !node.computation_error && (
-              <span className="text-sm text-zinc-400">
-                {node.unit}
-              </span>
+            {node.unit && !isError && (
+              <span className="text-sm text-muted-foreground">{node.unit}</span>
             )}
             <DiffIndicator diff={diff} baseline={baseline} isScenarioActive={isScenarioActive} />
           </div>
-          {node.computation_error && (
+          {isError && (
             <p className="text-[10px] text-red-400/80 mt-1 truncate" title={node.computation_error}>
               {node.computation_error}
             </p>
           )}
-          {/* Notes */}
           {node.notes && (
-            <p className="text-xs mt-2 text-zinc-500">
-              {node.notes}
-            </p>
+            <p className="text-xs mt-2 text-muted-foreground">{node.notes}</p>
           )}
         </div>
 
-        {/* Parents list */}
         {parents.length > 0 && (
-          <div className="px-4 pb-3">
-            <span className="text-xs text-zinc-400">
-              Dépend de
-            </span>
+          <div className="pl-5 pr-4 pb-3">
+            <span className="text-xs text-muted-foreground">Dépend de</span>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-            {visibleParents.map(parent => (
-              <div
-                key={parent.id}
-                onClick={(e) => { e.stopPropagation(); onDependencyClick(parent.id); }}
-                onMouseEnter={() => onHover(true, parent.id)}
-                onMouseLeave={() => onHover(false)}
-                className="flex items-center gap-1.5 cursor-pointer transition-colors hover:opacity-70 text-zinc-600"
-                title={`${parent.label || parent.slug} (${getNodeType(parent.id) === 'parameter' ? 'Paramètre' : 'Calcul'})`}
-              >
-                {getNodeType(parent.id) === 'parameter' ? (
-                  <Circle className="h-2 w-2 fill-current shrink-0 text-blue-500" />
-                ) : (
-                  <Triangle className="h-2 w-2 fill-current shrink-0 rotate-90 text-purple-500" />
-                )}
-                <span className="text-xs">
-                  {parent.label || parent.slug}
-                </span>
-              </div>
-            ))}
-            {hasMoreParents && (
-              <button
-                onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
-                className="text-xs font-medium transition-colors hover:underline text-zinc-400 hover:text-zinc-600"
-              >
-                {isExpanded ? "−" : `+${parents.length - 2}`}
-              </button>
-            )}
+              {visibleParents.map(parent => (
+                <div
+                  key={parent.id}
+                  onClick={(e) => { e.stopPropagation(); onDependencyClick(parent.id); }}
+                  onMouseEnter={() => onHover(true, parent.id)}
+                  onMouseLeave={() => onHover(false)}
+                  className="flex items-center gap-1.5 cursor-pointer transition-colors hover:opacity-70 text-muted-foreground"
+                  title={`${parent.label || parent.slug} (${getNodeType(parent.id) === 'parameter' ? 'Paramètre' : 'Calcul'})`}
+                >
+                  {getNodeType(parent.id) === 'parameter' ? (
+                    <Circle className="h-2 w-2 fill-current shrink-0 text-blue-500" />
+                  ) : (
+                    <Triangle className="h-2 w-2 fill-current shrink-0 rotate-90 text-purple-500" />
+                  )}
+                  <span className="text-xs">{parent.label || parent.slug}</span>
+                </div>
+              ))}
+              {hasMoreParents && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
+                  className="text-xs font-medium transition-colors hover:underline text-muted-foreground hover:text-foreground"
+                >
+                  {isExpanded ? "−" : `+${parents.length - 2}`}
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -375,3 +354,4 @@ function ResultCard({
     </div>
   );
 }
+

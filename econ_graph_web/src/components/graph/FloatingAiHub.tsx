@@ -5,6 +5,7 @@
 
 "use client";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SmartGraphLogo } from "@/components/ui/SmartGraphLogo";
 import { useGraphData } from "@/graph/context/GraphDataContext";
 import { useProjectChat } from "@/hooks/useProjectChat";
@@ -19,7 +20,6 @@ import {
   ChevronRight,
   ChevronUp,
   Circle,
-  Pencil,
   Triangle,
   X
 } from "lucide-react";
@@ -69,8 +69,6 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
     return () => mq.removeEventListener("change", h);
   }, []);
 
-  const [chatOpen, setChatOpen] = useState(false);
-  const [compactThread, setCompactThread] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [textValue, setTextValue] = useState(""); // shadow for isEmpty checks
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -251,6 +249,9 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
     [paramItems, calcItems, resultItems]
   );
 
+  // Keep a ref so setTimeout closures always get the latest resolver
+  const resolveNodeLabelRef = useRef<(textAfterAt: string) => MentionData | null>(() => null);
+
   const resolveNodeLabel = useCallback(
     (textAfterAt: string): MentionData | null => {
       let bestMatch: MentionData | null = null;
@@ -280,6 +281,9 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
     [allMentionItems, resultNodeIds]
   );
 
+  // Keep ref in sync so setTimeout closures always use the latest version
+  resolveNodeLabelRef.current = resolveNodeLabel;
+
   // ── Click outside ─────────────────────────────────────────────────
   useEffect(() => {
     if (!isExpanded) return;
@@ -288,8 +292,6 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
         containerRef.current &&
         !containerRef.current.contains(e.target as Node)
       ) {
-        setChatOpen(false);
-        setCompactThread(false);
         setIsClosing(true);
         setAiAssistantOpen(false);
       }
@@ -321,13 +323,6 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages.length, isSending]);
 
-  useEffect(() => {
-    if (!chatOpen) return;
-    requestAnimationFrame(() => {
-      if (scrollRef.current)
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    });
-  }, [chatOpen]);
 
   // ── Focus ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -344,13 +339,24 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
   // ── Prefill from AiActionableArea ─────────────────────────────────
   useEffect(() => {
     let tid: NodeJS.Timeout;
+    let retryTid: NodeJS.Timeout;
     if (aiPromptPrefill !== null) {
-      // Set content in MentionInput (parses @mentions into tags)
-      setTimeout(() => {
-        mentionInputRef.current?.setContent(aiPromptPrefill, resolveNodeLabel);
+      // Use ref-based resolver so the setTimeout always gets the latest version
+      const applyPrefill = (attempt = 0) => {
+        const resolver = resolveNodeLabelRef.current;
+        mentionInputRef.current?.setContent(aiPromptPrefill, resolver);
         setTextValue(aiPromptPrefill);
         mentionInputRef.current?.focus();
-      }, 50);
+
+        // If the text has @ mentions and they weren't resolved (items not loaded yet), retry
+        if (attempt < 5 && aiPromptPrefill.includes("@")) {
+          const text = mentionInputRef.current?.getTextValue() || "";
+          if (text.includes("@")) {
+            retryTid = setTimeout(() => applyPrefill(attempt + 1), 100);
+          }
+        }
+      };
+      setTimeout(() => applyPrefill(), 50);
 
       if (aiAutoSend) {
         if (isSending) return;
@@ -360,9 +366,6 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
           const text = aiPromptPrefill.trim();
           if (text && !isSending) {
             const prefix = aiContext ? `"${aiContext.label}" : ` : "";
-            // Show chat + loading BEFORE sending
-            setChatOpen(true);
-            setCompactThread(true);
             try {
               await sendMessage(prefix + text, aiContext || undefined);
               refresh();
@@ -378,6 +381,7 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
     }
     return () => {
       if (tid) clearTimeout(tid);
+      if (retryTid) clearTimeout(retryTid);
     };
   }, [
     aiPromptPrefill,
@@ -389,7 +393,6 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
     isSending,
     sendMessage,
     refresh,
-    resolveNodeLabel,
   ]);
 
   // ── Handlers ──────────────────────────────────────────────────────
@@ -425,10 +428,9 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
   const handleInputChange = useCallback(
     (text: string) => {
       if (aiPromptPrefill !== null) setAiPromptPrefill(null);
-      if (compactThread) setCompactThread(false);
       setTextValue(text);
     },
-    [aiPromptPrefill, compactThread, setAiPromptPrefill]
+    [aiPromptPrefill, setAiPromptPrefill]
   );
 
   const handleMentionHover = useCallback(
@@ -457,14 +459,10 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
     // Only add prefix if there's no @mention already in the text
     const hasMention = text.includes("@");
     const prefix = aiContext && !hasMention ? `"${aiContext.label}" : ` : "";
-    // Show chat immediately so user sees their message + loading
-    setChatOpen(true);
-    setCompactThread(true);
     try {
       await sendMessage(prefix + (text || "Explique"), aiContext || undefined);
       refresh();
       clearAiContext();
-      setCompactThread(false);
     } catch (e) {
       console.error("Failed to send message", e);
     }
@@ -513,7 +511,6 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
       }
       if (e.key === "Escape") {
         setAiAssistantOpen(false);
-        setChatOpen(false);
       }
     },
     [
@@ -527,14 +524,8 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
   );
 
   const handleToggle = () => {
-    if (isExpanded) {
-      setChatOpen(false);
-      setCompactThread(false);
-      setIsClosing(true);
-      setAiAssistantOpen(false);
-    } else {
-      setAiAssistantOpen(true);
-    }
+    setIsClosing(true);
+    setAiAssistantOpen(false);
   };
 
   const toggleCategory = (cat: string) => {
@@ -546,15 +537,25 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
     });
   };
 
-  // ── Visible messages ──────────────────────────────────────────────
-  const visibleMessages = messages;
-
   // ── Render ────────────────────────────────────────────────────────
-  const aiSurface = isLightMode
-    ? "bg-white text-zinc-900"
-    : "bg-zinc-900 text-zinc-100";
-  const aiMuted = isLightMode ? "text-zinc-500" : "text-zinc-400";
-  const aiStrong = isLightMode ? "text-zinc-900" : "text-zinc-100";
+  // Centralized theme tokens — eliminates 20+ inline ternaires
+  const t = {
+    surface:      isLightMode ? "bg-white text-zinc-900"        : "bg-zinc-900 text-zinc-100",
+    border:       isLightMode ? "border-zinc-200"               : "border-zinc-700",
+    muted:        isLightMode ? "text-zinc-500"                 : "text-zinc-400",
+    strong:       isLightMode ? "text-zinc-900"                 : "text-zinc-100",
+    hover:        isLightMode ? "hover:bg-zinc-50"              : "hover:bg-zinc-800/50",
+    hoverMid:     isLightMode ? "hover:bg-zinc-200/40"          : "hover:bg-zinc-800/40",
+    hoverClose:   isLightMode ? "hover:bg-zinc-200"             : "hover:bg-zinc-800",
+    disabled:     isLightMode ? "bg-zinc-200 text-zinc-500"     : "bg-zinc-800 text-zinc-500",
+    mentionBg:    isLightMode ? "bg-white border-zinc-200"      : "bg-zinc-900 border-zinc-700",
+    mentionSel:   isLightMode ? "bg-violet-50"                  : "bg-violet-500/15",
+    mentionHint:  isLightMode ? "text-zinc-400 border-zinc-100 bg-zinc-50" : "text-zinc-500 border-zinc-800 bg-zinc-900/50",
+    pillBg:       isLightMode ? "bg-white border-zinc-200 shadow-md hover:shadow-lg hover:border-zinc-300" : "bg-zinc-900 border-zinc-700 hover:border-zinc-600",
+    pillIcon:     isLightMode ? "bg-violet-100"                 : "bg-violet-900",
+    pillIconText: isLightMode ? "text-violet-600"               : "text-violet-300",
+    accent:       isLightMode ? "text-violet-600"               : "text-violet-300",
+  };
 
   if (hideHub) return null;
 
@@ -579,16 +580,14 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
         }}
         className={cn(
           "w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors",
-          isLightMode
-            ? "hover:bg-zinc-50 text-zinc-500"
-            : "hover:bg-zinc-800/50 text-zinc-400"
+          t.hover, t.muted
         )}
       >
         {icon}
         <span className="text-[12px] font-semibold uppercase tracking-wider flex-1">
           {label}
         </span>
-        <span className={cn("text-[11px]", aiMuted)}>{count}</span>
+        <span className={cn("text-[11px]", t.muted)}>{count}</span>
         {expanded ? (
           <ChevronUp className="h-3 w-3" />
         ) : (
@@ -611,21 +610,15 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
               className={cn(
                 "w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors",
                 isSubField ? "pl-10" : "pl-7",
-                idx === mentionSelectedIdx
-                  ? isLightMode
-                    ? "bg-violet-50"
-                    : "bg-violet-500/15"
-                  : isLightMode
-                    ? "hover:bg-zinc-50"
-                    : "hover:bg-zinc-800/50"
+                idx === mentionSelectedIdx ? t.mentionSel : t.hover
               )}
             >
               <span
                 className={cn(
                   "truncate",
                   isSubField
-                    ? cn("text-[12px]", aiMuted)
-                    : cn("text-[13px] font-medium", isLightMode ? "text-zinc-800" : "text-zinc-200")
+                    ? cn("text-[12px]", t.muted)
+                    : cn("text-[13px] font-medium", t.strong)
                 )}
               >
                 {item.displayLabel}
@@ -648,9 +641,15 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
 
   const hasInputContent = textValue.trim().length > 0 || !!aiContext;
 
+  const quickFill = (text: string) => {
+    mentionInputRef.current?.setContent(text);
+    setTextValue(text);
+    mentionInputRef.current?.focus();
+  };
+
   return (
     <>
-      {/* Mobile backdrop when AI open */}
+      {/* Mobile backdrop */}
       <AnimatePresence>
         {isExpanded && isMobile && (
           <motion.div
@@ -664,412 +663,246 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
           />
         )}
       </AnimatePresence>
-      <div
-      ref={containerRef}
-      className="fixed bottom-[66px] md:bottom-6 right-4 md:right-6 z-50 flex flex-col md:flex-row items-end gap-2"
-    >
-      <div className="relative">
-        {/* Collapsed pill — hidden when managed by topbar */}
-        {!hidePill && !isExpanded && !isClosing && (
-          <button
-            onClick={handleToggle}
-            className={cn(
-              "ai-bounce-on-hover relative flex items-stretch cursor-pointer select-none w-full overflow-hidden",
-              "transition-all duration-200 md:rounded-[25px] rounded-full border",
-              "hover:-translate-y-0.5 hover:shadow-md hover:shadow-violet-500/15",
-              isLightMode
-                ? "bg-white border-zinc-200 shadow-md hover:shadow-lg hover:border-zinc-300"
-                : "bg-zinc-900 border-zinc-700 hover:border-zinc-600"
-            )}
-          >
-            <div
-              className={cn(
-                "flex items-center justify-center md:px-4 w-14 h-14 md:w-auto md:h-auto",
-                isLightMode ? "bg-violet-100" : "bg-violet-900"
-              )}
-            >
-              <Pencil
-                className={cn(
-                  "ai-bounce-target w-5 h-5",
-                  isLightMode ? "text-violet-600" : "text-violet-300"
-                )}
-              />
-            </div>
-            <div className="hidden md:flex flex-col justify-center px-4 py-3">
-              <span
-                className={cn(
-                  "text-[15px] font-semibold tracking-tight",
-                  aiStrong
-                )}
-              >
-                Éditer, comprendre…
-              </span>
-              <span className={cn("text-[12px] font-medium", aiMuted)}>
-                Assistant IA
-              </span>
-            </div>
-          </button>
-        )}
 
-        <AnimatePresence
-          initial={false}
-          onExitComplete={() => setIsClosing(false)}
-        >
+      <div
+        ref={containerRef}
+        className="fixed bottom-[66px] md:bottom-6 right-4 md:right-6 z-50"
+      >
+        <AnimatePresence initial={false} onExitComplete={() => setIsClosing(false)}>
           {isExpanded && (
             <motion.div
               key="module"
-              initial={{ x: 24, opacity: 1 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 24, opacity: 1 }}
-              transition={{ duration: 0.22, ease: [0.22, 0.8, 0.35, 1] }}
-              className="relative origin-bottom-right w-[min(94vw,620px)]"
+              initial={{ opacity: 0, y: 10, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.97 }}
+              transition={{ duration: 0.2, ease: [0.22, 0.8, 0.35, 1] }}
+              className="w-[min(94vw,520px)] flex flex-col"
             >
-              <div
-                className={cn(
-                  "rounded-[26px] border",
-                  isLightMode ? "border-zinc-200" : "border-zinc-700"
-                )}
-              >
+              <div className={cn(
+                "rounded-2xl border flex flex-col overflow-hidden",
+                isLightMode
+                  ? "bg-white border-zinc-300 shadow-[0_8px_48px_rgba(0,0,0,0.14)]"
+                  : "bg-zinc-900 border-zinc-700 shadow-[0_8px_48px_rgba(0,0,0,0.5)]"
+              )}>
+
+                {/* ── Header ───────────────────────────────────────── */}
+                <div className={cn(
+                  "flex items-center justify-between px-4 h-11 border-b shrink-0",
+                  t.border
+                )}>
+                  <div className="flex items-center gap-2">
+                    <SmartGraphLogo size={16} />
+                    <span className={cn("text-sm font-semibold", t.strong)}>Assistant IA</span>
+                    {messages.length > 0 && (
+                      <span className={cn(
+                        "text-[10px] font-medium px-1.5 py-0.5 rounded-full tabular-nums",
+                        isLightMode ? "bg-zinc-100 text-zinc-500" : "bg-zinc-800 text-zinc-400"
+                      )}>
+                        {messages.length}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleToggle}
+                    className={cn(
+                      "h-7 w-7 rounded-md flex items-center justify-center transition-colors",
+                      t.hoverClose
+                    )}
+                  >
+                    <X className={cn("w-4 h-4", t.muted)} />
+                  </button>
+                </div>
+
+                {/* ── Messages ─────────────────────────────────────── */}
                 <div
+                  ref={scrollRef}
                   className={cn(
-                    "rounded-[25px] flex flex-col",
-                    aiSurface
+                    "overflow-y-auto px-4 py-4 min-h-[180px] max-h-[52vh]",
+                    "[scrollbar-width:thin] [scrollbar-color:hsl(var(--border))_transparent]"
                   )}
                 >
-                  {/* Toggle chat header */}
-                  <div
-                    onClick={() => {
-                      setChatOpen((v) => {
-                        const next = !v;
-                        if (next) setCompactThread(false);
-                        return next;
-                      });
-                    }}
-                    className={cn(
-                      "w-full flex items-center justify-between px-5 py-2.5 transition-colors cursor-pointer",
-                      isLightMode
-                        ? "hover:bg-zinc-200/40"
-                        : "hover:bg-zinc-800/40"
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          "text-[12px] font-medium",
-                          isLightMode
-                            ? "text-violet-600"
-                            : "text-violet-300"
+                  {/* Empty state */}
+                  {!hasMessages && !isSending && (
+                    <div className="space-y-4">
+                      <div>
+                        <p className={cn("text-sm font-medium", t.strong)}>Comment puis-je vous aider ?</p>
+                        <p className={cn("text-xs mt-0.5", t.muted)}>Tapez @ pour mentionner un nœud du modèle</p>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <QuickAction label="Résumer le modèle" onClick={() => quickFill("Résume ce modèle en quelques phrases")} />
+                        {nodes.some((n) => n.computation_error) ? (
+                          <QuickAction label="Corriger les erreurs" onClick={() => quickFill("Il y a des erreurs de calcul, peux-tu les corriger ?")} />
+                        ) : (
+                          <QuickAction label="Créer un scénario" onClick={() => quickFill("Propose un scénario intéressant pour ce modèle")} />
                         )}
-                      >
-                        {chatOpen
-                          ? "Masquer la discussion"
-                          : "Afficher la discussion"}
-                      </span>
-                      <span className={cn("text-[11px]", aiMuted)}>
-                        {messages.length} messages
-                      </span>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggle();
-                      }}
-                      className={cn(
-                        "h-8 w-8 rounded-lg flex items-center justify-center",
-                        "transition-colors",
-                        isLightMode
-                          ? "hover:bg-zinc-200"
-                          : "hover:bg-zinc-800"
-                      )}
-                    >
-                      <X className={cn("w-4 h-4", aiMuted)} />
-                    </button>
-                  </div>
-
-                  {/* Chat area */}
-                  {chatOpen && (
-                    <div
-                      className={cn(
-                        "px-5 pb-4 pt-2 border-t",
-                        isLightMode
-                          ? "border-zinc-200"
-                          : "border-zinc-700"
-                      )}
-                    >
-                      {/* Empty state — quick actions */}
-                      {!hasMessages && (
-                        <div className="py-2 space-y-3">
-                          <p className={cn("text-[13px]", aiMuted)}>
-                            Posez une question ou sélectionnez un élément.
-                          </p>
-                          <div className="flex flex-wrap gap-1.5">
-                            <QuickAction
-                              label="Résumer le modèle"
-                              onClick={() => {
-                                mentionInputRef.current?.setContent(
-                                  "Résume ce modèle en quelques phrases"
-                                );
-                                setTextValue(
-                                  "Résume ce modèle en quelques phrases"
-                                );
-                                mentionInputRef.current?.focus();
-                              }}
-                            />
-                            {nodes.some((n) => n.computation_error) ? (
-                              <QuickAction
-                                label="Corriger les erreurs"
-                                onClick={() => {
-                                  mentionInputRef.current?.setContent(
-                                    "Il y a des erreurs de calcul, peux-tu les corriger ?"
-                                  );
-                                  setTextValue(
-                                    "Il y a des erreurs de calcul, peux-tu les corriger ?"
-                                  );
-                                  mentionInputRef.current?.focus();
-                                }}
-                              />
-                            ) : (
-                              <QuickAction
-                                label="Créer un scénario"
-                                onClick={() => {
-                                  mentionInputRef.current?.setContent(
-                                    "Propose un scénario intéressant pour ce modèle"
-                                  );
-                                  setTextValue(
-                                    "Propose un scénario intéressant pour ce modèle"
-                                  );
-                                  mentionInputRef.current?.focus();
-                                }}
-                              />
-                            )}
-                            <QuickAction
-                              label="Enrichir le modèle"
-                              onClick={() => {
-                                mentionInputRef.current?.setContent(
-                                  "Quels paramètres ou calculs pourraient enrichir ce modèle ?"
-                                );
-                                setTextValue(
-                                  "Quels paramètres ou calculs pourraient enrichir ce modèle ?"
-                                );
-                                mentionInputRef.current?.focus();
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                      <div
-                        ref={scrollRef}
-                        className="max-h-[60vh] overflow-y-auto pr-1"
-                        style={{
-                          scrollbarWidth: "thin",
-                          scrollbarColor: isLightMode
-                            ? "#d4d4d8 transparent"
-                            : "#27272a transparent",
-                        }}
-                      >
-                        <div className="space-y-3">
-                          {(compactThread
-                            ? visibleMessages.slice(-2)
-                            : visibleMessages
-                          ).map((message, index, list) => {
-                            const baseIndex = compactThread
-                              ? messages.length - list.length + index
-                              : index;
-                            return (
-                              <MessageBubble
-                                key={message.id}
-                                message={message}
-                                nodes={nodes}
-                                isLastAssistant={
-                                  message.role === "assistant" &&
-                                  baseIndex === messages.length - 1 &&
-                                  !isSending
-                                }
-                                isStreaming={
-                                  message.role === "assistant" &&
-                                  baseIndex === messages.length - 1 &&
-                                  isSending &&
-                                  !message.content
-                                }
-                                suggestedActions={
-                                  message.role === "assistant" &&
-                                  baseIndex === messages.length - 1 &&
-                                  !isSending
-                                    ? suggestedActions
-                                    : undefined
-                                }
-                                onSuggestedAction={(a) => {
-                                  mentionInputRef.current?.setContent(a);
-                                  setTextValue(a);
-                                  mentionInputRef.current?.focus();
-                                }}
-                                onClosePanel={() =>
-                                  setAiAssistantOpen(false)
-                                }
-                              />
-                            );
-                          })}
-                          {isSending && messages.length === 0 && (
-                            <div className="flex gap-2.5 items-start">
-                              <div
-                                className={cn(
-                                  "w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5",
-                                  isLightMode
-                                    ? "bg-zinc-200"
-                                    : "bg-zinc-800"
-                                )}
-                              >
-                                <SmartGraphLogo size={12} />
-                              </div>
-                              <TypingDots />
-                            </div>
-                          )}
-                          {error && (
-                            <div className="flex gap-2.5 items-start text-red-500 text-sm">
-                              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                              <span>{error}</span>
-                            </div>
-                          )}
-                        </div>
+                        <QuickAction label="Enrichir le modèle" onClick={() => quickFill("Quels paramètres ou calculs pourraient enrichir ce modèle ?")} />
                       </div>
                     </div>
                   )}
 
-                  {/* Input area */}
-                  <div
-                    className={cn(
-                      "px-5 pt-3 pb-4 border-t relative",
-                      isLightMode
-                        ? "border-zinc-200"
-                        : "border-zinc-700"
-                    )}
-                  >
-                    {/* @ Mention dropdown */}
-                    <AnimatePresence>
-                      {mentionDropdownVisible && (
-                        <motion.div
-                          ref={mentionListRef}
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 8 }}
-                          transition={{ duration: 0.15 }}
-                          className={cn(
-                            "absolute bottom-full left-5 right-5 mb-1 rounded-xl border shadow-lg overflow-hidden z-50",
-                            isLightMode
-                              ? "bg-white border-zinc-200"
-                              : "bg-zinc-900 border-zinc-700"
-                          )}
-                        >
-                          <div className="max-h-[240px] overflow-y-auto py-1">
-                            {(() => {
-                              let idx = 0;
-                              const sections: React.ReactNode[] = [];
-
-                              // Paramètres
-                              const pItems = hasQuery ? filteredParams : paramItems;
-                              if (!hasQuery || pItems.length > 0) {
-                                const r = renderMentionCategory(
-                                  "Paramètres",
-                                  "params",
-                                  <Circle className="h-2.5 w-2.5 fill-current text-blue-400 shrink-0" />,
-                                  pItems,
-                                  paramsExpanded,
-                                  idx
-                                );
-                                if (r.element) sections.push(r.element);
-                                idx = r.nextIdx;
-                              }
-
-                              // Calculs
-                              const cItems = hasQuery ? filteredCalcs : calcItems;
-                              if (!hasQuery || cItems.length > 0) {
-                                const r = renderMentionCategory(
-                                  "Calculs",
-                                  "calcs",
-                                  <Triangle className="h-2.5 w-2.5 fill-current rotate-90 text-purple-400 shrink-0" />,
-                                  cItems,
-                                  calcsExpanded,
-                                  idx
-                                );
-                                if (r.element) sections.push(r.element);
-                                idx = r.nextIdx;
-                              }
-
-                              // Résultats
-                              const rItems = hasQuery ? filteredResults : resultItems;
-                              if (!hasQuery || rItems.length > 0) {
-                                const r = renderMentionCategory(
-                                  "Résultats",
-                                  "results",
-                                  <Circle className="h-2.5 w-2.5 fill-current text-emerald-400 shrink-0" />,
-                                  rItems,
-                                  resultsExpanded,
-                                  idx
-                                );
-                                if (r.element) sections.push(r.element);
-                              }
-
-                              return sections;
-                            })()}
-                          </div>
-                          <div
-                            className={cn(
-                              "px-3 py-1.5 text-[11px] border-t",
-                              isLightMode
-                                ? "text-zinc-400 border-zinc-100 bg-zinc-50"
-                                : "text-zinc-500 border-zinc-800 bg-zinc-900/50"
-                            )}
-                          >
-                            <kbd className="font-mono text-[10px]">
-                              ↑↓
-                            </kbd>{" "}
-                            naviguer ·{" "}
-                            <kbd className="font-mono text-[10px]">
-                              Enter
-                            </kbd>{" "}
-                            sélectionner ·{" "}
-                            <kbd className="font-mono text-[10px]">
-                              Esc
-                            </kbd>{" "}
-                            fermer
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    <div className="relative flex items-end gap-3">
-                      <MentionInput
-                        ref={mentionInputRef}
-                        placeholder={
-                          aiContext
-                            ? "Votre question..."
-                            : "Demander à l'IA... (@ pour mentionner)"
-                        }
-                        disabled={isSending || isLoading}
+                  {/* Thread */}
+                  <div className="space-y-4">
+                    {messages.map((message, index) => (
+                      <MessageBubble
+                        key={message.id}
+                        message={message}
+                        nodes={nodes}
                         isLightMode={isLightMode}
-                        onInput={handleInputChange}
-                        onKeyDown={handleKeyDown}
-                        onMentionQueryChange={handleMentionQueryChange}
-                        onMentionHover={handleMentionHover}
-                        maxHeight={100}
+                        isLastAssistant={
+                          message.role === "assistant" &&
+                          index === messages.length - 1 &&
+                          !isSending
+                        }
+                        isStreaming={
+                          message.role === "assistant" &&
+                          index === messages.length - 1 &&
+                          isSending &&
+                          !message.content
+                        }
+                        suggestedActions={
+                          message.role === "assistant" &&
+                          index === messages.length - 1 &&
+                          !isSending
+                            ? suggestedActions
+                            : undefined
+                        }
+                        onSuggestedAction={(a) => {
+                          mentionInputRef.current?.setContent(a);
+                          setTextValue(a);
+                          mentionInputRef.current?.focus();
+                        }}
+                        onClosePanel={() => setAiAssistantOpen(false)}
                       />
+                    ))}
 
-                      <div className="relative">
-                        <button
-                          onClick={handleSubmit}
-                          disabled={!hasInputContent || isSending}
-                          className={cn(
-                            "relative w-10 h-10 rounded-[13px] flex items-center justify-center shrink-0 transition-colors",
-                            hasInputContent && !isSending
-                              ? "bg-violet-500 text-white hover:bg-violet-600"
-                              : isLightMode
-                                ? "bg-zinc-200 text-zinc-500"
-                                : "bg-zinc-800 text-zinc-500"
-                          )}
-                        >
-                          <ArrowUp className="w-5 h-5" />
-                        </button>
+                    {isSending && (
+                      <div className="flex gap-2.5 items-start">
+                        <div className={cn(
+                          "w-6 h-6 rounded-full flex items-center justify-center shrink-0",
+                          isLightMode ? "bg-violet-100" : "bg-violet-900/50"
+                        )}>
+                          <SmartGraphLogo size={13} />
+                        </div>
+                        <div className={cn(
+                          "flex-1 rounded-2xl rounded-tl-sm px-3 py-2",
+                          isLightMode ? "bg-zinc-100" : "bg-zinc-800"
+                        )}>
+                          <TypingDots />
+                        </div>
                       </div>
+                    )}
+
+                    {error && (
+                      <Alert variant="destructive" className="py-2">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription className="text-sm">{error}</AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── Input ────────────────────────────────────────── */}
+                <div className={cn("px-4 pb-4 pt-3 border-t shrink-0 relative", t.border)}>
+                  {/* @ Mention dropdown */}
+                  <AnimatePresence>
+                    {mentionDropdownVisible && (
+                      <motion.div
+                        ref={mentionListRef}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 6 }}
+                        transition={{ duration: 0.13 }}
+                        className={cn(
+                          "absolute bottom-full left-4 right-4 mb-1 rounded-xl border shadow-lg overflow-hidden z-50",
+                          t.mentionBg
+                        )}
+                      >
+                        <div className="max-h-[220px] overflow-y-auto py-1">
+                          {(() => {
+                            let idx = 0;
+                            const sections: React.ReactNode[] = [];
+                            const pItems = hasQuery ? filteredParams : paramItems;
+                            if (!hasQuery || pItems.length > 0) {
+                              const r = renderMentionCategory("Paramètres", "params", <Circle className="h-2.5 w-2.5 fill-current text-blue-400 shrink-0" />, pItems, paramsExpanded, idx);
+                              if (r.element) sections.push(r.element);
+                              idx = r.nextIdx;
+                            }
+                            const cItems = hasQuery ? filteredCalcs : calcItems;
+                            if (!hasQuery || cItems.length > 0) {
+                              const r = renderMentionCategory("Calculs", "calcs", <Triangle className="h-2.5 w-2.5 fill-current rotate-90 text-purple-400 shrink-0" />, cItems, calcsExpanded, idx);
+                              if (r.element) sections.push(r.element);
+                              idx = r.nextIdx;
+                            }
+                            const rItems = hasQuery ? filteredResults : resultItems;
+                            if (!hasQuery || rItems.length > 0) {
+                              const r = renderMentionCategory("Résultats", "results", <Circle className="h-2.5 w-2.5 fill-current text-emerald-400 shrink-0" />, rItems, resultsExpanded, idx);
+                              if (r.element) sections.push(r.element);
+                            }
+                            return sections;
+                          })()}
+                        </div>
+                        <div className={cn("px-3 py-1.5 text-[11px] border-t", t.mentionHint)}>
+                          <kbd className="font-mono text-[10px]">↑↓</kbd> naviguer ·{" "}
+                          <kbd className="font-mono text-[10px]">Enter</kbd> sélectionner ·{" "}
+                          <kbd className="font-mono text-[10px]">Esc</kbd> fermer
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Input wrapper — styled comme ai-input */}
+                  <div className={cn(
+                    "rounded-xl border transition-colors overflow-hidden",
+                    isLightMode
+                      ? "bg-zinc-50 border-zinc-200 focus-within:border-zinc-300"
+                      : "bg-zinc-800/60 border-zinc-700 focus-within:border-zinc-600"
+                  )}>
+                    {/* Context tag */}
+                    {aiContext && (
+                      <div className="px-3 pt-2.5 pb-0">
+                        <span className={cn("inline-flex items-center gap-1.5 text-xs", t.muted)}>
+                          {aiContext.type === "parameter" && <Circle className="h-2 w-2 fill-current text-blue-400" />}
+                          {aiContext.type === "calculation" && <Triangle className="h-2 w-2 fill-current rotate-90 text-purple-400" />}
+                          {aiContext.type === "result" && <Circle className="h-2 w-2 fill-current text-emerald-400" />}
+                          <span className={t.strong}>{aiContext.label}</span>
+                          <button
+                            onMouseDown={(e) => { e.preventDefault(); clearAiContext(); }}
+                            className="ml-0.5 opacity-60 hover:opacity-100 transition-opacity"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex items-end gap-2 px-3 py-2.5">
+                      <div className="flex-1 min-w-0">
+                        <MentionInput
+                          ref={mentionInputRef}
+                          placeholder={aiContext ? "Votre question..." : "Demandez à l'IA… (@ pour mentionner)"}
+                          disabled={isSending || isLoading}
+                          isLightMode={isLightMode}
+                          onInput={handleInputChange}
+                          onKeyDown={handleKeyDown}
+                          onMentionQueryChange={handleMentionQueryChange}
+                          onMentionHover={handleMentionHover}
+                          maxHeight={100}
+                        />
+                      </div>
+                      <button
+                        onClick={handleSubmit}
+                        disabled={!hasInputContent || isSending}
+                        className={cn(
+                          "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all duration-150",
+                          hasInputContent && !isSending
+                            ? "bg-violet-500 text-white hover:bg-violet-600"
+                            : isLightMode
+                              ? "bg-zinc-200 text-zinc-400"
+                              : "bg-zinc-700 text-zinc-500"
+                        )}
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1078,7 +911,6 @@ export function FloatingAiHub({ hidePill = false }: { hidePill?: boolean } = {})
           )}
         </AnimatePresence>
       </div>
-    </div>
     </>
   );
 }

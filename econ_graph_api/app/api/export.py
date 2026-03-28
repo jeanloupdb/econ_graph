@@ -51,6 +51,10 @@ class ExcelAnalysisResponse(BaseModel):
     suitability_level: str  # "excellent", "good", "limited", "not_suitable"
     suitability_message: str  # User-friendly explanation
     insights: list[str]  # List of insights about the file structure
+    import_recommendation: str  # "direct_import" | "import_with_simplification" | "do_not_import"
+    simplification_expected: bool = False
+    refusal_reason: Optional[str] = None
+    next_step_hint: Optional[str] = None
 
 
 class ExcelImportResponse(BaseModel):
@@ -272,26 +276,43 @@ async def analyze_excel_file(
             "SmartGraph est conçu pour modéliser des relations causales (formules, dépendances). "
             "Pour convertir ce fichier, ajoutez des formules Excel ou décrivez les relations que vous souhaitez modéliser."
         )
-        can_import = False  # Don't allow import of formula-less files
+        import_recommendation = "do_not_import"
+        simplification_expected = False
+        refusal_reason = "Fichier principalement tabulaire sans relations calculables."
+        next_step_hint = "Essayez un classeur avec formules ou une feuille de modèle plus structurée."
     elif suitability_score >= 70:
         suitability_level = "excellent"
         suitability_message = (
             "Ce fichier est parfaitement adapté à SmartGraph ! "
             f"Il contient {formula_count} formule(s) et une structure de modèle claire."
         )
+        import_recommendation = "direct_import"
+        simplification_expected = False
+        refusal_reason = None
+        next_step_hint = "Vous pouvez lancer l'import directement."
     elif suitability_score >= 45:
         suitability_level = "good"
         suitability_message = (
             "Ce fichier peut être converti en SmartGraph. "
             "Certaines informations pourront nécessiter des ajustements manuels."
         )
+        import_recommendation = "direct_import"
+        simplification_expected = False
+        refusal_reason = None
+        next_step_hint = "Import recommandé. Vérifiez simplement le résultat après création."
     else:
         suitability_level = "limited"
         suitability_message = (
             "Ce fichier a une utilité limitée pour SmartGraph. "
             "Envisagez d'ajouter des formules pour définir les relations entre variables."
         )
+        import_recommendation = "import_with_simplification"
+        simplification_expected = True
+        refusal_reason = None
+        next_step_hint = "Import possible, mais une simplification du modèle sera probablement nécessaire."
     
+    can_import = formula_count > 0 and estimated_nodes > 0 and import_recommendation != "do_not_import"
+
     return ExcelAnalysisResponse(
         filename=file.filename or "unknown.xlsx",
         total_cells=len(analysis.cells),
@@ -303,12 +324,16 @@ async def analyze_excel_file(
         detected_kpis=detected_kpis,
         sample_labels=sample_labels,
         estimated_nodes=estimated_nodes,
-        can_import=can_import if formula_count == 0 else estimated_nodes > 0,
+        can_import=can_import,
         warning=warning,
         suitability_score=suitability_score,
         suitability_level=suitability_level,
         suitability_message=suitability_message,
-        insights=insights
+        insights=insights,
+        import_recommendation=import_recommendation,
+        simplification_expected=simplification_expected,
+        refusal_reason=refusal_reason,
+        next_step_hint=next_step_hint,
     )
 
 @router.post("/import/excel", response_model=ExcelImportResponse)

@@ -26,11 +26,12 @@ export default function ProjectCreatingPage({ params }: PageProps) {
 
   const router = useRouter();
   const { currentTask } = useAgentStore();
+  const completeTask = useAgentStore((s) => s.completeTask);
   const { addProject, setCurrentProject } = useProjectStore();
   const { resetConversation } = useWizard();
 
   // Connect to SSE stream
-  useAgentStream(taskId, {
+  const { disconnect } = useAgentStream(taskId, {
     onComplete: async (projectId, error) => {
       if (projectId) {
         try {
@@ -76,30 +77,21 @@ export default function ProjectCreatingPage({ params }: PageProps) {
     },
   });
 
-  return (
-    <div className="min-h-screen bg-zinc-950 text-white flex items-center justify-center">
-      {/* Background */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div
-          className="absolute inset-0 opacity-[0.02]"
-          style={{
-            backgroundImage: `
-              linear-gradient(to right, rgb(255 255 255) 1px, transparent 1px),
-              linear-gradient(to bottom, rgb(255 255 255) 1px, transparent 1px)
-            `,
-            backgroundSize: '48px 48px',
-          }}
-        />
-        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-violet-500/[0.03] rounded-full blur-[150px]" />
-        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-blue-500/[0.02] rounded-full blur-[120px]" />
-      </div>
+  const handleCancel = () => {
+    disconnect();
+    completeTask(undefined, "Création annulée par l'utilisateur.");
+    const message = encodeURIComponent("Création annulée par l'utilisateur.");
+    router.push(`/dashboard?error=${message}&type=creation_failed`);
+  };
 
-      {/* AI Creation Overlay */}
+  return (
+    <div className="min-h-screen bg-zinc-100 flex items-center justify-center">
       <AiCreationOverlay
         isVisible={true}
         logs={currentTask?.logs || []}
         status={currentTask?.status || 'initializing'}
         currentStep={currentTask?.currentStep}
+        onCancel={handleCancel}
       />
     </div>
   );

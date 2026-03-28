@@ -38,6 +38,7 @@ class ProjectOut(BaseModel):
   wizard_state: Optional[Dict[str, Any]] = None
   generation_prompt: Optional[str] = None
   description: Optional[str] = None
+  dashboard_config: Optional[Dict[str, Any]] = None
   owner: Optional[ProjectOwnerOut] = None
 
   class Config:

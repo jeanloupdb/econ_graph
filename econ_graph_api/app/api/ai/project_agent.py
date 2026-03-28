@@ -5,18 +5,21 @@ Multi-agent pipeline for automatic project creation.
 
 Endpoints:
 - POST /agent-project-create: Create a complete project via multi-agent pipeline
+- POST /demo-create: Create a demo project without authentication (rate-limited)
 - GET /agent-status/{task_id}: Stream SSE logs from the pipeline
 """
 
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, UploadFile, File, Form, Request
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 import json
 import uuid
+import secrets
 import asyncio
 import io
 import pypdf
 from datetime import datetime
+from time import time as monotonic_time
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -32,6 +35,24 @@ logger = get_logger(__name__)
 # Store log queues for each task (in-memory for simplicity)
 log_queues: dict[str, asyncio.Queue] = {}
 
+# ==================== DEMO RATE LIMITER ====================
+# Simple in-memory rate limiter: 1 demo per IP per 24h
+_demo_rate: dict[str, float] = {}  # ip -> last_demo_timestamp
+DEMO_COOLDOWN_SECONDS = 24 * 60 * 60  # 24 hours
+
+
+def _check_demo_rate_limit(ip: str) -> bool:
+    """Returns True if the IP is allowed to create a demo."""
+    now = monotonic_time()
+    # Cleanup old entries (older than cooldown)
+    expired = [k for k, v in _demo_rate.items() if now - v > DEMO_COOLDOWN_SECONDS]
+    for k in expired:
+        del _demo_rate[k]
+    last = _demo_rate.get(ip)
+    if last and now - last < DEMO_COOLDOWN_SECONDS:
+        return False
+    return True
+
 
 # ==================== REQUEST/RESPONSE MODELS ====================
 
@@ -46,7 +67,7 @@ class AgentProjectCreateResponse(BaseModel):
 
 # ==================== BACKGROUND TASK ====================
 
-async def run_agent_pipeline_background(task_id: str, prompt: str, user_id: str):
+async def run_agent_pipeline_background(task_id: str, prompt: str, user_id: str | None, demo_token: str | None = None):
     """Execute the pipeline in background and stream logs"""
     from app.services.agent_pipeline import agent_graph, PipelineState
 
@@ -91,7 +112,7 @@ async def run_agent_pipeline_background(task_id: str, prompt: str, user_id: str)
         # Initial state
         initial_state: PipelineState = {
             "prompt": prompt,
-            "user_id": user_id,
+            "user_id": user_id or "",
             "analyzed_structure": None,
             "project_id": None,
             "created_nodes": {},
@@ -101,6 +122,7 @@ async def run_agent_pipeline_background(task_id: str, prompt: str, user_id: str)
             "status": "initializing",
             "total_prompt_tokens": 0,
             "total_completion_tokens": 0,
+            "demo_token": demo_token,
         }
 
         await queue.put({
@@ -132,21 +154,21 @@ async def run_agent_pipeline_background(task_id: str, prompt: str, user_id: str)
             final_state = state_update[node_name]
 
         # Log AI usage for the entire pipeline
-        if final_state:
+        if final_state and user_id:
             total_prompt_tokens = final_state.get("total_prompt_tokens", 0)
             total_completion_tokens = final_state.get("total_completion_tokens", 0)
-            
+
             if total_prompt_tokens > 0 or total_completion_tokens > 0:
                 try:
                     from app.core.db import SessionLocal
                     usage_db = SessionLocal()
                     try:
                         log_ai_usage(
-                            usage_db, 
-                            user_id, 
-                            "create_project", 
-                            GEMINI_MODEL, 
-                            total_prompt_tokens, 
+                            usage_db,
+                            user_id,
+                            "create_project",
+                            GEMINI_MODEL,
+                            total_prompt_tokens,
                             total_completion_tokens
                         )
                     finally:
@@ -156,12 +178,15 @@ async def run_agent_pipeline_background(task_id: str, prompt: str, user_id: str)
 
         # Completion message
         if final_state and final_state.get("status") == "success":
-            await queue.put({
+            complete_msg = {
                 "type": "complete",
                 "status": "success",
                 "project_id": final_state.get("project_id"),
                 "message": "✓ Projet créé avec succès !"
-            })
+            }
+            if demo_token:
+                complete_msg["demo_token"] = demo_token
+            await queue.put(complete_msg)
         else:
             errors = final_state.get("errors", []) if final_state else []
             error_msg = "✗ Échec de la création du projet"
@@ -285,3 +310,101 @@ async def agent_status_stream(task_id: str):
             pass
 
     return EventSourceResponse(event_generator())
+
+
+# ==================== DEMO ENDPOINT (NO AUTH) ====================
+
+class DemoCreateResponse(BaseModel):
+    task_id: str
+    message: str
+
+
+@router.post("/demo-create", response_model=DemoCreateResponse)
+async def demo_create(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    prompt: str = Form(...),
+):
+    """
+    Create a demo project without authentication.
+    Rate-limited to 1 per IP per 24h.
+    The project is created with user_id=None and a public_view_token for viewing.
+    """
+    if not settings.GOOGLE_GENERATIVE_AI_API_KEY:
+        raise HTTPException(status_code=500, detail="AI API key not configured")
+
+    # Rate limit by IP
+    client_ip = request.client.host if request.client else "unknown"
+    if not _check_demo_rate_limit(client_ip):
+        raise HTTPException(
+            status_code=429,
+            detail="Vous avez déjà généré un modèle démo. Créez un compte pour continuer."
+        )
+
+    # Mark IP as used
+    _demo_rate[client_ip] = monotonic_time()
+
+    # Generate a demo token for public viewing
+    demo_token = secrets.token_urlsafe(32)
+
+    task_id = str(uuid.uuid4())
+    log_queues[task_id] = asyncio.Queue()
+
+    # Limit prompt length for demo
+    safe_prompt = prompt[:500]
+
+    background_tasks.add_task(
+        run_agent_pipeline_background,
+        task_id=task_id,
+        prompt=safe_prompt,
+        user_id=None,
+        demo_token=demo_token,
+    )
+
+    return DemoCreateResponse(
+        task_id=task_id,
+        message="Génération du modèle démo en cours..."
+    )
+
+
+# ==================== CLAIM DEMO PROJECT ====================
+
+class ClaimDemoRequest(BaseModel):
+    demo_token: str
+
+
+class ClaimDemoResponse(BaseModel):
+    project_id: str
+    message: str
+
+
+@router.post("/demo-claim", response_model=ClaimDemoResponse)
+async def demo_claim(
+    body: ClaimDemoRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Claim a demo project by attaching it to the authenticated user.
+    """
+    from app.core.db import SessionLocal
+    from app.models import Project
+
+    db = SessionLocal()
+    try:
+        project = db.query(Project).filter(
+            Project.public_view_token == body.demo_token,
+            Project.user_id.is_(None),
+        ).first()
+
+        if not project:
+            raise HTTPException(status_code=404, detail="Projet démo introuvable ou déjà réclamé.")
+
+        project.user_id = current_user.id
+        db.commit()
+
+        return ClaimDemoResponse(
+            project_id=project.id,
+            message="Projet rattaché à votre compte !"
+        )
+    finally:
+        db.close()

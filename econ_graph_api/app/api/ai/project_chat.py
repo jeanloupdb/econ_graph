@@ -125,10 +125,6 @@ async def send_chat_message(
 
     try:
         configure_gemini()
-        model = genai.GenerativeModel(
-            GEMINI_MODEL,
-            tools=[GRAPH_TOOLS]
-        )
 
         system_prompt = PROJECT_CHAT_SYSTEM_PROMPT.format(
             project_name=project.name,
@@ -138,36 +134,46 @@ async def send_chat_message(
             agent_snapshot=build_agent_snapshot(db, project_id, len(nodes), MAX_NODES_IN_CONTEXT),
         )
 
-        conversation_history = build_conversation_context(existing_messages)
-
-        # Enrich message with context if user clicked on a specific element
+        # Detect action intent BEFORE sending so we can force tool use from the start
+        import unicodedata
+        def _strip_accents(s: str) -> str:
+            return "".join(
+                c for c in unicodedata.normalize("NFD", s)
+                if unicodedata.category(c) != "Mn"
+            )
         context_dict = request.context.dict() if request.context else None
         enriched_content = enrich_message_with_context(request.content, context_dict, nodes_map)
+        _normalized = _strip_accents(enriched_content.strip().lower())
+        _action_keywords = [
+            "lance cette modification", "modifie", "change", "corrige", "cree",
+            "creer", "ajoute", "supprime", "mets a jour", "edite", "nouveau",
+            "scenario pessimiste", "scenario optimiste", "analyse de sensibilite",
+        ]
+        action_required = any(kw in _normalized for kw in _action_keywords)
 
-        conversation_history.append({"role": "user", "parts": [enriched_content]})
+        model = genai.GenerativeModel(
+            GEMINI_MODEL,
+            tools=[GRAPH_TOOLS],
+            system_instruction=system_prompt,
+        )
 
-        # Start chat
-        chat = model.start_chat(history=[
-            {"role": "user", "parts": [system_prompt]},
-            {"role": "model", "parts": ["Compris. Je suis prêt à t'aider avec ton modèle."]},
-            *conversation_history[:-1]  # All but the last message
-        ])
+        conversation_history = build_conversation_context(existing_messages)
+
+        # Start chat (system prompt set via system_instruction, NOT as a user message)
+        chat = model.start_chat(history=conversation_history)
+
+        # When an action is expected, force Gemini to call a tool (mode=ANY eliminates randomness)
+        _send_kwargs: dict = {}
+        if action_required:
+            _send_kwargs["tool_config"] = {"function_calling_config": {"mode": "ANY"}}
 
         # Send user message and handle function calls
-        response = chat.send_message(enriched_content)
+        response = chat.send_message(enriched_content, **_send_kwargs)
 
         actions_performed = []
         did_modify_graph = False
         total_prompt_tokens = 0
         total_completion_tokens = 0
-        # Detect action intent from user message (not just "Lance cette modification")
-        _lower = enriched_content.strip().lower()
-        _action_keywords = [
-            "lance cette modification", "modifie", "change", "corrige", "crée",
-            "créer", "ajoute", "supprime", "mets à jour", "édite", "nouveau",
-            "scénario pessimiste", "scénario optimiste", "analyse de sensibilité",
-        ]
-        action_required = any(kw in _lower for kw in _action_keywords)
         forced_action_attempts = 0
 
         # Handle function calls in a loop
@@ -219,10 +225,10 @@ async def send_chat_message(
             if not has_function_call:
                 if action_required and forced_action_attempts < 1:
                     forced_action_attempts += 1
+                    # Force tool use on retry (mode=ANY: Gemini must call a function)
                     response = chat.send_message(
-                        "STOP. Tu as répondu en texte au lieu d'agir. "
-                        "L'utilisateur attend une ACTION. Appelle les outils MAINTENANT. "
-                        "Ne réponds pas en texte tant que les outils ne sont pas appelés."
+                        "L'utilisateur attend une ACTION concrète. Appelle maintenant l'outil approprié.",
+                        tool_config={"function_calling_config": {"mode": "ANY"}},
                     )
                     continue
                 break
@@ -253,7 +259,8 @@ async def send_chat_message(
             elif not ai_response_text:
                 ai_response_text = "Actions effectuées."
         elif action_required:
-            ai_response_text = "Action non exécutée automatiquement. Merci de réessayer."
+            # Keep the AI's text response rather than replacing it with a generic error
+            pass
 
         # Log AI usage
         log_ai_usage(db, current_user.id, "project_chat", GEMINI_MODEL, total_prompt_tokens, total_completion_tokens)

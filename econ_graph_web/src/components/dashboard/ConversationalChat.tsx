@@ -1,25 +1,18 @@
-/**
- * ConversationalChat — Gemini-style conversational UI.
- *
- * Clean, centered, with generous spacing.
- * Welcome screen is vertically centered; conversation flows naturally.
- * Input bar is anchored at the bottom with a soft gradient fade.
- */
-
 "use client";
 
 import { SmartGraphLogo } from "@/components/ui/SmartGraphLogo";
 import { cn } from "@/lib/utils";
 import { WizardOption, WizardState } from "@/types/wizard";
-import { ArrowUp, Loader2 } from "lucide-react";
+import { motion } from "framer-motion";
+import { ArrowUp, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
     buildMessages,
     ChatMessage,
     Message,
     TypingDots,
-    WelcomeMessage
 } from "./chat";
+import { parseInlineMarkdown } from "./chat/types";
 
 export interface ConversationalChatProps {
   state: WizardState;
@@ -45,28 +38,25 @@ export function ConversationalChat({
   onReset,
 }: ConversationalChatProps) {
   const [inputValue, setInputValue] = useState("");
-  const [isExpertMode, setIsExpertMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const inputBarRef = useRef<HTMLDivElement>(null);
 
-  // Send validation
   const canSend =
     !!state.currentQuestion &&
     state.currentStep === "question" &&
     !state.isLoading;
+
   const inputPlaceholder =
     state.currentQuestion?.freeform_placeholder ||
-    "Décrivez ce que vous voulez modéliser...";
+    "Décrivez ce que vous voulez modéliser…";
 
-  // Build messages
   const messages: Message[] = buildMessages(state, state.isLoading);
-  const isFirstMessage = messages.length === 0 || (messages.length === 1 && !state.conversationHistory.length);
+  const isWelcome = messages.length === 0 || (messages.length === 1 && !state.conversationHistory.length);
+  const displayMessages = isWelcome ? [] : messages;
+  const options = state.currentQuestion?.options || [];
 
-  // When showing WelcomeMessage, skip the duplicate current question from messages
-  const displayMessages = isFirstMessage ? [] : messages;
-
-  // Auto-scroll
+  // Auto-scroll on new messages
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -85,17 +75,13 @@ export function ConversationalChat({
     setInputValue("");
   }, [state.currentQuestion?.step]);
 
-  // Keep input above mobile keyboard using fixed + visualViewport
+  // Mobile keyboard: keep input above keyboard
   useEffect(() => {
-    if (typeof window === "undefined" || !window.visualViewport) return;
+    if (typeof window === "undefined" || !window.visualViewport || isWelcome) return;
     const vv = window.visualViewport!;
     const update = () => {
       if (!inputBarRef.current) return;
-      if (window.innerWidth >= 1024) {
-        // Desktop: reset any transform
-        inputBarRef.current.style.transform = "";
-        return;
-      }
+      if (window.innerWidth >= 1024) { inputBarRef.current.style.transform = ""; return; }
       const keyboardH = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
       inputBarRef.current.style.transform = `translateY(-${keyboardH}px)`;
     };
@@ -108,18 +94,16 @@ export function ConversationalChat({
       vv.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
     };
-  }, []);
+  }, [isWelcome]);
 
-  // Auto-create project when summary arrives (skip summary UI)
+  // Auto-create when summary
   const hasTriggeredCreate = useRef(false);
   useEffect(() => {
     if (state.currentStep === 'summary' && state.summary && !hasTriggeredCreate.current) {
       hasTriggeredCreate.current = true;
       onCreateProject();
     }
-    if (state.currentStep !== 'summary') {
-      hasTriggeredCreate.current = false;
-    }
+    if (state.currentStep !== 'summary') hasTriggeredCreate.current = false;
   }, [state.currentStep, state.summary, onCreateProject]);
 
   const handleSubmit = () => {
@@ -127,69 +111,153 @@ export function ConversationalChat({
     if (!text || !canSend) return;
     onSubmitAnswer(undefined, text, { choiceType: 'freeform', displayText: text });
     setInputValue("");
-    if (inputRef.current) {
-      inputRef.current.style.height = 'auto';
-    }
+    if (inputRef.current) inputRef.current.style.height = 'auto';
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
   };
 
   const handleQuickOption = (option: WizardOption) => {
-    if (option.value === "expert_mode") {
-      setIsExpertMode(true);
-      return;
-    }
-    if (option.value === "accept") {
-      onCreateProject();
-      return;
-    }
+    if (option.value === "accept") { onCreateProject(); return; }
     const details = option.description?.trim();
     const formatted = details ? `${option.label} — ${details}` : option.label;
-    onSubmitAnswer(option.label, undefined, {
-      selectedOption: option,
-      choiceType: 'option',
-      displayText: formatted,
-    });
+    onSubmitAnswer(option.label, undefined, { selectedOption: option, choiceType: 'option', displayText: formatted });
   };
 
   if (!state.currentQuestion && !state.error && !state.isLoading && state.stepNumber === 0) {
     return <FullChatLoader />;
   }
+  if (state.currentStep === 'summary') return <FullChatLoader />;
 
-  if (state.currentStep === 'summary') {
-    return <FullChatLoader />;
-  }
+  // ─── WELCOME MODE ────────────────────────────────────────────────────────────
+  if (isWelcome) {
+    const title = state.currentQuestion?.question || "Que souhaitez-vous modéliser ?";
+    // Show only the first 4 non-"autre" options to keep it clean
+    const primaryOptions = options.filter(o => !o.label.toLowerCase().includes("autre chose")).slice(0, 4);
 
-  return (
-    <div className="flex flex-col h-full min-h-0 relative">
-      {/* Messages area — scrollable, vertically centered for welcome */}
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 sm:py-6 pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-6 scroll-smooth custom-scrollbar"
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex-1 flex flex-col items-center justify-center px-4 py-8 min-h-0 overflow-y-auto"
       >
-        <div
-          className={`max-w-2xl mx-auto ${
-            isFirstMessage 
-              ? "min-h-full flex flex-col items-center justify-center" 
-              : "space-y-6 min-h-full flex flex-col justify-end pb-4"
-          }`}
-        >
-          {/* Welcome message with proposals (shown only on first message) */}
-          {isFirstMessage && (
-            <WelcomeMessage
-              state={state}
-              onOptionClick={handleQuickOption}
-              onReload={onReset}
-              onFocusInput={() => inputRef.current?.focus()}
-            />
+        <div className="w-full max-w-lg">
+
+          {/* Motif + titre */}
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35 }}
+            className="text-center mb-7"
+          >
+            <div
+              className="font-mono font-black text-violet-400 leading-none select-none mb-4"
+              style={{ fontSize: "36px" }}
+            >›</div>
+            <h1 className="text-[19px] font-bold text-zinc-900 tracking-tight leading-snug">
+              {parseInlineMarkdown(title)}
+            </h1>
+          </motion.div>
+
+          {/* Input — élément central */}
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.08 }}
+            className={cn(
+              "bg-white rounded-xl border transition-all duration-200 mb-4",
+              "border-zinc-300 focus-within:border-violet-400"
+            )}
+          >
+            <div className="flex items-start px-4 pt-4 pb-1">
+              <span className="font-mono font-bold text-violet-500 text-[15px] leading-none select-none mt-[2px] mr-3 shrink-0">›</span>
+              <textarea
+                ref={inputRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={inputPlaceholder}
+                disabled={state.isLoading}
+                rows={3}
+                className="flex-1 bg-transparent text-[14px] text-zinc-900 placeholder:text-zinc-400 resize-none focus:outline-none leading-relaxed custom-scrollbar"
+              />
+            </div>
+            <div className="flex items-center justify-between px-4 pb-3 pt-1">
+              <span className="font-mono text-[9px] uppercase tracking-widest text-zinc-300 select-none hidden sm:block">
+                ↵ Envoyer · ⇧↵ Retour à la ligne
+              </span>
+              <button
+                onClick={handleSubmit}
+                disabled={!inputValue.trim() || state.isLoading}
+                className={cn(
+                  "ml-auto flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-150",
+                  inputValue.trim() && !state.isLoading
+                    ? "bg-zinc-900 text-white hover:bg-zinc-800"
+                    : "bg-zinc-100 text-zinc-300 cursor-not-allowed"
+                )}
+              >
+                <ArrowUp className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </motion.div>
+
+          {/* Suggestions */}
+          {primaryOptions.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3, delay: 0.18 }}
+              className="grid grid-cols-2 gap-1.5"
+            >
+              {primaryOptions.map((option, i) => (
+                <motion.button
+                  key={option.value}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2, delay: 0.2 + i * 0.04 }}
+                  onClick={() => handleQuickOption(option)}
+                  className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg border border-zinc-200 bg-white hover:border-violet-300 hover:bg-violet-50/30 text-left transition-all duration-150 group"
+                >
+                  <span className="font-mono font-bold text-violet-400 text-sm shrink-0 group-hover:text-violet-600 transition-colors">›</span>
+                  <span className="text-[13px] font-medium text-zinc-600 group-hover:text-zinc-900 leading-snug transition-colors">
+                    {option.label}
+                  </span>
+                </motion.button>
+              ))}
+            </motion.div>
           )}
 
-          {/* Message history (skip when WelcomeMessage is shown) */}
+          {/* Reload */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.2, delay: 0.4 }}
+            className="flex justify-center mt-4"
+          >
+            <button
+              onClick={onReset}
+              title="Autres suggestions"
+              className="h-7 w-7 flex items-center justify-center rounded-lg text-zinc-300 hover:text-zinc-500 hover:bg-zinc-100 transition-colors"
+            >
+              <RefreshCw className="w-3 h-3" />
+            </button>
+          </motion.div>
+
+        </div>
+      </motion.div>
+    );
+  }
+
+  // ─── CONVERSATION MODE ───────────────────────────────────────────────────────
+  return (
+    <div className="flex flex-col h-full min-h-0 relative">
+      {/* Messages */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 sm:py-6 pb-[calc(9rem+env(safe-area-inset-bottom))] lg:pb-32 scroll-smooth custom-scrollbar"
+      >
+        <div className="max-w-2xl mx-auto space-y-6 min-h-full flex flex-col justify-end pb-4">
           {displayMessages.map((msg) => (
             <ChatMessage
               key={msg.id}
@@ -199,99 +267,71 @@ export function ConversationalChat({
               onCreateProject={(customPrompt) => onCreateProject(customPrompt)}
             />
           ))}
-
-          {/* Loading indicator */}
           {state.isLoading && (
             <div className="flex gap-3 items-center">
-              <div className="flex-shrink-0 mt-1">
-                <SmartGraphLogo size={20} />
-              </div>
+              <div className="flex-shrink-0 mt-1"><SmartGraphLogo size={20} /></div>
               <TypingDots />
             </div>
           )}
-
         </div>
       </div>
 
-      {/* Input bar — fixed on mobile (above keyboard via JS transform), relative on desktop */}
+      {/* Input bar */}
       <div
         ref={inputBarRef}
-        className="fixed bottom-0 left-0 right-0 lg:relative lg:bottom-auto z-30 will-change-transform"
+        className="fixed bottom-0 left-0 right-0 lg:absolute lg:bottom-0 lg:left-0 lg:right-0 z-30 will-change-transform"
       >
-        {/* Gradient fade */}
-        <div className="absolute -top-20 left-0 right-0 h-20 bg-gradient-to-t from-[#f5f5f7] to-transparent pointer-events-none" />
-
-        <div className="bg-[#f5f5f7] px-3 sm:px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3">
+        <div className="absolute -top-8 left-0 right-0 h-8 bg-gradient-to-t from-white/90 to-transparent pointer-events-none" />
+        <div className="px-3 sm:px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-0">
           <div className="max-w-2xl mx-auto">
-            {isExpertMode ? (
-              <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-md">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-[13px] font-medium text-zinc-700">Mode Expert</span>
-                  <button
-                    onClick={() => setIsExpertMode(false)}
-                    className="text-[12px] text-zinc-500 hover:text-zinc-700 transition-colors"
-                  >
-                    Revenir au mode guidé
-                  </button>
+            <div
+              className={cn(
+                "relative bg-white rounded-xl border transition-all duration-200 shadow-[0_-2px_12px_rgba(0,0,0,0.08)]",
+                state.isLoading ? "border-zinc-200 opacity-70" : "border-zinc-300 focus-within:border-violet-400"
+              )}
+            >
+              <div className="flex items-end">
+                <div className="pl-4 pb-[14px] pt-[14px] shrink-0 self-start">
+                  <span className="font-mono font-bold text-violet-500 text-[15px] leading-none select-none">›</span>
                 </div>
                 <textarea
                   ref={inputRef}
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Décrivez votre modèle complet ici..."
-                  className="w-full bg-zinc-50 border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-blue-500/50 min-h-[50px] resize-none py-3 custom-scrollbar leading-relaxed rounded-lg px-3"
+                  placeholder={inputPlaceholder}
+                  rows={1}
                   disabled={state.isLoading}
+                  className="flex-1 bg-transparent pl-2.5 pr-2 py-[14px] text-[14px] text-zinc-900 placeholder:text-zinc-400 resize-none focus:outline-none max-h-[120px] min-h-[48px] custom-scrollbar leading-relaxed disabled:cursor-not-allowed"
+                  style={{ height: 'auto', overflow: 'hidden' }}
+                  onInput={(e) => {
+                    const t = e.target as HTMLTextAreaElement;
+                    t.style.height = 'auto';
+                    t.style.height = Math.min(t.scrollHeight, 120) + 'px';
+                    t.style.overflowY = t.scrollHeight > 120 ? 'auto' : 'hidden';
+                  }}
                 />
-                <div className="flex justify-end mt-2">
+                <div className="p-2 shrink-0">
                   <button
                     onClick={handleSubmit}
                     disabled={!inputValue.trim() || state.isLoading}
-                    className="bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    className={cn(
+                      "flex items-center justify-center w-8 h-8 rounded-lg transition-all duration-150",
+                      inputValue.trim() && !state.isLoading
+                        ? "bg-zinc-900 text-white hover:bg-zinc-800"
+                        : "bg-zinc-100 text-zinc-300 cursor-not-allowed"
+                    )}
                   >
-                    Envoyer
+                    <ArrowUp className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
-            ) : (
-              <div>
-                <div className="relative bg-white border border-zinc-200 rounded-2xl transition-all duration-200 focus-within:border-zinc-300 flex items-end shadow-md">
-                    <textarea
-                      ref={inputRef}
-                      value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder={inputPlaceholder}
-                      rows={1}
-                      disabled={state.isLoading}
-                      className="flex-1 bg-transparent pl-4 pr-2 py-3.5 text-[14px] text-zinc-900 placeholder:text-zinc-400 resize-none focus:outline-none max-h-[160px] min-h-[48px] custom-scrollbar leading-relaxed disabled:opacity-40"
-                      style={{ height: 'auto', overflow: 'hidden' }}
-                      onInput={(e) => {
-                        const target = e.target as HTMLTextAreaElement;
-                        target.style.height = 'auto';
-                        target.style.height = Math.min(target.scrollHeight, 160) + 'px';
-                        target.style.overflowY = target.scrollHeight > 160 ? 'auto' : 'hidden';
-                      }}
-                    />
-
-                    {/* Send button */}
-                    <div className="p-2 shrink-0">
-                      <button
-                        onClick={handleSubmit}
-                        disabled={!inputValue.trim() || state.isLoading}
-                        className={cn(
-                          "flex items-center justify-center w-8 h-8 rounded-xl transition-all duration-200",
-                          inputValue.trim()
-                            ? "bg-zinc-900 text-white hover:bg-zinc-800"
-                            : "bg-zinc-100 text-zinc-400 hover:bg-zinc-200 disabled:opacity-50"
-                        )}
-                      >
-                        <ArrowUp className="w-4 h-4" />
-                      </button>
-                    </div>
-                </div>
+              <div className="px-4 pb-2.5 -mt-1">
+                <span className="font-mono text-[9px] uppercase tracking-widest text-zinc-300 select-none hidden sm:block">
+                  ↵ Envoyer &nbsp;·&nbsp; ⇧↵ Retour à la ligne
+                </span>
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
@@ -301,14 +341,9 @@ export function ConversationalChat({
 
 function FullChatLoader() {
   return (
-    <div className="flex flex-col items-center justify-center h-full min-h-[40vh] animate-in fade-in duration-500 bg-[#f5f5f7]">
-      <div className="mb-4">
-        <SmartGraphLogo size={40} />
-      </div>
-      <div className="flex items-center gap-2 text-zinc-500 text-sm">
-        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        <span>Chargement...</span>
-      </div>
+    <div className="flex flex-col items-center justify-center h-full min-h-[40vh] animate-in fade-in duration-500 bg-white gap-4">
+      <SmartGraphLogo size={36} loading />
+      <span className="font-mono text-[10px] uppercase tracking-widest text-zinc-400">Chargement…</span>
     </div>
   );
 }

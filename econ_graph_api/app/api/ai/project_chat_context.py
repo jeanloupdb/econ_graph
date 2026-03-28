@@ -66,14 +66,14 @@ def build_nodes_context(nodes: list[Node], edges: list[Edge]) -> str:
         err = " ⚠️ ERREUR DE CALCUL" if node.computation_error else ""
 
         if is_param:
-            params.append(f"  • {label} (id: {node.slug}){val}{err}")
+            params.append(f"  • {label} (node_slug: {node.slug}){val}{err}")
         else:
             deps = deps_map.get(node.slug, [])
             deps_str = f" — dépend de : {', '.join(deps)}" if deps else ""
             formula_expr = _extract_formula_expression(node.computation_definition)
             formula_human = _humanize_formula(formula_expr, slug_to_label)
             formula_str = f" — logique : {formula_human}" if formula_human else ""
-            calcs.append(f"  • {label} (id: {node.slug}){val}{deps_str}{formula_str}{err}")
+            calcs.append(f"  • {label} (node_slug: {node.slug}){val}{deps_str}{formula_str}{err}")
 
     lines = []
     if params:
@@ -140,6 +140,38 @@ def build_agent_snapshot(
         for s in scenarios[:5]:
             parts.append(f"  • {s.name} (id: {s.id})")
     return "\n".join(parts)
+
+
+def build_dashboard_context(project) -> str:
+    """Build a concise summary of the current V2 dashboard config for the AI."""
+    config = getattr(project, "dashboard_config", None)
+    if not config or not isinstance(config, dict) or config.get("version") != 2:
+        return "(Aucun tableau de bord configuré — utilise regenerate_dashboard pour en créer un)"
+
+    groups = config.get("parameter_groups", [])
+    widgets = config.get("kpi_widgets", [])
+
+    lines = []
+    if widgets:
+        lines.append(f"Widgets KPI affichés ({len(widgets)}) :")
+        for w in widgets:
+            viz = w.get("viz_type", "big_number")
+            slug = w.get("node_slug", "")
+            node_slugs = w.get("node_slugs", [])
+            breakdown = w.get("breakdown_slugs", [])
+            if node_slugs:
+                lines.append(f"  • \"{w.get('title')}\" → {viz} sur [{', '.join(node_slugs)}]")
+            elif breakdown:
+                lines.append(f"  • \"{w.get('title')}\" → {viz} sur {slug} (breakdown: {', '.join(breakdown)})")
+            else:
+                lines.append(f"  • \"{w.get('title')}\" → {viz} sur {slug}")
+    if groups:
+        lines.append(f"Groupes de paramètres ({len(groups)}) :")
+        for g in groups:
+            slugs = [c.get("node_slug", "") for c in g.get("controls", [])]
+            lines.append(f"  • {g.get('title', '?')} : {', '.join(slugs)}")
+
+    return "\n".join(lines) if lines else "(Tableau de bord vide)"
 
 
 def build_conversation_context(messages: list[ConversationMessage], limit: int = MAX_CONTEXT_MESSAGES) -> list[dict]:

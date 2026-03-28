@@ -9,7 +9,6 @@ import {
     Eye,
     EyeOff,
     Loader2,
-    Sparkles
 } from 'lucide-react';
 import { SmartGraphLogo } from '@/components/ui/SmartGraphLogo';
 import Link from 'next/link';
@@ -84,14 +83,11 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex">
       {/* Left side - Stylized content */}
-      <div className="hidden lg:flex lg:w-1/2 bg-zinc-950 relative overflow-hidden">
-        {/* Subtle grid pattern overlay */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]" />
-
+      <div className="hidden lg:flex lg:w-1/2 bg-zinc-50 relative overflow-hidden">
         {/* Animated gradient mesh background */}
-        <div className="absolute inset-0 opacity-30">
+        <div className="absolute inset-0 opacity-40">
           <motion.div
-            className="absolute top-0 right-0 w-[600px] h-[600px] bg-gradient-to-br from-emerald-900/20 to-transparent rounded-full blur-[100px]"
+            className="absolute top-0 right-0 w-[600px] h-[600px] bg-gradient-to-br from-violet-200/40 to-transparent rounded-full blur-[100px]"
             animate={{
               x: [0, 50, 0],
               y: [0, 30, 0],
@@ -104,7 +100,7 @@ export default function RegisterPage() {
             }}
           />
           <motion.div
-            className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-gradient-to-tr from-teal-900/20 to-transparent rounded-full blur-[100px]"
+            className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-gradient-to-tr from-blue-200/40 to-transparent rounded-full blur-[100px]"
             animate={{
               x: [0, -30, 0],
               y: [0, -50, 0],
@@ -127,14 +123,10 @@ export default function RegisterPage() {
             transition={{ duration: 0.6 }}
             className="text-center mb-8"
           >
-            <Link href="/" className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full border-2 border-violet-800 bg-zinc-900/90 backdrop-blur-md shadow-lg hover:border-violet-600 transition-colors cursor-pointer">
+            <Link href="/" className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full border border-zinc-200 bg-white/80 backdrop-blur-md shadow-sm hover:border-violet-300 transition-colors cursor-pointer">
               <SmartGraphLogo size={24} />
-              <span className="text-sm font-bold text-violet-400">
+              <span className="text-sm font-bold text-zinc-900">
                 SmartGraph
-              </span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 font-semibold flex items-center gap-1">
-                <Sparkles className="w-3 h-3" />
-                IA Inside
               </span>
             </Link>
           </motion.div>
@@ -279,10 +271,10 @@ export default function RegisterPage() {
                   </div>
                   <span className={`font-medium ${
                     passwordStrength === 'strong'
-                      ? 'text-emerald-400'
+                      ? 'text-emerald-600'
                       : passwordStrength === 'medium'
-                      ? 'text-amber-400'
-                      : 'text-red-400'
+                      ? 'text-amber-600'
+                      : 'text-red-600'
                   }`}>
                     {passwordStrength === 'strong' ? 'Fort' : passwordStrength === 'medium' ? 'Moyen' : 'Faible'}
                   </span>
@@ -318,7 +310,7 @@ export default function RegisterPage() {
                 </button>
               </div>
               {formData.confirmPassword && formData.password === formData.confirmPassword && (
-                <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
+                <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium">
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   <span>Les mots de passe correspondent</span>
                 </div>

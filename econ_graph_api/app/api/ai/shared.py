@@ -22,14 +22,19 @@ def configure_gemini():
 
 
 def clean_json_response(text: str) -> str:
-    """Clean up markdown code blocks from JSON response."""
+    """Clean up markdown code blocks from JSON response and fix invalid escape sequences."""
+    import re
     if text.startswith("```json"):
         text = text[7:]
     elif text.startswith("```"):
         text = text[3:]
     if text.endswith("```"):
         text = text[:-3]
-    return text.strip()
+    text = text.strip()
+    # Fix invalid JSON escape sequences produced by the LLM (e.g. \s, \i, \p...).
+    # Valid JSON escapes after \ are: " \ / b f n r t u
+    text = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', text)
+    return text
 
 
 def clean_code_response(text: str) -> str:

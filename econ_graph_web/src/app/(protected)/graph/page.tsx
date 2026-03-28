@@ -17,7 +17,7 @@ import { isDashboardV2 } from "@/types/dashboard";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
 import { useProjectStore } from "@/store/projectState";
 import { useUIStore } from "@/store/uiState";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { ReactFlowProvider } from "reactflow";
 
 import { useQueryClient } from "@tanstack/react-query";
@@ -64,15 +64,26 @@ function GraphPageContent() {
 
   const prevProjectIdRef = useRef<string | null>(null);
 
+  // Set currentProjectId from URL immediately — don't wait for projects list
+  // This lets useProjectNodes/useProjectEdges start fetching in parallel with loadProjects
+  useEffect(() => {
+    if (projectIdParam && currentProjectId !== projectIdParam) {
+      setCurrentProject(projectIdParam);
+    }
+  }, [projectIdParam, currentProjectId, setCurrentProject]);
+
+  // Reset workspace to columns view before first paint to avoid flash of graph canvas
+  useLayoutEffect(() => {
+    setWorkspaceView("causal");
+  }, [setWorkspaceView]);
+
   // Reset to columns mode with sidebar open on page load
   useEffect(() => {
     setViewMode("columns");
-    setWorkspaceView("causal");
     setFloatingPanelOpen(true);
     resetToBaseline();
   }, [
     setViewMode,
-    setWorkspaceView,
     setFloatingPanelOpen,
     resetToBaseline,
     currentProjectId,
@@ -82,16 +93,6 @@ function GraphPageContent() {
     loadProjects();
   }, [loadProjects]);
 
-  // Sync URL project param with store
-  useEffect(() => {
-    if (projectIdParam && projects.length > 0) {
-      const targetProject = projects.find((p) => p.id === projectIdParam);
-      if (targetProject && currentProjectId !== projectIdParam) {
-        setCurrentProject(projectIdParam);
-      }
-    }
-  }, [projectIdParam, projects, currentProjectId, setCurrentProject]);
-
   useEffect(() => {
     if (prevProjectIdRef.current === currentProjectId) {
       return;
@@ -100,13 +101,16 @@ function GraphPageContent() {
     resetDetailPanels();
   }, [currentProjectId, resetDetailPanels]);
 
-  // Auto-generate dashboard in background when a new project is loaded
+  // Auto-generate dashboard in background when a project loads without a V2 config
+  const dashboardGenRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!currentProjectId) return;
-    const project = useProjectStore.getState().projects.find(p => p.id === currentProjectId);
+    if (!currentProjectId || projects.length === 0) return;
+    if (dashboardGenRef.current.has(currentProjectId)) return;
+    const project = projects.find(p => p.id === currentProjectId);
     if (!project || project.status !== 'completed') return;
     if (project.dashboard_config && isDashboardV2(project.dashboard_config as any)) return;
 
+    dashboardGenRef.current.add(currentProjectId);
     generateDashboard(currentProjectId)
       .then(config => {
         useProjectStore.setState(state => ({
@@ -116,10 +120,9 @@ function GraphPageContent() {
         }));
       })
       .catch(() => {
-        // Silent failure — user can regenerate manually from the dashboard view
+        dashboardGenRef.current.delete(currentProjectId);
       });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentProjectId]);
+  }, [currentProjectId, projects]);
 
   const handleFitView = () => {
     console.log("Fit view triggered");
@@ -144,10 +147,7 @@ function GraphPageContent() {
       <CommandPalette />
 
 
-      <div 
-        className={`flex h-screen flex-col ${isLightMode ? '' : 'dark'}`}
-        style={isLightMode ? { backgroundColor: GRAPH_LIGHT_COLORS.pageBg } : { backgroundColor: '#0a0a0b' }}
-      >
+      <div className={`flex h-screen flex-col bg-background ${isLightMode ? '' : 'dark'}`}>
         {/* Topbar - barre supérieure */}
         <TopbarMinimal />
 
