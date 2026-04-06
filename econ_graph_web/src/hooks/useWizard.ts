@@ -4,6 +4,7 @@
  */
 
 import {
+    analyzeWizardAttachment,
     createProjectFromWizard,
     finalizeWizard,
     getInitialQuestion,
@@ -11,7 +12,7 @@ import {
     loadUserWizardState,
     saveUserWizardState,
 } from '@/lib/api/wizard';
-import { ConversationTurn, WizardOption, WizardState, WizardSummary } from '@/types/wizard';
+import { ConversationTurn, WizardAttachment, WizardOption, WizardState, WizardSummary } from '@/types/wizard';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const SESSION_STORAGE_KEY = 'wizard_state';
@@ -20,18 +21,30 @@ const INITIAL_STATE: WizardState = {
   currentStep: 'question',
   stepNumber: 0,
   conversationHistory: [],
+  attachments: [],
   currentQuestion: null,
   summary: null,
   isLoading: false,
   error: null,
 };
 
+const normalizeWizardState = (state: Partial<WizardState> | null | undefined): WizardState => ({
+  ...INITIAL_STATE,
+  ...(state || {}),
+  conversationHistory: state?.conversationHistory || [],
+  attachments: state?.attachments || [],
+  currentQuestion: state?.currentQuestion || null,
+  summary: state?.summary || null,
+  error: state?.error || null,
+});
+
 const toSerializableState = (state: WizardState): WizardState => {
+  const normalized = normalizeWizardState(state);
   const systemMessage =
-    state.systemMessage && typeof state.systemMessage.content === 'string'
-      ? state.systemMessage
+    normalized.systemMessage && typeof normalized.systemMessage.content === 'string'
+      ? normalized.systemMessage
       : undefined;
-  return { ...state, systemMessage };
+  return { ...normalized, systemMessage };
 };
 
 export function useWizard() {
@@ -96,21 +109,21 @@ export function useWizard() {
         const parsedState = JSON.parse(saved) as WizardState;
         if (parsedState.currentQuestion) {
           if (parsedState.isLoading) {
-            setState({
-              ...parsedState,
-              isLoading: false,
-              currentStep: 'question',
-              systemMessage: {
-                type: 'info',
-                content: 'Une génération précédente a été interrompue.',
-                timestamp: new Date().toISOString(),
-              },
-            });
-          } else {
-            setState(parsedState);
+              setState(normalizeWizardState({
+                ...parsedState,
+                isLoading: false,
+                currentStep: 'question',
+                systemMessage: {
+                  type: 'info',
+                  content: 'Une génération précédente a été interrompue.',
+                  timestamp: new Date().toISOString(),
+                },
+              }));
+            } else {
+              setState(normalizeWizardState(parsedState));
+            }
+            return;
           }
-          return;
-        }
       }
     } catch (e) {
       console.error('Failed to restore wizard state from session', e);
@@ -124,8 +137,9 @@ export function useWizard() {
 
       if (serverState && serverState.currentQuestion) {
         // État existant sur le serveur
-        setState(serverState);
-        persistSessionState(serverState);
+        const normalizedServerState = normalizeWizardState(serverState);
+        setState(normalizedServerState);
+        persistSessionState(normalizedServerState);
         return;
       }
 
@@ -150,7 +164,7 @@ export function useWizard() {
         isLoading: false,
       }));
     }
-  }, [nextRequest, saveToServer]);
+  }, [nextRequest, persistSessionState, saveToServer]);
 
   /**
    * Soumet la réponse de l'utilisateur et passe à l'étape suivante.
@@ -206,7 +220,7 @@ export function useWizard() {
         if (state.currentQuestion.is_final_step) {
           // Finaliser le wizard
           const { signal, requestId } = nextRequest();
-          const summary = await finalizeWizard(updatedHistory, signal);
+          const summary = await finalizeWizard(updatedHistory, state.attachments, signal);
           if (requestId !== requestIdRef.current) return;
           newState = {
             ...intermediateState,
@@ -217,7 +231,7 @@ export function useWizard() {
         } else {
           // Question suivante
           const { signal, requestId } = nextRequest();
-          const nextQuestion = await getNextQuestion(updatedHistory, signal);
+          const nextQuestion = await getNextQuestion(updatedHistory, state.attachments, signal);
           if (requestId !== requestIdRef.current) return;
           newState = {
             ...intermediateState,
@@ -262,7 +276,9 @@ export function useWizard() {
     try {
       if (updatedHistory.length === 0) {
         const { signal, requestId } = nextRequest();
-        const initialQuestion = await getInitialQuestion(signal);
+        const initialQuestion = state.attachments.length > 0
+          ? await getNextQuestion([], state.attachments, signal)
+          : await getInitialQuestion(signal);
         if (requestId !== requestIdRef.current) return;
         const newState: WizardState = {
           ...state,
@@ -276,7 +292,7 @@ export function useWizard() {
         saveToServer(newState);
       } else {
         const { signal, requestId } = nextRequest();
-        const previousQuestion = await getNextQuestion(updatedHistory.slice(0, -1), signal);
+        const previousQuestion = await getNextQuestion(updatedHistory.slice(0, -1), state.attachments, signal);
         if (requestId !== requestIdRef.current) return;
         const newState: WizardState = {
           ...state,
@@ -315,7 +331,7 @@ export function useWizard() {
 
     try {
       const { signal, requestId } = nextRequest();
-      const lastQuestion = await getNextQuestion(state.conversationHistory, signal);
+      const lastQuestion = await getNextQuestion(state.conversationHistory, state.attachments, signal);
       if (requestId !== requestIdRef.current) return;
       const newState: WizardState = {
         ...state,
@@ -358,7 +374,7 @@ export function useWizard() {
     async (draftPromptOverride?: string): Promise<WizardSummary | null> => {
       if (!state.currentQuestion) return null;
       const { signal, requestId } = nextRequest();
-      const summary = await finalizeWizard(state.conversationHistory, signal, draftPromptOverride);
+      const summary = await finalizeWizard(state.conversationHistory, state.attachments, signal, draftPromptOverride);
       if (requestId !== requestIdRef.current) return null;
       return summary;
     },
@@ -448,7 +464,21 @@ export function useWizard() {
           return null;
         }
 
-        const result = await createProjectFromWizard(promptToUse);
+        const documentContext =
+          state.attachments.length > 0
+            ? [
+                "",
+                "[CONTEXTE DOCUMENTAIRE VALIDÉ PAR LE WIZARD]",
+                ...state.attachments.map((attachment, index) => {
+                  const hints = attachment.prompt_hints?.length
+                    ? ` | pistes: ${attachment.prompt_hints.slice(0, 2).join('; ')}`
+                    : "";
+                  return `${index + 1}. ${attachment.file_name} (${attachment.file_kind}) — ${attachment.summary}${hints}`;
+                }),
+              ].join("\n")
+            : "";
+
+        const result = await createProjectFromWizard(promptToUse + documentContext);
         setState((prev) => ({
           ...prev,
           currentStep: 'question',
@@ -473,7 +503,7 @@ export function useWizard() {
         return null;
       }
     },
-    [buildSummary, state.currentQuestion, state.summary]
+    [buildSummary, state.attachments, state.currentQuestion, state.summary]
   );
 
   const cancelLoading = useCallback((message: unknown = 'Génération interrompue.') => {
@@ -531,16 +561,54 @@ export function useWizard() {
         isLoading: false,
       }));
     }
-  }, []);
+  }, [persistSessionState]);
 
   /**
    * Charge l'état depuis un objet WizardState existant.
    * Utilisé lors de migrations ou restaurations spécifiques.
    */
   const loadFromState = useCallback((wizardState: WizardState) => {
-    setState(wizardState);
-    persistSessionState(wizardState);
-  }, []);
+    const normalized = normalizeWizardState(wizardState);
+    setState(normalized);
+    persistSessionState(normalized);
+  }, [persistSessionState]);
+
+  const addAttachment = useCallback(async (file: File): Promise<WizardAttachment | null> => {
+    const attachment = await analyzeWizardAttachment(file);
+    let nextState: WizardState | null = null;
+    setState((prev) => {
+      nextState = normalizeWizardState({
+        ...prev,
+        attachments: [...prev.attachments, attachment],
+        systemMessage: {
+          type: 'info',
+          content: `${file.name} a été analysé et sera pris en compte dans le brief.`,
+          timestamp: new Date().toISOString(),
+        },
+      });
+      return nextState;
+    });
+    if (nextState) {
+      persistSessionState(nextState);
+      saveToServer(nextState);
+    }
+    return attachment;
+  }, [persistSessionState, saveToServer]);
+
+  const removeAttachment = useCallback((attachmentId: string) => {
+    let nextState: WizardState | null = null;
+    setState((prev) => {
+      nextState = normalizeWizardState({
+        ...prev,
+        attachments: prev.attachments.filter((attachment) => attachment.id !== attachmentId),
+      });
+      return nextState;
+    });
+    if (nextState) {
+      persistSessionState(nextState);
+      saveToServer(nextState);
+    }
+  }, [persistSessionState, saveToServer]);
 
   return {
     state,
@@ -554,5 +622,7 @@ export function useWizard() {
     loadFromState,
     cancelLoading,
     prepareSummary,
+    addAttachment,
+    removeAttachment,
   };
 }

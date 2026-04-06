@@ -1,10 +1,8 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CandidateBlock, ImportSession, SelectedScope } from "@/types/excel-import-session";
-import { ArrowRight, Calculator, FileSpreadsheet, Star, TriangleAlert } from "lucide-react";
+import { ArrowRight, Calculator, FileSpreadsheet, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 
 interface BlockSelectionViewProps {
@@ -51,24 +49,14 @@ export function BlockSelectionView({ session, onConfirm, onBack, isLoading }: Bl
   };
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div>
-        <h3 className="text-sm font-semibold text-foreground">Sélectionnez un bloc à importer</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {session.verdict_message ?? "Choisissez la feuille à convertir en graphe causal."}
-        </p>
-      </div>
-
-      {/* Warnings */}
+    <div className="space-y-4">
       {session.warnings.length > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800 flex items-start gap-2">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] text-amber-800 flex items-start gap-2">
           <TriangleAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <span>{session.warnings[0]}</span>
         </div>
       )}
 
-      {/* Block list */}
       <div className="space-y-2">
         {candidateBlocks.map((block) => (
           <BlockCard
@@ -81,36 +69,41 @@ export function BlockSelectionView({ session, onConfirm, onBack, isLoading }: Bl
         ))}
       </div>
 
-      {/* Actions */}
       <div className="space-y-2 pt-1">
-        <Button
-          className="w-full"
+        <button
+          type="button"
+          className={cn(
+            "w-full rounded-xl px-4 py-3 text-[13px] font-medium transition-colors flex items-center justify-center gap-2",
+            !selectedId || isLoading
+              ? "bg-zinc-100 text-zinc-300 cursor-not-allowed"
+              : "bg-zinc-900 text-white hover:bg-zinc-800"
+          )}
           onClick={handleConfirm}
           disabled={!selectedId || isLoading}
         >
           Importer ce bloc
           <ArrowRight className="w-4 h-4" />
-        </Button>
+        </button>
 
         {formulaBlocks.length > 1 && (
-          <Button
-            variant="outline"
-            className="w-full text-muted-foreground"
+          <button
+            type="button"
+            className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-[13px] font-medium text-zinc-600 transition-colors hover:border-violet-300 hover:text-zinc-900"
             onClick={handleImportAll}
             disabled={isLoading}
           >
             Importer toutes les feuilles ({formulaBlocks.length})
-          </Button>
+          </button>
         )}
 
-        <Button
-          variant="ghost"
-          className="w-full text-muted-foreground"
+        <button
+          type="button"
+          className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-[13px] font-medium text-zinc-500 transition-colors hover:border-zinc-300 hover:text-zinc-900"
           onClick={onBack}
           disabled={isLoading}
         >
           Choisir un autre fichier
-        </Button>
+        </button>
       </div>
     </div>
   );
@@ -133,34 +126,38 @@ function BlockCard({
       onClick={onSelect}
       disabled={disabled}
       className={cn(
-        "w-full text-left rounded-2xl border px-4 py-3.5 transition-all duration-150",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "w-full text-left rounded-xl border px-4 py-3.5 transition-all duration-150",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200",
         disabled
-          ? "opacity-40 cursor-not-allowed border-border bg-muted/30"
+          ? "opacity-40 cursor-not-allowed border-zinc-200 bg-zinc-50"
           : selected
-          ? "border-violet-300 bg-violet-50 ring-1 ring-violet-300"
-          : "border-border bg-background hover:border-violet-200 hover:bg-violet-50/40"
+          ? "border-violet-300 bg-violet-50/30"
+          : "border-zinc-200 bg-white hover:border-violet-300"
       )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className={cn(
-            "w-7 h-7 rounded-lg flex items-center justify-center shrink-0",
-            disabled ? "bg-muted" : selected ? "bg-violet-100" : "bg-muted"
+            "w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border",
+            disabled
+              ? "bg-zinc-50 border-zinc-200"
+              : selected
+                ? "bg-violet-50 border-violet-200"
+                : "bg-zinc-50 border-zinc-200"
           )}>
             {block.formula_count > 0
-              ? <Calculator className={cn("w-3.5 h-3.5", selected ? "text-violet-600" : "text-muted-foreground")} />
-              : <FileSpreadsheet className="w-3.5 h-3.5 text-muted-foreground" />
+              ? <Calculator className={cn("w-3.5 h-3.5", selected ? "text-violet-600" : "text-zinc-500")} />
+              : <FileSpreadsheet className="w-3.5 h-3.5 text-zinc-500" />
             }
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-sm font-medium text-foreground truncate">{block.label}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[13px] font-medium text-zinc-900 truncate">{block.label}</span>
               {block.is_recommended && (
-                <Star className="w-3 h-3 text-amber-500 shrink-0" fill="currentColor" />
+                <span className="font-mono text-[10px] uppercase tracking-widest text-violet-500 shrink-0">reco</span>
               )}
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
+            <p className="text-[11px] text-zinc-400 mt-0.5">
               {SHEET_TYPE_LABELS[block.sheet_type] ?? block.sheet_type}
               {" · "}
               {block.formula_count > 0
@@ -170,15 +167,10 @@ function BlockCard({
             </p>
           </div>
         </div>
-
-        <div className="flex flex-wrap gap-1 shrink-0">
-          {block.is_recommended && (
-            <Badge variant="secondary" className="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] px-1.5">
-              Recommandé
-            </Badge>
-          )}
-          <InterestBar score={block.interest_score} />
-        </div>
+        <span className={cn(
+          "font-mono text-sm shrink-0 transition-colors",
+          selected ? "text-violet-500" : "text-zinc-300"
+        )}>›</span>
       </div>
 
       {block.warnings.length > 0 && (
@@ -188,29 +180,5 @@ function BlockCard({
         </p>
       )}
     </button>
-  );
-}
-
-function InterestBar({ score }: { score: number }) {
-  const bars = 4;
-  const filled = Math.round((score / 100) * bars);
-  const color =
-    score >= 75 ? "bg-emerald-500" :
-    score >= 45 ? "bg-blue-400" :
-    score >= 20 ? "bg-amber-400" : "bg-muted-foreground/40";
-
-  return (
-    <div className="flex items-center gap-0.5 mt-0.5" title={`Score : ${score}/100`}>
-      {Array.from({ length: bars }).map((_, i) => (
-        <div
-          key={i}
-          className={cn(
-            "w-1 rounded-full",
-            i < filled ? color : "bg-border",
-            i === 0 ? "h-1.5" : i === 1 ? "h-2" : i === 2 ? "h-2.5" : "h-3"
-          )}
-        />
-      ))}
-    </div>
   );
 }

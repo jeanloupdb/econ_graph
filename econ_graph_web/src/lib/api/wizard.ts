@@ -3,6 +3,7 @@
  */
 
 import { ConversationTurn, WizardQuestion, WizardState, WizardSummary } from '@/types/wizard';
+import type { WizardAttachment } from '@/types/wizard';
 import { API_BASE_URL } from './client';
 
 /**
@@ -39,6 +40,7 @@ export async function getInitialQuestion(signal?: AbortSignal): Promise<WizardQu
  */
 export async function getNextQuestion(
   conversationHistory: ConversationTurn[],
+  attachments: WizardAttachment[] = [],
   signal?: AbortSignal
 ): Promise<WizardQuestion> {
   const response = await fetch(`${API_BASE_URL}/ai/conversational-wizard`, {
@@ -49,6 +51,7 @@ export async function getNextQuestion(
     },
     body: JSON.stringify({
       conversation_history: conversationHistory,
+      attachments,
     }),
     signal,
   });
@@ -65,6 +68,7 @@ export async function getNextQuestion(
  */
 export async function finalizeWizard(
   conversationHistory: ConversationTurn[],
+  attachments: WizardAttachment[] = [],
   signal?: AbortSignal,
   draftPromptOverride?: string
 ): Promise<WizardSummary> {
@@ -76,6 +80,7 @@ export async function finalizeWizard(
     },
     body: JSON.stringify({
       conversation_history: conversationHistory,
+      attachments,
       draft_prompt_override: draftPromptOverride,
     }),
     signal,
@@ -108,6 +113,36 @@ export async function createProjectFromWizard(finalPrompt: string): Promise<{
 
   if (!response.ok) {
     throw new Error('Failed to create project');
+  }
+
+  return response.json();
+}
+
+export async function analyzeWizardAttachment(
+  file: File,
+  signal?: AbortSignal
+): Promise<WizardAttachment> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE_URL}/ai/wizard-attachments/analyze`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeader(),
+    },
+    body: formData,
+    signal,
+  });
+
+  if (!response.ok) {
+    let detail = 'Failed to analyze file';
+    try {
+      const data = await response.json();
+      detail = data.detail || detail;
+    } catch {
+      // ignore malformed error body
+    }
+    throw new Error(detail);
   }
 
   return response.json();

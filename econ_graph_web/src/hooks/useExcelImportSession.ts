@@ -1,5 +1,8 @@
 /**
- * Hook for the session-based Excel import flow (Lot 2).
+ * Hook for the dashboard import flow.
+ *
+ * Excel files use the session-based qualification flow.
+ * SmartGraph `.smgp` files are imported directly.
  *
  * States: idle → creating → scanning → awaiting_selection → selecting →
  *         importing → success
@@ -13,6 +16,7 @@ import {
   createImportSession,
   selectImportScope,
 } from "@/lib/api/excel-import-sessions";
+import { importSmgpProject, type SmgpImportResult } from "@/lib/api/smgp";
 import { useProjectStore } from "@/store/projectState";
 import type { CommitResult, ImportSession, SelectedScope } from "@/types/excel-import-session";
 import { useRouter } from "next/navigation";
@@ -33,7 +37,7 @@ export type SessionFlowStatus =
 interface SessionFlowState {
   status: SessionFlowStatus;
   session: ImportSession | null;
-  result: CommitResult | null;
+  result: CommitResult | SmgpImportResult | null;
   error: string | null;
 }
 
@@ -48,7 +52,7 @@ export function useExcelImportSession() {
     error: null,
   });
 
-  /** Upload + qualify a file. Returns full session with candidate blocks. */
+  /** Upload + qualify an Excel file. Returns full session with candidate blocks. */
   const createSession = useCallback(async (
     file: File,
     options?: { signal?: AbortSignal }
@@ -89,7 +93,7 @@ export function useExcelImportSession() {
     }
   }, [flowState.session]);
 
-  /** Commit the import — creates the Smart Graph project. */
+  /** Commit the qualified Excel import and create the SmartGraph project. */
   const commit = useCallback(async (
     projectName?: string,
     options?: { signal?: AbortSignal }
@@ -129,6 +133,40 @@ export function useExcelImportSession() {
     }
   }, [flowState.session, load, setCurrentProject, router]);
 
+  /** Direct import for canonical SmartGraph files. */
+  const importSmgp = useCallback(async (
+    file: File,
+    projectName?: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<SmgpImportResult | null> => {
+    setFlowState({ status: "importing", session: null, result: null, error: null });
+    try {
+      const effectiveProjectName = projectName || file.name.replace(/\.[^.]+$/, "");
+      const result = await importSmgpProject(file, effectiveProjectName, options?.signal);
+      setFlowState({ status: "success", session: null, result, error: null });
+
+      await load();
+      setCurrentProject(result.project_id);
+
+      toast.success(
+        `Projet importé avec ${result.nodes_created} variables, ${result.scenarios_created} scénario(x) et ${result.composites_created} composite(s)`,
+        { duration: 4000 }
+      );
+
+      router.push(`/graph?project=${result.project_id}`);
+      return result;
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        setFlowState({ status: "idle", session: null, result: null, error: null });
+        return null;
+      }
+      const msg = err instanceof Error ? err.message : "Échec de l'import SmartGraph";
+      setFlowState({ status: "error", session: null, result: null, error: msg });
+      toast.error(msg);
+      return null;
+    }
+  }, [load, router, setCurrentProject]);
+
   /** Cancel the session and reset. */
   const cancel = useCallback(async (): Promise<void> => {
     const session = flowState.session;
@@ -147,6 +185,15 @@ export function useExcelImportSession() {
     return name.endsWith(".xlsx") || name.endsWith(".xls");
   }, []);
 
+  const isSmgpFile = useCallback((file: File): boolean => {
+    const name = file.name.toLowerCase();
+    return name.endsWith(".smgp");
+  }, []);
+
+  const isSupportedImportFile = useCallback((file: File): boolean => {
+    return isExcelFile(file) || isSmgpFile(file);
+  }, [isExcelFile, isSmgpFile]);
+
   return {
     ...flowState,
     isCreating: flowState.status === "creating",
@@ -156,8 +203,11 @@ export function useExcelImportSession() {
     createSession,
     selectScope,
     commit,
+    importSmgp,
     cancel,
     reset,
     isExcelFile,
+    isSmgpFile,
+    isSupportedImportFile,
   };
 }

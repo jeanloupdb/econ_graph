@@ -311,6 +311,40 @@ GRAPH_TOOLS = Tool(function_declarations=[
         }
     ),
     FunctionDeclaration(
+        name="create_project_checkpoint",
+        description="Crée un checkpoint du projet avant une modification importante afin de pouvoir revenir en arrière.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "message": {"type": "string", "description": "Raison courte du checkpoint"}
+            },
+            "required": []
+        }
+    ),
+    FunctionDeclaration(
+        name="list_project_snapshots",
+        description="Liste les derniers checkpoints disponibles pour le projet.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "limit": {"type": "number", "description": "Nombre maximum de snapshots à retourner"}
+            },
+            "required": []
+        }
+    ),
+    FunctionDeclaration(
+        name="restore_project_snapshot",
+        description="Restaure entièrement le projet depuis un checkpoint précédent.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "snapshot_id": {"type": "string", "description": "Identifiant du snapshot à restaurer"},
+                "message": {"type": "string", "description": "Raison courte de la restauration"}
+            },
+            "required": ["snapshot_id"]
+        }
+    ),
+    FunctionDeclaration(
         name="regenerate_dashboard",
         description="Régénère le tableau de bord Insights (widgets KPI et groupes de paramètres) en tenant compte de l'état actuel du modèle. À utiliser après avoir créé ou modifié des nœuds importants, ou quand l'utilisateur demande de mettre à jour les visualisations.",
         parameters={

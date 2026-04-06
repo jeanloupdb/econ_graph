@@ -168,3 +168,14 @@ def get_scenario_snapshot(
             "error": scenario_entry.error,
         }
     return snapshot
+
+
+def invalidate_project_cache(project_id: Optional[str]) -> None:
+    project_key = project_id or "default"
+    with _LOCK:
+        _CACHE.pop(project_key, None)
+
+
+def clear_all_caches() -> None:
+    with _LOCK:
+        _CACHE.clear()

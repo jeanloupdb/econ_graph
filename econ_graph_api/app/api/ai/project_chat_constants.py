@@ -23,4 +23,6 @@ INSIGHTS_MUTATION_TOOLS = {
     "list_overrides",
     "list_providers",
     "get_project_summary",
+    "restore_project_snapshot",
+    "regenerate_dashboard",
 }

@@ -3,11 +3,12 @@ AI Conversational Wizard endpoints.
 
 Endpoints:
 - GET /wizard-initial-question: Get the first wizard question
+- POST /wizard-attachments/analyze: Analyze a common business document for wizard context
 - POST /conversational-wizard: Generate next wizard question
 - POST /wizard-finalize: Finalize wizard and generate project prompt
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import google.generativeai as genai
@@ -19,6 +20,12 @@ from app.core.deps import get_current_user
 from app.core.db import get_db
 from app.models import User
 from app.services.ai_usage import log_ai_usage, extract_usage_from_gemini_response
+from app.services.wizard_documents import (
+    SUPPORTED_WIZARD_EXTENSIONS,
+    WizardDocumentError,
+    analyze_wizard_document,
+    format_wizard_document_context,
+)
 
 from .shared import GEMINI_MODEL, configure_gemini, clean_json_response
 
@@ -52,6 +59,7 @@ class ConversationTurn(BaseModel):
 
 class WizardQuestionRequest(BaseModel):
     conversation_history: list[ConversationTurn]
+    attachments: list["WizardAttachment"] = []
 
 
 class WizardQuestionResponse(BaseModel):
@@ -70,6 +78,7 @@ class WizardQuestionResponse(BaseModel):
 class WizardFinalizeRequest(BaseModel):
     conversation_history: list[ConversationTurn]
     draft_prompt_override: str | None = None
+    attachments: list["WizardAttachment"] = []
 
 
 class GraphPreview(BaseModel):
@@ -89,7 +98,68 @@ class WizardFinalizeResponse(BaseModel):
     final_prompt: str
 
 
+class WizardAttachment(BaseModel):
+    id: str
+    file_name: str
+    file_kind: str
+    mime_type: str | None = None
+    size_bytes: int
+    summary: str
+    excerpt: str | None = None
+    prompt_hints: list[str] = []
+    warnings: list[str] = []
+    created_at: str
+
+
+WizardQuestionRequest.model_rebuild()
+WizardFinalizeRequest.model_rebuild()
+
+
 # ==================== ENDPOINTS ====================
+
+
+@router.post("/wizard-attachments/analyze", response_model=WizardAttachment)
+async def analyze_attachment_for_wizard(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Analyze a common document and return a compact summary that can be persisted
+    inside the wizard state and injected into later prompts.
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Nom de fichier manquant")
+
+    extension = file.filename.lower().rsplit(".", 1)
+    if len(extension) < 2 or f".{extension[-1]}" not in SUPPORTED_WIZARD_EXTENSIONS:
+        accepted = ", ".join(sorted(SUPPORTED_WIZARD_EXTENSIONS))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Format non supporté pour le wizard. Formats pris en charge: {accepted}",
+        )
+
+    try:
+        content = await file.read()
+        analysis = analyze_wizard_document(
+            file_name=file.filename,
+            content=content,
+            mime_type=file.content_type,
+        )
+        return WizardAttachment(
+            id=analysis.id,
+            file_name=analysis.file_name,
+            file_kind=analysis.file_kind,
+            mime_type=analysis.mime_type,
+            size_bytes=analysis.size_bytes,
+            summary=analysis.summary,
+            excerpt=analysis.excerpt,
+            prompt_hints=analysis.prompt_hints,
+            warnings=analysis.warnings,
+            created_at=analysis.created_at,
+        )
+    except WizardDocumentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
 
 @router.get("/wizard-initial-question", response_model=WizardQuestionResponse)
 async def get_wizard_initial_question(
@@ -371,6 +441,15 @@ async def generate_wizard_question(
             conversation_history=conversation_text
         )
 
+        attachment_context = format_wizard_document_context(request.attachments)
+        if attachment_context:
+            system_prompt += (
+                "\n\n"
+                + attachment_context
+                + "\n\nUtilise ce contexte documentaire pour proposer les bons axes de modélisation, "
+                + "sans te limiter à répéter le contenu des fichiers."
+            )
+
         # Step 3: Call AI
         logger.info("Step 3: Calling Gemini")
         configure_gemini()
@@ -567,6 +646,15 @@ async def finalize_wizard(
             conversation_history=conversation_text,
             draft_prompt_override=request.draft_prompt_override or ""
         )
+
+        attachment_context = format_wizard_document_context(request.attachments)
+        if attachment_context:
+            system_prompt += (
+                "\n\n"
+                + attachment_context
+                + "\n\nLe prompt final doit intégrer explicitement les chiffres, structures, contraintes "
+                + "et hypothèses utiles tirés de ces documents."
+            )
 
         configure_gemini()
         model = genai.GenerativeModel(GEMINI_MODEL)

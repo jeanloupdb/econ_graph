@@ -3,10 +3,11 @@ from .scenario import Scenario, ScenarioNodeOverride
 from .composite import Composite
 from .user import User
 from .project import Project
+from .project_snapshot import ProjectSnapshot
 from .project_collaborator import ProjectCollaborator
 from .edge import Edge
 from .ai_usage import AIUsage
 from .project_conversation import ProjectConversation, ConversationMessage
 from .project_notification import ProjectNotification
 
-__all__ = ["Node", "Status", "Scenario", "ScenarioNodeOverride", "Composite", "User", "Project", "ProjectCollaborator", "Edge", "AIUsage", "ProjectConversation", "ConversationMessage", "ProjectNotification"]
+__all__ = ["Node", "Status", "Scenario", "ScenarioNodeOverride", "Composite", "User", "Project", "ProjectSnapshot", "ProjectCollaborator", "Edge", "AIUsage", "ProjectConversation", "ConversationMessage", "ProjectNotification"]

@@ -5,6 +5,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.api.nodes import router as nodes_router
 from app.api.edges import router as edges_router
 from app.api.projects import router as projects_router
+from app.api.project_snapshots import router as project_snapshots_router
 from app.api.composites import router as composites_router
 from app.api.compute import router as compute_router
 from app.api.ui import router as ui_router
@@ -58,6 +59,7 @@ app.include_router(edges_router)
 # Rules router disabled: focusing API on graph CRUD only
 app.include_router(compute_router)
 app.include_router(projects_router)
+app.include_router(project_snapshots_router)
 app.include_router(ui_router)
 app.include_router(providers_router)
 app.include_router(scenarios_router)
@@ -95,6 +97,7 @@ async def startup_event():
         def ensure_project_columns():
             column_statements = [
                 "ALTER TABLE project ADD COLUMN IF NOT EXISTS public_view_token VARCHAR(64)",
+                "ALTER TABLE project ADD COLUMN IF NOT EXISTS head_snapshot_id VARCHAR(64)",
                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_project_public_view_token ON project (public_view_token)",
             ]
             db = SessionLocal()

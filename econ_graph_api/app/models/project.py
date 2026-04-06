@@ -14,6 +14,7 @@ class Project(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     public_view_token: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    head_snapshot_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     
     # Project status: 'draft' = wizard in progress, 'completed' = graph generated
     status: Mapped[str] = mapped_column(String(20), default="completed", nullable=False)
@@ -31,4 +32,4 @@ class Project(Base):
     # Relationships
     owner = relationship("User", backref="projects")
     scenarios = relationship("Scenario", back_populates="project", cascade="all, delete-orphan")
-
+    snapshots = relationship("ProjectSnapshot", backref="project", cascade="all, delete-orphan")

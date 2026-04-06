@@ -14,7 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { Project } from "@/store/projectState";
 import { useProjectStore } from "@/store/projectState";
-import { Edit3, MoreHorizontal, SquarePen, Trash2, Upload, Users, X } from "lucide-react";
+import { Edit3, MoreHorizontal, SquarePen, Trash2, Users, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -23,14 +23,12 @@ import { UserMenu } from "./UserMenu";
 
 interface DashboardSidebarProps {
     onNewModel?: () => void;
-    onImportClick?: () => void;
     isOpen?: boolean;
     onClose?: () => void;
 }
 
 export function DashboardSidebar({
     onNewModel,
-    onImportClick,
     isOpen = false,
     onClose
 }: DashboardSidebarProps) {
@@ -181,21 +179,6 @@ export function DashboardSidebar({
                             className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
                         >
                             <SquarePen className="w-[15px] h-[15px]" />
-                        </button>
-                        <button
-                            onClick={() => {
-                                if (onImportClick) {
-                                    onImportClick();
-                                } else {
-                                    router.push("/dashboard?view=import");
-                                }
-                                onClose?.();
-                            }}
-                            title="Importer un Excel"
-                            aria-label="Importer un Excel"
-                            className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
-                        >
-                            <Upload className="w-[14px] h-[14px]" />
                         </button>
                         <button
                             className="lg:hidden h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"

@@ -2,15 +2,21 @@
 
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
-from fastapi.testclient import TestClient
 
 from app.core.db import Base, get_db
-from app.main import app
 
 
 # Use in-memory SQLite for testing
 TEST_DATABASE_URL = "sqlite:///:memory:"
+
+
+@compiles(JSONB, "sqlite")
+def compile_jsonb_sqlite(_type, _compiler, **_kw):
+    """Allow PostgreSQL JSONB columns to run on SQLite test databases."""
+    return "JSON"
 
 
 @pytest.fixture(scope="function")
@@ -37,6 +43,8 @@ def db_session(db_engine):
 @pytest.fixture(scope="function")
 def client(db_session):
     """Create a test client with database dependency override."""
+    from fastapi.testclient import TestClient
+    from app.main import app
 
     def override_get_db():
         try:

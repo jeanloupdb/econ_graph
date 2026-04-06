@@ -6,25 +6,70 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger
-from app.models import Node, Scenario, Edge
+from app.models import Node, Project, Scenario, Edge
 from app.models.scenario import ScenarioNodeOverride
+from app.services.project_snapshots import (
+    create_project_snapshot,
+    get_project_snapshot,
+    list_project_snapshots,
+    restore_project_snapshot,
+)
 from app.services.computation import compute_all_nodes
 from app.services.dependency_tracker import invalidate_dependency_graph
 from app.services import scenario_cache
+from app.services.smgp import SmgpImportError
 
 logger = get_logger(__name__)
+
+
+AUTO_CHECKPOINT_TOOLS = {
+    "update_node_formula",
+    "convert_to_parameter",
+    "delete_edge",
+    "create_node",
+    "update_node_fields",
+    "delete_node",
+    "create_scenario",
+    "update_scenario",
+    "delete_scenario",
+    "set_scenario_override",
+    "delete_scenario_override",
+    "recompute_project",
+    "create_sensitivity_analysis",
+    "regenerate_dashboard",
+}
 
 
 def execute_tool(tool_name: str, args: dict, db: Session, project_id: str, nodes_map: dict) -> dict:
     """Execute a tool and return the result."""
     logger.info("Executing tool", tool=tool_name, args=args, project_id=project_id)
+    checkpoint_before = _maybe_create_auto_checkpoint(
+        db,
+        project_id,
+        tool_name,
+        phase="before",
+    )
     try:
         result = _dispatch_tool(tool_name, args, db, project_id, nodes_map)
+        checkpoint_after = _maybe_create_auto_checkpoint(
+            db,
+            project_id,
+            tool_name,
+            phase="after",
+        )
+        _attach_auto_checkpoint_metadata(result, checkpoint_before, checkpoint_after)
         logger.info("Tool result", tool=tool_name, success=result.get("success", True))
         return result
     except Exception as e:
         logger.error("Tool execution failed", tool=tool_name, error=str(e), project_id=project_id)
-        return {"success": False, "error": f"Erreur lors de l'exécution de {tool_name}: {str(e)}"}
+        result = {"success": False, "error": f"Erreur lors de l'exécution de {tool_name}: {str(e)}"}
+        checkpoint_after = _safe_create_post_tool_checkpoint(
+            db,
+            project_id,
+            tool_name,
+        )
+        _attach_auto_checkpoint_metadata(result, checkpoint_before, checkpoint_after)
+        return result
 
 
 def _dispatch_tool(tool_name: str, args: dict, db: Session, project_id: str, nodes_map: dict) -> dict:
@@ -77,10 +122,176 @@ def _dispatch_tool(tool_name: str, args: dict, db: Session, project_id: str, nod
         return _list_providers(db, project_id)
     elif tool_name == "get_project_summary":
         return _get_project_summary(db, project_id)
+    elif tool_name == "create_project_checkpoint":
+        return _create_project_checkpoint(db, project_id, args)
+    elif tool_name == "list_project_snapshots":
+        return _list_project_snapshots(db, project_id, args)
+    elif tool_name == "restore_project_snapshot":
+        return _restore_project_snapshot(db, project_id, nodes_map, args)
     elif tool_name == "regenerate_dashboard":
         return _regenerate_dashboard(db, project_id)
     else:
         return {"error": f"Unknown tool: {tool_name}"}
+
+
+def _attach_auto_checkpoint_metadata(
+    result: dict,
+    checkpoint_before: dict | None,
+    checkpoint_after: dict | None,
+) -> None:
+    if checkpoint_before:
+        result.setdefault("auto_checkpoint_before", checkpoint_before)
+    if checkpoint_after:
+        result.setdefault("auto_checkpoint_after", checkpoint_after)
+    if checkpoint_after:
+        result.setdefault("auto_checkpoint", checkpoint_after)
+    elif checkpoint_before:
+        result.setdefault("auto_checkpoint", checkpoint_before)
+
+
+def _maybe_create_auto_checkpoint(
+    db: Session,
+    project_id: str,
+    tool_name: str,
+    *,
+    phase: str,
+) -> dict | None:
+    if tool_name not in AUTO_CHECKPOINT_TOOLS:
+        return None
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        return None
+
+    phase = "after" if phase == "after" else "before"
+    phase_prefix = "Après" if phase == "after" else "Avant"
+    snapshot, created = create_project_snapshot(
+        db,
+        project,
+        author_user_id=project.user_id,
+        message=f"{phase_prefix} l'action IA: {tool_name}",
+        trigger="ai_auto",
+    )
+    return {
+        "snapshot_id": snapshot.id,
+        "created": created,
+        "phase": phase,
+        "head_snapshot_id": project.head_snapshot_id,
+        "message": snapshot.message,
+    }
+
+
+def _safe_create_post_tool_checkpoint(
+    db: Session,
+    project_id: str,
+    tool_name: str,
+) -> dict | None:
+    try:
+        return _maybe_create_auto_checkpoint(
+            db,
+            project_id,
+            tool_name,
+            phase="after",
+        )
+    except Exception as checkpoint_error:
+        logger.warning(
+            "Failed to create post-tool auto checkpoint",
+            tool=tool_name,
+            project_id=project_id,
+            error=str(checkpoint_error),
+        )
+        return None
+
+
+def _create_project_checkpoint(db: Session, project_id: str, args: dict) -> dict:
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        return {"success": False, "error": "Projet introuvable"}
+
+    snapshot, created = create_project_snapshot(
+        db,
+        project,
+        author_user_id=project.user_id,
+        message=args.get("message") or args.get("reason"),
+        trigger="ai",
+    )
+    return {
+        "success": True,
+        "snapshot_id": snapshot.id,
+        "created": created,
+        "head_snapshot_id": project.head_snapshot_id,
+        "message": "Checkpoint créé" if created else "Aucun changement depuis le dernier checkpoint",
+    }
+
+
+def _list_project_snapshots(db: Session, project_id: str, args: dict) -> dict:
+    limit = args.get("limit", 10)
+    try:
+        limit = int(limit)
+    except Exception:
+        limit = 10
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        return {"success": False, "error": "Projet introuvable"}
+
+    snapshots = list_project_snapshots(db, project_id, limit=limit)
+    return {
+        "success": True,
+        "head_snapshot_id": project.head_snapshot_id,
+        "snapshots": [
+            {
+                "id": snapshot.id,
+                "message": snapshot.message,
+                "trigger": snapshot.trigger,
+                "created_at": snapshot.created_at.isoformat() if snapshot.created_at else None,
+                "is_head": snapshot.id == project.head_snapshot_id,
+            }
+            for snapshot in snapshots
+        ],
+    }
+
+
+def _restore_project_snapshot(db: Session, project_id: str, nodes_map: dict, args: dict) -> dict:
+    snapshot_id = args.get("snapshot_id")
+    if not snapshot_id:
+        return {"success": False, "error": "snapshot_id requis"}
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        return {"success": False, "error": "Projet introuvable"}
+
+    snapshot = get_project_snapshot(db, project_id, snapshot_id)
+    if not snapshot:
+        return {"success": False, "error": f"Snapshot '{snapshot_id}' introuvable"}
+
+    try:
+        restored = restore_project_snapshot(
+            db,
+            project,
+            snapshot,
+            actor_user_id=project.user_id,
+            message=args.get("message"),
+        )
+    except SmgpImportError as exc:
+        return {"success": False, "error": str(exc)}
+
+    nodes_map.clear()
+    restored_nodes = db.query(Node).filter(Node.project_id == project_id).all()
+    for node in restored_nodes:
+        nodes_map[node.slug] = node
+
+    return {
+        "success": True,
+        "message": f"Projet restauré depuis le snapshot {snapshot_id}",
+        "restored_snapshot_id": restored.restored_snapshot_id,
+        "head_snapshot_id": restored.head_snapshot_id,
+        "nodes_restored": restored.nodes_restored,
+        "edges_restored": restored.edges_restored,
+        "scenarios_restored": restored.scenarios_restored,
+        "composites_restored": restored.composites_restored,
+        "status": "restored",
+    }
 
 
 def _update_node_formula(db: Session, project_id: str, nodes_map: dict, args: dict) -> dict:

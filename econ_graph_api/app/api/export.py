@@ -8,7 +8,7 @@ import logging
 import re
 import uuid
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -22,9 +22,19 @@ from app.models.node import Node
 from app.models.edge import Edge
 from app.models.user import User
 from app.models.project_collaborator import ProjectCollaborator
+from app.schemas.smgp import SMGP_MEDIA_TYPE, SmgpImportResponse
 from app.services.excel_export import export_project_to_excel
 from app.services.excel_import import create_project_from_excel, analyze_excel, enhance_analysis_with_ai
 from app.services.computation import compute_all_nodes
+from app.services.project_snapshots import create_project_snapshot
+from app.services.smgp import (
+    SmgpError,
+    SmgpImportError,
+    export_project_to_smgp,
+    import_project_from_smgp,
+    load_smgp_document,
+    serialize_smgp_document,
+)
 from app.api.insights_trigger import schedule_project_insights
 
 logger = logging.getLogger(__name__)
@@ -135,6 +145,41 @@ async def export_project_excel(
             "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
             "Access-Control-Expose-Headers": "Content-Disposition"
         }
+    )
+
+
+@router.get("/{project_id}/export/smgp")
+async def export_project_smgp(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Export a project as a canonical SmartGraph .smgp document."""
+    project = _get_project_with_access(db, project_id, current_user, required_role="viewer")
+
+    try:
+        document = export_project_to_smgp(db, project_id)
+        payload = serialize_smgp_document(document)
+    except SmgpError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate .smgp file: {exc}",
+        ) from exc
+
+    safe_name = "".join(
+        c if c.isalnum() or c in (" ", "-", "_") else "_"
+        for c in project.name
+    )
+    filename = f"{safe_name}.smgp"
+    encoded_filename = urllib.parse.quote(filename)
+
+    return Response(
+        content=payload,
+        media_type=SMGP_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
     )
 
 
@@ -336,6 +381,64 @@ async def analyze_excel_file(
         next_step_hint=next_step_hint,
     )
 
+
+@router.post("/import/smgp", response_model=SmgpImportResponse)
+async def import_smgp_to_project(
+    file: UploadFile = File(...),
+    project_name: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Import a canonical SmartGraph .smgp document and create a new project."""
+    if not file.filename or not file.filename.lower().endswith((".smgp", ".json")):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file type. Please upload a SmartGraph .smgp file.",
+        )
+
+    try:
+        content = await file.read()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to read file: {exc}",
+        ) from exc
+
+    try:
+        document = load_smgp_document(content)
+    except SmgpImportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    try:
+        result = import_project_from_smgp(
+            db,
+            document,
+            owner_id=current_user.id,
+            project_name_override=project_name,
+        )
+        imported_project = db.query(Project).filter(Project.id == result.project_id).first()
+        if imported_project:
+            create_project_snapshot(
+                db,
+                imported_project,
+                author_user_id=current_user.id,
+                message="Snapshot initial après import .smgp",
+                trigger="import",
+            )
+        db.commit()
+    except SmgpImportError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Failed to import .smgp file")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to import .smgp file: {exc}",
+        ) from exc
+
+    return result
+
 @router.post("/import/excel", response_model=ExcelImportResponse)
 async def import_excel_to_project(
     file: UploadFile = File(...),
@@ -469,6 +572,14 @@ async def import_excel_to_project(
         logger.info(f"Computed all node values for project '{project_name}'")
     except Exception as e:
         logger.warning(f"Graph computation after import failed (non-fatal): {e}")
+
+    create_project_snapshot(
+        db,
+        project,
+        author_user_id=current_user.id,
+        message="Snapshot initial après import Excel",
+        trigger="import",
+    )
 
     schedule_project_insights(db, project_id, current_user.id, background_tasks)
 

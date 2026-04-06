@@ -51,6 +51,19 @@ export interface ConversationTurn {
   timestamp: string;
 }
 
+export interface WizardAttachment {
+  id: string;
+  file_name: string;
+  file_kind: string;
+  mime_type?: string | null;
+  size_bytes: number;
+  summary: string;
+  excerpt?: string | null;
+  prompt_hints: string[];
+  warnings: string[];
+  created_at: string;
+}
+
 export interface GraphPreview {
   description: string;
   structure: string;
@@ -80,6 +93,7 @@ export interface WizardState {
   currentStep: WizardStep;
   stepNumber: number;
   conversationHistory: ConversationTurn[];
+  attachments: WizardAttachment[];
   currentQuestion: WizardQuestion | null;
   summary: WizardSummary | null;
   isLoading: boolean;
