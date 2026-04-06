@@ -16,44 +16,8 @@ export function FeatureCarousel() {
 
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center overflow-hidden">
-      {/* Shared Background Grid */}
-      <div className="absolute inset-0 z-0 opacity-[0.03]" 
-        style={{ 
-            backgroundImage: `linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)`, 
-            backgroundSize: '40px 40px' 
-        }} 
-      />
-
-      {/* Text Overlay - Moved to Top, No Bubble */}
-      <div className="absolute top-8 left-0 right-0 text-center z-20 pointer-events-none">
-         <AnimatePresence mode="wait">
-            <motion.div
-                key={scene}
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                className="space-y-1"
-            >
-                <h3 className={`text-2xl font-black tracking-tight ${
-                    scene === 0 ? "text-purple-400" :
-                    scene === 1 ? "text-emerald-400" :
-                    "text-blue-400"
-                }`}>
-                    {scene === 0 && "Structurez vos Idées"}
-                    {scene === 1 && "Simulez l'Impact"}
-                    {scene === 2 && "Collaborez en Sécurité"}
-                </h3>
-                <p className="text-xs text-zinc-400 font-bold uppercase tracking-widest">
-                    {scene === 0 && "Composites Intelligents"}
-                    {scene === 1 && "Scénarios Temps Réel"}
-                    {scene === 2 && "Synchronisation Instantanée"}
-                </p>
-            </motion.div>
-         </AnimatePresence>
-      </div>
-
       {/* Main Stage - Increased Width for V3 */}
-      <div className="relative w-full max-w-3xl aspect-[16/9] flex items-center justify-center mt-12">
+      <div className="relative w-full max-w-3xl aspect-[16/9] flex items-center justify-center">
         <AnimatePresence mode="wait">
             {scene === 0 && <SceneComposites key="scene-0" />}
             {scene === 1 && <SceneScenarios key="scene-1" />}
@@ -98,14 +62,6 @@ function SceneComposites() {
                 animate={{ width: 400, height: 220 }}
                 transition={{ duration: 1.5, ease: "easeInOut", delay: 0.2 }}
             >
-                 {/* Internal Grid Detail */}
-                 <div className="absolute inset-0 opacity-20" 
-                    style={{ 
-                        backgroundImage: `linear-gradient(#a855f7 1px, transparent 1px), linear-gradient(90deg, #a855f7 1px, transparent 1px)`, 
-                        backgroundSize: '20px 20px' 
-                    }} 
-                 />
-
                  {/* Internal Logic Reveal */}
                  <motion.div 
                     className="absolute inset-0 flex items-center justify-center opacity-0"

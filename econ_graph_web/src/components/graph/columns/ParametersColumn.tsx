@@ -173,7 +173,7 @@ export function ParametersColumn({
         />
       ) : (
         <>
-          {/* Header */}
+          {/* Header (desktop only — compact hides via ColumnHeader null) */}
           <ColumnHeader compact={compact} stopPropagation className="z-10">
             <div className="flex items-center justify-center gap-2">
               <span className="text-lg font-semibold flex items-center gap-2 text-foreground">
@@ -183,7 +183,7 @@ export function ParametersColumn({
               <span className="text-sm text-muted-foreground">({settings.length})</span>
             </div>
 
-            {/* Scenario selector */}
+            {/* Scenario selector (desktop) */}
             <div className="mt-2 w-full">
               {creatingScenario ? (
                 <div className="flex items-center gap-2 w-full max-w-sm px-4">

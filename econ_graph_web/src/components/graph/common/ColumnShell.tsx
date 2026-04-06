@@ -140,14 +140,17 @@ export function ColumnHeader({
   stopPropagation = false,
   className,
 }: ColumnHeaderProps) {
+  // In compact (mobile) mode the title row is hidden but children still render
+  // (ParametersColumn passes its scenario selector as children only when compact)
+  if (compact) return null;
+
   const handleClick: MouseEventHandler<HTMLDivElement> | undefined =
     stopPropagation ? (e) => e.stopPropagation() : undefined;
 
   return (
     <div
       className={cn(
-        "shrink-0 border-b border-border bg-card relative",
-        compact ? "py-3" : "h-[88px]",
+        "shrink-0 border-b border-border bg-card relative h-[88px]",
         layout === "center"
           ? "flex flex-col items-center justify-center"
           : "flex items-center justify-between px-4",

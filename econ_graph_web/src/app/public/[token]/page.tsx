@@ -4,6 +4,7 @@ import { CollapsibleModePanel } from "@/components/chrome/CollapsibleModePanel";
 import { TopbarMinimal } from "@/components/chrome/TopbarMinimal";
 import { CommandPalette } from "@/components/command/CommandPalette";
 import { BottomToolbar } from "@/components/graph/BottomToolbar";
+import { CausalStateView } from "@/components/graph/CausalStateView";
 import { GraphCanvas } from "@/components/graph/GraphCanvas";
 import { Inspector } from "@/components/panels/Inspector";
 import { ProjectGraphProvider } from "@/graph/providers/ProjectGraphProvider";
@@ -11,7 +12,7 @@ import { apiClient } from "@/lib/api/client";
 import type { Edge, Node } from "@/lib/types";
 import { useProjectStore } from "@/store/projectState";
 import { useUIStore } from "@/store/uiState";
-import { AlertCircle, ArrowRight, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowRight, Loader2, X } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -120,34 +121,59 @@ export default function PublicProjectPage() {
         <TopbarMinimal />
 
         {/* Demo claim banner */}
-        {isDemoProject && (
-          <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2.5 flex items-center justify-center gap-3 shrink-0">
-            <span className="text-white text-sm">
-              Votre modèle est prêt ! Créez un compte pour le modifier et l&apos;exporter.
-            </span>
-            <Link
-              href="/register"
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-white text-violet-700 font-medium text-sm rounded-lg hover:bg-violet-50 transition-colors"
-            >
-              Créer un compte <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        )}
+        {isDemoProject && <DemoBanner />}
 
-        <div className="flex-1 relative overflow-hidden">
-          <ReactFlowProvider>
-            <GraphCanvas />
-            <BottomToolbar />
-            {/* No AI or Library for public users */}
-          </ReactFlowProvider>
-
-          <CollapsibleModePanel />
-
-          {/* Inspector - overlay flottant à droite */}
-          <FloatingInspectorWrapper />
+        <div className="flex-1 relative overflow-hidden flex flex-col">
+          <PublicWorkspace />
         </div>
       </div>
     </ProjectGraphProvider>
+  );
+}
+
+function DemoBanner() {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+  return (
+    <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2.5 flex items-center justify-center gap-3 shrink-0">
+      <span className="text-white text-sm">
+        Votre modèle est prêt ! Créez un compte pour le modifier et l&apos;exporter.
+      </span>
+      <Link
+        href="/register"
+        className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-white text-violet-700 font-medium text-sm rounded-lg hover:bg-violet-50 transition-colors"
+      >
+        Créer un compte <ArrowRight className="w-3.5 h-3.5" />
+      </Link>
+      <button
+        onClick={() => setDismissed(true)}
+        className="ml-1 p-1 rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+        aria-label="Fermer"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+function PublicWorkspace() {
+  const workspaceView = useUIStore((s) => s.workspaceView);
+
+  if (workspaceView === "causal") {
+    return <CausalStateView />;
+  }
+
+  return (
+    <>
+      <ReactFlowProvider>
+        <div className="flex-1 relative overflow-hidden">
+          <GraphCanvas />
+          <BottomToolbar />
+        </div>
+      </ReactFlowProvider>
+      <CollapsibleModePanel />
+      <FloatingInspectorWrapper />
+    </>
   );
 }
 

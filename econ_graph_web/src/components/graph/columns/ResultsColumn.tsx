@@ -5,7 +5,6 @@ import { InlineNodeDetail } from "@/components/graph/panels/InlineNodeDetail";
 import type { Node } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { formatNumber } from "@/utils/format";
-import { useUIStore } from "@/store/uiState";
 import { ColumnHeader } from "@/components/graph/common/ColumnShell";
 import { cva } from "class-variance-authority";
 import { useValueChanged } from "@/hooks/useValueChanged";
@@ -50,7 +49,6 @@ export function ResultsColumn({
   isScenarioActive,
   highlightedNodeIds,
   hasActiveInteraction,
-  selectedResultId,
   setSelectedResultId,
   viewFullResultDetailId,
   setViewFullResultDetailId,
@@ -66,7 +64,6 @@ export function ResultsColumn({
   isLoading,
   compact = false,
 }: ResultsColumnProps & { compact?: boolean }) {
-  const setColumnViewMode = useUIStore((s) => s.setColumnViewMode);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [scrollHint, setScrollHint] = useState<{ direction: 'up' | 'down'; label?: string } | null>(null);
 
@@ -235,20 +232,14 @@ function ResultCard({
   const hasMoreParents = parents.length > 2;
   const { changed: valueChanged, direction } = useValueChanged(displayValue, isLoading);
 
-  // Visual differentiation by value sign
   const isError = !!node.computation_error;
-  const isPositive = !isError && displayValue !== null && displayValue > 1e-9;
-  const isNegative = !isError && displayValue !== null && displayValue < -1e-9;
-  // Value text color — always colored by sign, overridden by scenario diff or value change flash
   const valueColorClass = isError
     ? "text-red-400"
     : valueChanged
       ? (direction === "up" ? "text-emerald-500" : "text-rose-500")
       : isScenarioActive && diff && Math.abs(diff) > 1e-9
         ? (diff > 0 ? "text-emerald-500" : "text-rose-500")
-        : isPositive ? "text-emerald-500"
-          : isNegative ? "text-rose-500"
-            : "text-foreground";
+        : "text-foreground";
 
   const cardState = isFlashHighlight ? "flash" : isFaded ? "faded" : isHighlighted ? "highlighted" : "default";
 
@@ -354,4 +345,3 @@ function ResultCard({
     </div>
   );
 }
-

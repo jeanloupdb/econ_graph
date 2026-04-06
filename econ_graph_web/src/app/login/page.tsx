@@ -46,11 +46,11 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex">
       {/* Left side - Stylized content */}
-      <div className="hidden lg:flex lg:w-1/2 bg-zinc-50 relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-1/2 bg-white relative overflow-hidden">
         {/* Animated gradient mesh background */}
-        <div className="absolute inset-0 opacity-40">
+        <div className="absolute inset-0 pointer-events-none">
           <motion.div
-            className="absolute top-0 right-0 w-[600px] h-[600px] bg-gradient-to-br from-violet-200/40 to-transparent rounded-full blur-[100px]"
+            className="absolute -top-24 -right-24 w-[640px] h-[640px] bg-gradient-to-br from-violet-100/70 to-transparent rounded-full blur-[110px]"
             animate={{
               x: [0, 50, 0],
               y: [0, 30, 0],
@@ -63,7 +63,7 @@ export default function LoginPage() {
             }}
           />
           <motion.div
-            className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-gradient-to-tr from-blue-200/40 to-transparent rounded-full blur-[100px]"
+            className="absolute -bottom-24 -left-24 w-[520px] h-[520px] bg-gradient-to-tr from-blue-100/70 to-transparent rounded-full blur-[100px]"
             animate={{
               x: [0, -30, 0],
               y: [0, -50, 0],
@@ -78,19 +78,17 @@ export default function LoginPage() {
         </div>
 
         {/* Content */}
-        <div className="relative z-10 flex flex-col items-center justify-center w-full h-full px-8">
-          {/* Header */}
+        <div className="relative z-10 flex flex-col w-full h-full px-10 pt-10 pb-8">
+          {/* Logo */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-8"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="mb-auto"
           >
-            <Link href="/" className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full border border-zinc-200 bg-white/80 backdrop-blur-md shadow-sm hover:border-violet-300 transition-colors cursor-pointer">
-              <SmartGraphLogo size={24} />
-              <span className="text-sm font-bold text-zinc-900">
-                SmartGraph
-              </span>
+            <Link href="/" className="inline-flex items-center gap-2 hover:opacity-80 transition-opacity">
+              <SmartGraphLogo size={20} />
+              <span className="text-sm font-semibold text-zinc-900 tracking-tight">SmartGraph</span>
             </Link>
           </motion.div>
 
@@ -98,8 +96,8 @@ export default function LoginPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.5 }}
-            className="w-full max-w-4xl h-[600px]"
+            transition={{ duration: 0.8, delay: 0.4 }}
+            className="flex-1 flex items-center"
           >
             <LoginVisualization />
           </motion.div>
