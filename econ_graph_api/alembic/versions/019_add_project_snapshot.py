@@ -15,6 +15,19 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # main.py fait deja un create_all() au demarrage : la table ou la colonne
+    # peuvent exister avant cette migration, on ne cree que ce qui manque
+    inspector = sa.inspect(op.get_bind())
+
+    if not inspector.has_table("project_snapshot"):
+        _create_project_snapshot()
+
+    project_columns = {c["name"] for c in inspector.get_columns("project")}
+    if "head_snapshot_id" not in project_columns:
+        op.add_column("project", sa.Column("head_snapshot_id", sa.String(64), nullable=True))
+
+
+def _create_project_snapshot() -> None:
     op.create_table(
         "project_snapshot",
         sa.Column("id", sa.String(64), primary_key=True),
@@ -43,7 +56,6 @@ def upgrade() -> None:
     op.create_index(
         "ix_project_snapshot_project_hash", "project_snapshot", ["project_id", "content_hash"]
     )
-    op.add_column("project", sa.Column("head_snapshot_id", sa.String(64), nullable=True))
 
 
 def downgrade() -> None:
