@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchCurrentUser = async (authToken: string) => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // le backend Fly peut etre en veille (cold start)
 
     try {
       const response = await fetch(`${API_BASE_URL}/auth/me`, {
@@ -67,15 +67,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.ok) {
         const userData = await response.json();
         setUser(userData);
-      } else {
+      } else if (response.status === 401) {
         // Token is invalid, clear it
         localStorage.removeItem('auth_token');
         setToken(null);
       }
     } catch (error) {
+      // Timeout ou reseau : on garde le token, ce n'est pas un token invalide
       console.error('Failed to fetch current user:', error);
-      localStorage.removeItem('auth_token');
-      setToken(null);
     } finally {
       clearTimeout(timeoutId);
       setIsLoading(false);

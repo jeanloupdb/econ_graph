@@ -11,7 +11,7 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 # Model name constant
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = settings.GEMINI_MODEL
 
 
 def configure_gemini():

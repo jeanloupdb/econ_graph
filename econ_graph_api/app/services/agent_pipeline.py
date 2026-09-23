@@ -36,7 +36,7 @@ from app.api.ai.dashboard_generator import generate_dashboard_for_project
 
 # Configuration Gemini - Modèle STABLE
 genai.configure(api_key=settings.GOOGLE_GENERATIVE_AI_API_KEY)
-GEMINI_MODEL = 'gemini-2.0-flash'  # Stable, pas exp
+GEMINI_MODEL = settings.GEMINI_MODEL  # Stable, pas exp
 
 
 class PipelineState(TypedDict):

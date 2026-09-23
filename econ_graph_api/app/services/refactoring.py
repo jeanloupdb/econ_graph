@@ -79,7 +79,7 @@ async def analyze_complexity(db: Session, project_id: str) -> List[RefactoringSu
     """
 
     try:
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        model = genai.GenerativeModel(settings.GEMINI_MODEL)
         response = model.generate_content(
             prompt,
             generation_config={"response_mime_type": "application/json", "temperature": 0.2}

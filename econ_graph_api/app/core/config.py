@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     # Security settings
     SECRET_KEY: str = "your-secret-key-change-this-in-production-use-openssl-rand-hex-32"
     GOOGLE_GENERATIVE_AI_API_KEY: str | None = None
+    GEMINI_MODEL: str = "gemini-3.6-flash"
 
     # Observability settings
     LOG_LEVEL: str = "INFO"
